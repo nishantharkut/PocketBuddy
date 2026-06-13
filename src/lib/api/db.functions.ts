@@ -244,3 +244,55 @@ export const insertCheckinLog = createServerFn({ method: "POST" })
     await db.collection("checkin_logs").insertOne(log);
     return mapDoc(log);
   });
+
+export const getCurrentUser = createServerFn({ method: "GET" })
+  .middleware([requireMongoAuth])
+  .handler(async ({ context }) => {
+    const { userId } = context;
+    const { db } = await connectToDatabase();
+    const user = await db.collection("users").findOne({ _id: userId as any });
+    if (!user) return null;
+    return {
+      id: user._id.toString(),
+      email: user.email,
+      fullName: user.fullName,
+      phone: user.phone || null,
+    };
+  });
+
+export const identifyMerchant = createServerFn({ method: "POST" })
+  .middleware([requireMongoAuth])
+  .inputValidator(
+    z.object({
+      raw_merchant_string: z.string(),
+      display_name: z.string(),
+      category: z.string(),
+    })
+  )
+  .handler(async ({ context, data }) => {
+    const { userId } = context;
+    const { db } = await connectToDatabase();
+    const existing = await db.collection("merchant_directory").findOne({ raw_string: data.raw_merchant_string });
+    if (existing) {
+      await db.collection("merchant_directory").updateOne(
+        { _id: existing._id },
+        { $set: { display_name: data.display_name, category: data.category }, $inc: { confirmation_count: 1 } }
+      );
+    } else {
+      await db.collection("merchant_directory").insertOne({
+        _id: globalThis.crypto.randomUUID() as any,
+        raw_string: data.raw_merchant_string,
+        display_name: data.display_name,
+        category: data.category,
+        campus: "ABV-IIITM Gwalior",
+        mapped_by_user_id: userId,
+        confirmation_count: 1,
+        created_at: new Date(),
+      });
+    }
+    await db.collection("transactions").updateMany(
+      { user_id: userId, raw_merchant_string: data.raw_merchant_string },
+      { $set: { mapped_merchant_name: data.display_name, category: data.category, is_mapped: true } }
+    );
+    return { success: true };
+  });

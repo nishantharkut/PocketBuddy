@@ -133,7 +133,18 @@ async function createSession(userId: string) {
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
   });
 
-  return { sessionToken, userId };
+  const user = await db.collection("users").findOne({ _id: userId as any });
+
+  return {
+    sessionToken,
+    userId,
+    user: user ? {
+      id: user._id.toString(),
+      email: user.email,
+      fullName: user.fullName,
+      phone: user.phone || null
+    } : null
+  };
 }
 
 export async function validateSession(sessionToken: string) {

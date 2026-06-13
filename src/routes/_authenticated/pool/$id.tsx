@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
-import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,15 +12,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { rupees, relativeTime } from "@/lib/format";
-import type { Tables } from "@/integrations/supabase/types";
+import { getCartPool, getCartPoolItems, insertCartPoolItem } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/pool/$id")({
   ssr: false,
   component: PoolDetail,
 });
 
-type Pool = Tables<"cart_pools">;
-type Item = Tables<"cart_pool_items">;
+type Pool = any;
+type Item = any;
 
 function PoolDetail() {
   const { id } = Route.useParams();
@@ -31,28 +30,14 @@ function PoolDetail() {
 
   const { data: pool } = useQuery({
     queryKey: ["pool", id],
-    queryFn: async (): Promise<Pool | null> => {
-      const { data } = await supabase.from("cart_pools").select("*").eq("id", id).maybeSingle();
-      return data;
-    },
+    queryFn: () => getCartPool({ data: { id } }),
   });
 
   const { data: items } = useQuery({
     queryKey: ["pool-items", id],
-    queryFn: async (): Promise<Item[]> => {
-      const { data } = await supabase.from("cart_pool_items").select("*").eq("pool_id", id).order("created_at", { ascending: true });
-      return data ?? [];
-    },
+    refetchInterval: 3000, // MongoDB real-time replacement polling
+    queryFn: () => getCartPoolItems({ data: { pool_id: id } }),
   });
-
-  useEffect(() => {
-    const ch = supabase
-      .channel(`pool-${id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "cart_pool_items", filter: `pool_id=eq.${id}` },
-        () => qc.invalidateQueries({ queryKey: ["pool-items", id] }))
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [id, qc]);
 
   const [name, setName] = useState(() =>
     typeof window !== "undefined" ? localStorage.getItem("pocketbuddy_pool_name") ?? "" : ""
@@ -65,9 +50,9 @@ function PoolDetail() {
 
   const expired = new Date(pool.expires_at).getTime() <= Date.now() || pool.status !== "open";
   const minsLeft = Math.max(0, Math.round((new Date(pool.expires_at).getTime() - Date.now()) / 60000));
-  const cartTotal = (items ?? []).reduce((s, i) => s + i.estimated_price, 0);
+  const cartTotal = (items ?? []).reduce((s: number, i: any) => s + i.estimated_price, 0);
   const cartPct = Math.min(100, Math.round((cartTotal / pool.min_cart_value) * 100));
-  const grouped = (items ?? []).reduce<Record<string, Item[]>>((acc, i) => {
+  const grouped = (items ?? []).reduce<Record<string, any[]>>((acc, i: any) => {
     (acc[i.added_by_name] ??= []).push(i); return acc;
   }, {});
   const people = Object.keys(grouped);
@@ -78,14 +63,23 @@ function PoolDetail() {
     if (!name || !item || !price) { toast.error("Fill all fields"); return; }
     localStorage.setItem("pocketbuddy_pool_name", name);
     setBusy(true);
-    const { error } = await supabase.from("cart_pool_items").insert({
-      pool_id: id, added_by_name: name, item_description: item,
-      estimated_price: Math.round(parseFloat(price) * 100),
-    });
-    setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    setItem(""); setPrice("");
-    toast.success("Item added!");
+    try {
+      await insertCartPoolItem({
+        data: {
+          pool_id: id,
+          added_by_name: name,
+          item_description: item,
+          estimated_price: Math.round(parseFloat(price) * 100),
+        },
+      });
+      setItem(""); setPrice("");
+      toast.success("Item added!");
+      qc.invalidateQueries({ queryKey: ["pool-items", id] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add item");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function share() {

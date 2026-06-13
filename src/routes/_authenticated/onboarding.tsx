@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,6 +9,7 @@ import {
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { seedDemoData } from "@/lib/seed.functions";
+import { getProfile, updateProfile } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   ssr: false,
@@ -60,15 +60,17 @@ function Onboarding() {
   // Pre-fill from existing profile
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle().then(({ data }) => {
-      if (!data) return;
-      if (data.monthly_allowance) setAllowance(String(Math.round(data.monthly_allowance / 100)));
-      if (data.cycle_start_day) setCycleDay(String(data.cycle_start_day));
-      if (data.college_name) setCollege(data.college_name);
-      if (data.hostel_block) setHostel(data.hostel_block);
-      if (data.wing_label) setWing(data.wing_label);
-      if (data.room_number) setRoom(data.room_number);
-    });
+    getProfile()
+      .then((data) => {
+        if (!data) return;
+        if (data.monthly_allowance) setAllowance(String(Math.round(data.monthly_allowance / 100)));
+        if (data.cycle_start_day) setCycleDay(String(data.cycle_start_day));
+        if (data.college_name) setCollege(data.college_name);
+        if (data.hostel_block) setHostel(data.hostel_block);
+        if (data.wing_label) setWing(data.wing_label);
+        if (data.room_number) setRoom(data.room_number);
+      })
+      .catch((err) => console.error("Onboarding profile load error:", err));
   }, [user]);
 
   async function saveStep1() {
@@ -77,48 +79,71 @@ function Onboarding() {
       toast.error("Fill all fields"); return;
     }
     setBusy(true);
-    const { error } = await supabase.from("profiles").update({
-      monthly_allowance: Math.round(parseFloat(allowance) * 100),
-      cycle_start_day: parseInt(cycleDay, 10),
-      college_name: college, hostel_block: hostel, wing_label: wing, room_number: room,
-    }).eq("id", user.id);
-    setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    setStep(2);
+    try {
+      await updateProfile({
+        data: {
+          monthly_allowance: Math.round(parseFloat(allowance) * 100),
+          cycle_start_day: parseInt(cycleDay, 10),
+          college_name: college,
+          hostel_block: hostel,
+          wing_label: wing,
+          room_number: room,
+        },
+      });
+      setStep(2);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save details");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveStep2() {
     if (!user) return;
     setBusy(true);
-    const { error } = await supabase.from("profiles").update({
-      mess_enrolled: mess,
-      meal_schedule: meals,
-      upi_apps_used: upiApps.map((a) => a.toLowerCase().replace(/\s+/g, "")),
-      exam_start_date: examStart || null,
-      exam_end_date: examEnd || null,
-    }).eq("id", user.id);
-    setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    setStep(3);
+    try {
+      await updateProfile({
+        data: {
+          mess_enrolled: mess,
+          meal_schedule: meals,
+          upi_apps_used: upiApps.map((a) => a.toLowerCase().replace(/\s+/g, "")),
+          exam_start_date: examStart || null,
+          exam_end_date: examEnd || null,
+        },
+      });
+      setStep(3);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save details");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function finish(skipPairing: boolean) {
     if (!user) return;
     setBusy(true);
-    await supabase.from("profiles").update({
-      onboarding_completed: true,
-      pairing_code: pairingCode,
-      companion_paired: !skipPairing,
-      companion_device_name: skipPairing ? null : "Redmi Note 12",
-      companion_last_sync: skipPairing ? null : new Date().toISOString(),
-    }).eq("id", user.id);
-    // Seed demo data
-    try { await seedFn(); } catch (e) { console.warn("seed", e); }
-    setBusy(false);
-    toast.success(skipPairing ? "Welcome! Add expenses manually." : "Device connected! 🎉");
-    nav({ to: "/dashboard", replace: true });
+    try {
+      await updateProfile({
+        data: {
+          onboarding_completed: true,
+          pairing_code: pairingCode,
+          companion_paired: !skipPairing,
+          companion_device_name: skipPairing ? null : "Redmi Note 12",
+          companion_last_sync: skipPairing ? null : new Date().toISOString(),
+        },
+      });
+      // Seed demo data
+      try { await seedFn(); } catch (e) { console.warn("seed", e); }
+      toast.success(skipPairing ? "Welcome! Add expenses manually." : "Device connected! 🎉");
+      nav({ to: "/dashboard", replace: true });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to complete onboarding");
+    } finally {
+      setBusy(false);
+    }
   }
 
+  // Demo APK download
   function downloadApk() {
     toast("APK downloading. Open it from your notifications to install.");
   }
@@ -219,8 +244,8 @@ function Onboarding() {
                 })}
               </div>
             </Field>
-            <div className="flex items-center justify-between">
-              <button onClick={() => setStep(1)} className="text-sm text-muted-foreground">← Back</button>
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => setStep(1)} className="text-sm text-muted-foreground text-left py-2">← Back</button>
               <Button id="btn-ob-next-2" onClick={saveStep2} disabled={busy}>Next →</Button>
             </div>
           </div>

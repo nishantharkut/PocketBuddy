@@ -2,12 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
-import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
@@ -16,14 +14,14 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { rupees } from "@/lib/format";
-import type { Tables } from "@/integrations/supabase/types";
+import { getProfile, getCartPools, insertCartPool } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/pool/")({
   ssr: false,
   component: PoolList,
 });
 
-type Pool = Tables<"cart_pools">;
+type Pool = any;
 
 const PLATFORMS = [
   { v: "blinkit" as const, l: "Blinkit" },
@@ -39,19 +37,13 @@ function PoolList() {
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
     enabled: !!user,
-    queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("wing_label, full_name").eq("id", user!.id).maybeSingle();
-      return data;
-    },
+    queryFn: () => getProfile(),
   });
 
   const { data: pools } = useQuery({
     queryKey: ["all-pools", profile?.wing_label],
     enabled: !!profile?.wing_label,
-    queryFn: async (): Promise<Pool[]> => {
-      const { data } = await supabase.from("cart_pools").select("*").eq("wing_label", profile!.wing_label).order("created_at", { ascending: false });
-      return data ?? [];
-    },
+    queryFn: () => getCartPools(),
   });
 
   const now = Date.now();
@@ -135,25 +127,32 @@ function CreatePoolForm({ userId, userName, wing, onDone }: {
   async function create() {
     if (!userId) return;
     setBusy(true);
-    const expires = new Date(Date.now() + parseInt(dur, 10) * 60_000).toISOString();
-    const { data, error } = await supabase.from("cart_pools").insert({
-      created_by: userId, created_by_name: userName || "You", wing_label: wing,
-      platform, status: "open",
-      min_cart_value: Math.round(parseFloat(minCart) * 100),
-      delivery_fee: Math.round(parseFloat(fee) * 100),
-      expires_at: expires,
-    }).select().single();
-    setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Pool created! Share with your wing.");
-    if (data && navigator.share) {
-      navigator.share({
-        title: "Join my cart pool",
-        text: `Join my ${platform} pool on PocketBuddy!`,
-        url: `${window.location.origin}/pool/${data.id}`,
-      }).catch(() => {});
+    try {
+      const expires = new Date(Date.now() + parseInt(dur, 10) * 60_000).toISOString();
+      const data = await insertCartPool({
+        data: {
+          created_by_name: userName || "You",
+          wing_label: wing,
+          platform,
+          min_cart_value: Math.round(parseFloat(minCart) * 100),
+          delivery_fee: Math.round(parseFloat(fee) * 100),
+          expires_at: expires,
+        },
+      });
+      toast.success("Pool created! Share with your wing.");
+      if (data && navigator.share) {
+        navigator.share({
+          title: "Join my cart pool",
+          text: `Join my ${platform} pool on PocketBuddy!`,
+          url: `${window.location.origin}/pool/${data.id}`,
+        }).catch(() => {});
+      }
+      onDone();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create pool");
+    } finally {
+      setBusy(false);
     }
-    onDone();
   }
 
   return (

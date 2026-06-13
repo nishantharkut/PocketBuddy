@@ -197,6 +197,12 @@ function Dashboard() {
       });
   }, [subs, calc]);
 
+  const cumulativeCollisionLimit = useMemo(() => {
+    if (!collisions.length || !calc) return 0;
+    const totalAmount = collisions.reduce((sum, s) => sum + s.amount, 0);
+    return calc.daysLeft > 0 ? Math.max(0, Math.round((calc.remaining - totalAmount / 100) / calc.daysLeft)) : 0;
+  }, [collisions, calc]);
+
   // Recent
   const recent = (txns ?? []).slice(0, 8);
 
@@ -459,6 +465,16 @@ function Dashboard() {
               UPCOMING COLLISIONS
             </h3>
             <div className="mt-2 space-y-2">
+              {collisions.length > 1 && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-600 dark:text-red-400 mb-2">
+                  <p className="font-bold uppercase tracking-wider text-[9px] text-red-500 flex items-center gap-1">
+                    <span>⚠️ Cumulative Budget Alert</span>
+                  </p>
+                  <p className="mt-0.5 font-medium leading-relaxed">
+                    If all {collisions.length} subscriptions debit this week, your daily allowance survival threshold will drop to <strong className="text-foreground font-black text-sm">{rupees(cumulativeCollisionLimit * 100)}</strong>/day.
+                  </p>
+                </div>
+              )}
               {collisions.map((c) => (
                 <Card
                   key={c.id}

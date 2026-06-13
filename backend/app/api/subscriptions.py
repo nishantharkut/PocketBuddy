@@ -20,6 +20,70 @@ class SubReq(BaseModel):
 @router.get("")
 async def get_subscriptions(user_id: str = Depends(get_current_user)):
     db = get_db()
+    
+    # Auto-detect subscriptions dynamically from historical transaction streams
+    try:
+        txns_cursor = db.transactions.find({"user_id": user_id}).sort("created_at", -1)
+        txns = await txns_cursor.to_list(length=150)
+        
+        # Group by clean merchant and amount to check for monthly recurrences
+        groups = {}
+        for t in txns:
+            m_name = t.get("mapped_merchant_name") or t.get("raw_merchant_string")
+            if not m_name:
+                continue
+            amt = t.get("amount")
+            if not amt or amt <= 0:
+                continue
+            key = (m_name.strip(), amt)
+            groups.setdefault(key, []).append(t)
+            
+        for (m_name, amt), t_list in groups.items():
+            if len(t_list) >= 2:
+                # Sort by created_at ascending
+                t_list.sort(key=lambda x: x["created_at"])
+                
+                # Check date differences between consecutive transactions
+                for i in range(len(t_list) - 1):
+                    d1 = t_list[i]["created_at"]
+                    d2 = t_list[i + 1]["created_at"]
+                    
+                    # Convert to datetime if string
+                    if isinstance(d1, str):
+                        d1 = datetime.datetime.fromisoformat(d1.replace("Z", "+00:00"))
+                    if isinstance(d2, str):
+                        d2 = datetime.datetime.fromisoformat(d2.replace("Z", "+00:00"))
+                        
+                    days_diff = (d2 - d1).days
+                    
+                    # Gap matching regular monthly auto-debit billing cycles (25-35 days)
+                    if 25 <= days_diff <= 35:
+                        service_name = m_name.capitalize()
+                        
+                        # Verify if subscription already exists
+                        existing = await db.subscriptions.find_one({
+                            "user_id": user_id,
+                            "service_name": service_name
+                        })
+                        
+                        if not existing:
+                            next_debit = d2 + datetime.timedelta(days=30)
+                            await db.subscriptions.insert_one({
+                                "_id": str(uuid.uuid4()),
+                                "user_id": user_id,
+                                "name": service_name,
+                                "service_name": service_name,
+                                "amount": amt,
+                                "billing_cycle": "monthly",
+                                "next_debit_date": next_debit,
+                                "is_active": True,
+                                "detected_from": "auto_detected",
+                                "created_at": datetime.datetime.utcnow()
+                            })
+                        break
+    except Exception:
+        pass  # Fail-silent to ensure user can always load manual subscriptions
+        
     cursor = db.subscriptions.find({"user_id": user_id}).sort("next_debit_date", 1)
     subs = await cursor.to_list(length=100)
     return map_docs(subs)

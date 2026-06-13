@@ -87,11 +87,40 @@ def detect_subscription(merchant: Optional[str]) -> Optional[str]:
     if not merchant:
         return None
 
-    subscriptions = ["spotify", "netflix", "youtube", "prime", "xbox", "playstation", "adobe"]
+    subscriptions_map = {
+        "spotify": "Spotify",
+        "netflix": "Netflix",
+        "youtube": "YouTube Premium",
+        "prime": "Amazon Prime",
+        "hotstar": "Disney+ Hotstar",
+        "zee5": "Zee5",
+        "sonyliv": "SonyLIV",
+        "jio": "JioFiber",
+        "airtel": "Airtel Thanks",
+        "vi ": "Vi Postpaid",
+        "xbox": "Xbox Game Pass",
+        "playstation": "PlayStation Plus",
+        "nintendo": "Nintendo Switch Online",
+        "steam": "Steam",
+        "adobe": "Adobe Creative Cloud",
+        "canva": "Canva Pro",
+        "chatgpt": "ChatGPT Plus",
+        "midjourney": "Midjourney",
+        "github": "GitHub Copilot",
+        "icloud": "Apple iCloud",
+        "googleone": "Google One",
+        "google one": "Google One",
+        "notion": "Notion",
+        "duolingo": "Duolingo Plus",
+        "swiggy": "Swiggy One",
+        "zomato": "Zomato Gold",
+        "zepto": "Zepto Pass",
+        "blinkit": "Blinkit Club"
+    }
     low = merchant.lower()
-    for subscription in subscriptions:
-        if subscription in low:
-            return subscription.capitalize()
+    for kw, display_name in subscriptions_map.items():
+        if kw in low:
+            return display_name
     return None
 
 

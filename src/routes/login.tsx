@@ -1,11 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { signUpFn, signInWithPasswordFn, signInWithPhoneFn } from "@/lib/api/auth.functions";
 
 export const Route = createFileRoute("/login")({
   ssr: false,
@@ -17,7 +17,7 @@ type Tab = "email" | "phone";
 
 function LoginPage() {
   const nav = useNavigate();
-  const { session, loading } = useAuth();
+  const { session, loading, login } = useAuth();
   const [tab, setTab] = useState<Tab>("email");
   const [mode, setMode] = useState<Mode>("signin");
   const [fullName, setFullName] = useState("");
@@ -40,25 +40,28 @@ function LoginPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
-        const redirectUrl = `${window.location.origin}/dashboard`;
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: redirectUrl, data: { full_name: fullName } },
-        });
-        if (error) {
-          if (error.message.toLowerCase().includes("already")) toast.error("Account already exists");
-          else toast.error(error.message);
+        if (!fullName) {
+          toast.error("Enter your full name");
           return;
         }
-        toast.success("Account created!");
+        const result = await signUpFn({ data: { email, password, fullName } });
+        if (result && result.user) {
+          login(result.sessionToken, result.user);
+          toast.success("Account created!");
+        } else {
+          toast.error("Sign up failed");
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
+        const result = await signInWithPasswordFn({ data: { email, password } });
+        if (result && result.user) {
+          login(result.sessionToken, result.user);
+          toast.success("Signed in!");
+        } else {
           toast.error("Invalid credentials");
-          return;
         }
       }
+    } catch (error: any) {
+      toast.error(error.message || "An error occurred");
     } finally {
       setBusy(false);
     }
@@ -80,24 +83,15 @@ function LoginPage() {
     }
     setBusy(true);
     try {
-      // Demo phone OTP — map phone to deterministic email/password
-      const cleaned = phone.replace(/\D/g, "").slice(-10);
-      const demoEmail = `phone${cleaned}@pocketbuddy.local`;
-      const demoPass = `pb_${cleaned}_pwd!`;
-      const signIn = await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPass });
-      if (signIn.error) {
-        const signUp = await supabase.auth.signUp({
-          email: demoEmail,
-          password: demoPass,
-          options: { data: { full_name: fullName || "Student", phone_number: `+91${cleaned}` } },
-        });
-        if (signUp.error) {
-          toast.error("Could not verify OTP");
-          return;
-        }
-        // Try sign-in again
-        await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPass });
+      const result = await signInWithPhoneFn({ data: { phone, fullName: fullName || "Student" } });
+      if (result && result.user) {
+        login(result.sessionToken, result.user);
+        toast.success("Signed in!");
+      } else {
+        toast.error("Could not verify OTP");
       }
+    } catch (error: any) {
+      toast.error(error.message || "Verification failed");
     } finally {
       setBusy(false);
     }

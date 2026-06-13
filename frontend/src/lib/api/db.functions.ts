@@ -58,7 +58,16 @@ export async function getCampusFood() {
   return apiRequest("/api/campus-food");
 }
 
-
+export async function getFoodRecommendation({
+  data,
+}: {
+  data: { days_left: number; remaining_budget: number; spent_today: number };
+}) {
+  return apiRequest("/api/rag/food-rag", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
 
 export async function getCartPools() {
   return apiRequest("/api/cart-pools");

@@ -37,6 +37,7 @@ import {
   insertTransaction,
   insertCheckinLog,
   identifyMerchant,
+  getFoodRecommendation,
 } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -163,6 +164,36 @@ function Dashboard() {
     }
     return foods[0];
   }, [foods]);
+
+  const showRunwayAlert = calc ? calc.runwayDays < 7 || calc.safeDailyLimit < 150 : false;
+
+  const { data: foodRecommendation, isFetching: isFoodRecommendationLoading } = useQuery({
+    queryKey: [
+      "food-rag",
+      user?.id,
+      calc?.daysLeft,
+      Math.round(calc?.remaining ?? 0),
+      Math.round(calc?.spentToday ?? 0),
+    ],
+    enabled: !!user && !!calc && showRunwayAlert,
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      getFoodRecommendation({
+        data: {
+          days_left: calc!.daysLeft,
+          remaining_budget: calc!.remaining,
+          spent_today: calc!.spentToday,
+        },
+      }),
+  });
+
+  const runwayRecommendation = useMemo(() => {
+    if (typeof foodRecommendation?.recommendation === "string") {
+      return foodRecommendation.recommendation;
+    }
+    if (!bestFood || !calc) return null;
+    return `${bestFood.venue_name} has ${bestFood.item_name} for ${rupees(bestFood.price)}. It fits your ${rupees(calc.safeDailyLimit * 100)}/day safe limit.`;
+  }, [bestFood, calc, foodRecommendation]);
 
   const runwayColor = calc
     ? calc.runwayDays >= 15
@@ -358,7 +389,7 @@ function Dashboard() {
         </Card>
 
         {/* Alert */}
-        {calc && (calc.runwayDays < 7 || calc.safeDailyLimit < 150) && (
+        {calc && showRunwayAlert && (
           <Card
             id="card-runway-alert"
             className="border-l-4 border-l-[color:var(--pb-amber)] bg-[color:var(--surface)] p-4"
@@ -370,19 +401,15 @@ function Dashboard() {
               Your daily budget is {rupees(calc.safeDailyLimit * 100)}. Skip ordering delivery
               tonight.
             </p>
-            {bestFood && (
+            {runwayRecommendation && (
               <div className="mt-4 rounded-xl border border-[color:var(--pb-green)]/30 bg-[color:var(--pb-green)]/10 p-3">
                 <div className="flex items-center gap-1.5 text-[color:var(--pb-green)]">
                   <div className="h-2 w-2 rounded-full bg-current pulse-dot" />
                   <p className="text-[11px] font-bold tracking-wide">RAG SUGGESTION</p>
                 </div>
-                <p className="mt-1.5 text-[13px]">
-                  Hit up <span className="font-semibold text-foreground">{bestFood.venue_name}</span> for{" "}
-                  <span className="font-semibold text-foreground">{bestFood.item_name}</span>. It's
-                  only <span className="font-semibold tnum">{rupees(bestFood.price)}</span>.
-                </p>
+                <p className="mt-1.5 text-[13px] leading-relaxed">{runwayRecommendation}</p>
                 <p className="mt-1 text-[11px] text-[color:var(--pb-green)] opacity-80">
-                  Fits your {rupees(calc.safeDailyLimit)}/day safe limit perfectly.
+                  {isFoodRecommendationLoading ? "Refreshing campus options..." : "Based on your current runway."}
                 </p>
               </div>
             )}

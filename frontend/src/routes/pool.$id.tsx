@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth-context";
+
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { rupees, relativeTime } from "@/lib/format";
 import { getCartPool, getCartPoolItems, insertCartPoolItem } from "@/lib/api/db.functions";
 
-export const Route = createFileRoute("/_authenticated/pool/$id")({
+export const Route = createFileRoute("/pool/$id")({
   ssr: false,
   component: PoolDetail,
 });
@@ -24,7 +24,7 @@ type Item = any;
 
 function PoolDetail() {
   const { id } = Route.useParams();
-  const { user } = useAuth();
+
   const qc = useQueryClient();
   const nav = useNavigate();
 
@@ -70,7 +70,7 @@ function PoolDetail() {
   const deliveryPerPerson = people.length ? Math.round(pool.delivery_fee / people.length) : 0;
 
   async function addItem() {
-    if (!user) return;
+
     if (!name || !item || !price) {
       toast.error("Fill all fields");
       return;

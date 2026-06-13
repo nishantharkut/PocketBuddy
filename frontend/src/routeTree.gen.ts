@@ -12,13 +12,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PoolIdRouteImport } from './routes/pool.$id'
 import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCompanionRouteImport } from './routes/_authenticated/companion'
 import { Route as AuthenticatedPoolIndexRouteImport } from './routes/_authenticated/pool/index'
-import { Route as AuthenticatedPoolIdRouteImport } from './routes/_authenticated/pool/$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -32,6 +32,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PoolIdRoute = PoolIdRouteImport.update({
+  id: '/pool/$id',
+  path: '/pool/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedTransactionsRoute =
@@ -65,11 +70,6 @@ const AuthenticatedPoolIndexRoute = AuthenticatedPoolIndexRouteImport.update({
   path: '/pool/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedPoolIdRoute = AuthenticatedPoolIdRouteImport.update({
-  id: '/pool/$id',
-  path: '/pool/$id',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -79,7 +79,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
-  '/pool/$id': typeof AuthenticatedPoolIdRoute
+  '/pool/$id': typeof PoolIdRoute
   '/pool/': typeof AuthenticatedPoolIndexRoute
 }
 export interface FileRoutesByTo {
@@ -90,7 +90,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
-  '/pool/$id': typeof AuthenticatedPoolIdRoute
+  '/pool/$id': typeof PoolIdRoute
   '/pool': typeof AuthenticatedPoolIndexRoute
 }
 export interface FileRoutesById {
@@ -103,7 +103,7 @@ export interface FileRoutesById {
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/transactions': typeof AuthenticatedTransactionsRoute
-  '/_authenticated/pool/$id': typeof AuthenticatedPoolIdRoute
+  '/pool/$id': typeof PoolIdRoute
   '/_authenticated/pool/': typeof AuthenticatedPoolIndexRoute
 }
 export interface FileRouteTypes {
@@ -139,7 +139,7 @@ export interface FileRouteTypes {
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
     | '/_authenticated/transactions'
-    | '/_authenticated/pool/$id'
+    | '/pool/$id'
     | '/_authenticated/pool/'
   fileRoutesById: FileRoutesById
 }
@@ -147,6 +147,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  PoolIdRoute: typeof PoolIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -170,6 +171,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pool/$id': {
+      id: '/pool/$id'
+      path: '/pool/$id'
+      fullPath: '/pool/$id'
+      preLoaderRoute: typeof PoolIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/transactions': {
@@ -214,13 +222,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPoolIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/pool/$id': {
-      id: '/_authenticated/pool/$id'
-      path: '/pool/$id'
-      fullPath: '/pool/$id'
-      preLoaderRoute: typeof AuthenticatedPoolIdRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
   }
 }
 
@@ -230,7 +231,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTransactionsRoute: typeof AuthenticatedTransactionsRoute
-  AuthenticatedPoolIdRoute: typeof AuthenticatedPoolIdRoute
   AuthenticatedPoolIndexRoute: typeof AuthenticatedPoolIndexRoute
 }
 
@@ -240,7 +240,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTransactionsRoute: AuthenticatedTransactionsRoute,
-  AuthenticatedPoolIdRoute: AuthenticatedPoolIdRoute,
   AuthenticatedPoolIndexRoute: AuthenticatedPoolIndexRoute,
 }
 
@@ -251,6 +250,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  PoolIdRoute: PoolIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

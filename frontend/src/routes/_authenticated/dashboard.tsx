@@ -94,30 +94,6 @@ function Dashboard() {
     queryFn: () => getTransactions(),
   });
 
-  const { data: foods } = useQuery({
-    queryKey: ["foods"],
-    staleTime: 5 * 60_000,
-    queryFn: () => getCampusFood(),
-  });
-
-  const { data: subs } = useQuery({
-    queryKey: ["subs", user?.id],
-    enabled: !!user,
-    staleTime: 30_000,
-    queryFn: () => getSubscriptions(),
-  });
-
-  const { data: pools } = useQuery({
-    queryKey: ["pools", profile?.wing_label],
-    enabled: !!profile?.wing_label,
-    staleTime: 15_000,
-    refetchInterval: 5000, // MongoDB real-time replacement polling
-    queryFn: async (): Promise<(Pool & { items: PoolItem[] })[]> => {
-      const ps = await getCartPools();
-      return ps ?? [];
-    },
-  });
-
   // Runway calculation
   const calc = useMemo(() => {
     if (!profile) return null;
@@ -150,6 +126,32 @@ function Dashboard() {
       pct: Math.min(100, Math.round((totalSpent / totalAllowance) * 100)),
     };
   }, [profile, txns]);
+
+
+
+  const { data: subs } = useQuery({
+    queryKey: ["subs", user?.id],
+    enabled: !!user,
+    staleTime: 30_000,
+    queryFn: () => getSubscriptions(),
+  });
+
+  const { data: pools } = useQuery({
+    queryKey: ["pools", profile?.wing_label],
+    enabled: !!profile?.wing_label,
+    staleTime: 15_000,
+    refetchInterval: 5000, // MongoDB real-time replacement polling
+    queryFn: async (): Promise<(Pool & { items: PoolItem[] })[]> => {
+      const ps = await getCartPools();
+      return ps ?? [];
+    },
+  });
+
+  const { data: foods } = useQuery({
+  queryKey: ["foods"],
+  staleTime: 30_000,
+  queryFn: () => getCampusFood(),
+});
 
   // Best food suggestion
   const bestFood = useMemo(() => {
@@ -261,7 +263,6 @@ function Dashboard() {
     await insertCheckinLog({
       data: {
         response: "skipped",
-        stress_note: stressNote || null,
         food_gap_hours: foodGapHours,
         suggestion_given: suggestion,
       },
@@ -362,10 +363,20 @@ function Dashboard() {
               tonight.
             </p>
             {bestFood && (
-              <p className="mt-1 text-[13px]">
-                → {bestFood.venue_name} has {bestFood.item_name} ({rupees(bestFood.price)}), open
-                until {fmtTime(bestFood.available_until)}.
-              </p>
+              <div className="mt-4 rounded-xl border border-[color:var(--pb-green)]/30 bg-[color:var(--pb-green)]/10 p-3">
+                <div className="flex items-center gap-1.5 text-[color:var(--pb-green)]">
+                  <div className="h-2 w-2 rounded-full bg-current pulse-dot" />
+                  <p className="text-[11px] font-bold tracking-wide">RAG SUGGESTION</p>
+                </div>
+                <p className="mt-1.5 text-[13px]">
+                  Hit up <span className="font-semibold text-foreground">{bestFood.venue_name}</span> for{" "}
+                  <span className="font-semibold text-foreground">{bestFood.item_name}</span>. It's
+                  only <span className="font-semibold tnum">{rupees(bestFood.price)}</span>.
+                </p>
+                <p className="mt-1 text-[11px] text-[color:var(--pb-green)] opacity-80">
+                  Fits your {rupees(calc.safeDailyLimit)}/day safe limit perfectly.
+                </p>
+              </div>
             )}
             <button
               onClick={() => setShowFoodSheet(true)}

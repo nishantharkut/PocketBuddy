@@ -58,6 +58,8 @@ export async function getCampusFood() {
   return apiRequest("/api/campus-food");
 }
 
+
+
 export async function getCartPools() {
   return apiRequest("/api/cart-pools");
 }
@@ -97,7 +99,7 @@ export async function getCurrentUser() {
 }
 
 export async function identifyMerchant({ data }: { data: any }) {
-  return apiRequest("/api/merchants/identify", {
+  return apiRequest(`/api/transactions/${data.txn_id}/identify`, {
     method: "POST",
     body: JSON.stringify(data),
   });

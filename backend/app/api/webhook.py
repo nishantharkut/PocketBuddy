@@ -124,6 +124,26 @@ def detect_subscription(merchant: Optional[str]) -> Optional[str]:
     return None
 
 
+def mask_notification_text(text: str) -> str:
+    preview = re.sub(r"\s+", " ", text).strip()
+    preview = re.sub(r"https?://\S+", "[link]", preview, flags=re.IGNORECASE)
+    preview = re.sub(
+        r"([A-Z]{2,}-[A-Z0-9]{2,}-?[A-Z0-9]*\s*)",
+        "",
+        preview,
+        flags=re.IGNORECASE,
+    )
+    preview = re.sub(
+        r"((?:upi\s*ref(?:erence)?\s*(?:no\.?|number)?|utr|txn\s*id)\s*[:.\-]?\s*)[A-Z0-9]{4,}",
+        r"\1[ref]",
+        preview,
+        flags=re.IGNORECASE,
+    )
+    preview = re.sub(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[email]", preview, flags=re.IGNORECASE)
+    preview = re.sub(r"(?<!\d)\d{4,}(?!\d)", "[digits]", preview)
+    return preview[:180]
+
+
 def user_id_from_authorization(authorization: Optional[str]) -> Optional[str]:
     if not authorization or not authorization.startswith("Bearer "):
         return None
@@ -210,6 +230,7 @@ async def ingest_notification(
         raise HTTPException(status_code=403, detail="Invalid pairing code")
 
     raw_body = req.text or req.body or ""
+    notification_preview = mask_notification_text(raw_body)
     notification_source = req.captureSource or req.type or req.source or "unknown"
     device_id = req.deviceId or x_pocketbuddy_device_id
     log_id = str(uuid.uuid4())
@@ -221,7 +242,7 @@ async def ingest_notification(
             "device_id": device_id,
             "device_name": req.device_name or req.sourceApp or req.packageName,
             "notification_source": notification_source,
-            "raw_body": raw_body,
+            "notification_preview": notification_preview,
             "processing_status": "pending",
             "package_name": req.packageName,
             "source_app": req.sourceApp,
@@ -279,7 +300,7 @@ async def ingest_notification(
         "category": merchant_doc["category"] if merchant_doc else None,
         "is_mapped": bool(merchant_doc),
         "source": source,
-        "raw_notification_body": raw_body,
+        "notification_preview": notification_preview,
         "transaction_reference": transaction_reference,
         "device_id": device_id,
         "package_name": req.packageName,

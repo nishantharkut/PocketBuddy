@@ -145,7 +145,7 @@ function PoolCard({ pool }: { pool: Pool }) {
     0,
     Math.round((new Date(pool.expires_at).getTime() - Date.now()) / 60000),
   );
-  
+
   const theme = BRAND_THEMES[pool.platform] || {
     bg: "bg-primary",
     text: "text-primary-foreground",
@@ -159,8 +159,8 @@ function PoolCard({ pool }: { pool: Pool }) {
   return (
     <Link to="/pool/$id" params={{ id: pool.id }} className="block no-underline">
       <Card className={`relative overflow-hidden p-4 border transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm hover:shadow-md ${
-        active 
-          ? `bg-gradient-to-r ${theme.gradient} text-white border-transparent` 
+        active
+          ? `bg-gradient-to-r ${theme.gradient} text-white border-transparent`
           : "bg-[color:var(--surface)] text-foreground border-border"
       }`}>
         {active && (
@@ -171,7 +171,7 @@ function PoolCard({ pool }: { pool: Pool }) {
             </span>
           </div>
         )}
-        
+
         <div className="flex flex-col justify-between h-full">
           <div>
             <div className="flex items-center gap-2">
@@ -203,8 +203,8 @@ function PoolCard({ pool }: { pool: Pool }) {
                 </span>
               ) : (
                 <Badge className={`font-bold capitalize ${
-                  pool.status === "completed" 
-                    ? "bg-green-600 text-white" 
+                  pool.status === "completed"
+                    ? "bg-green-600 text-white"
                     : pool.status === "cancelled"
                     ? "bg-red-600 text-white"
                     : "bg-muted text-muted-foreground"

@@ -475,7 +475,7 @@ function PoolDetail() {
             </div>
             <Progress id="progress-pool-cart" value={cartPct} className="h-2.5 bg-muted" />
             <p className="mt-2 text-xs text-muted-foreground">
-              {cartTotal >= pool.min_cart_value 
+              {cartTotal >= pool.min_cart_value
                 ? "🎉 Target cart minimum reached! Split delivery is active."
                 : `Need ${rupees(pool.min_cart_value - cartTotal)} more to strip small-cart/delivery fees.`}
             </p>
@@ -497,16 +497,16 @@ function PoolDetail() {
             {pool.status === "open" ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    id="btn-host-checkout" 
+                  <Button
+                    id="btn-host-checkout"
                     onClick={() => setCheckoutOpen(true)}
                     className="bg-[color:var(--pb-purple)] text-white hover:bg-[color:var(--pb-purple)]/90"
                   >
                     Complete & Split
                   </Button>
-                  <Button 
-                    id="btn-host-cancel" 
-                    variant="outline" 
+                  <Button
+                    id="btn-host-cancel"
+                    variant="outline"
                     onClick={cancelPool}
                     className="border-red-500 text-red-500 hover:bg-red-500/10"
                   >
@@ -550,7 +550,7 @@ function PoolDetail() {
                 <p className="text-xs text-muted-foreground font-semibold">
                   Order complete! Review payment verification queue below:
                 </p>
-                
+
                 {/* Host Payment Verification Checklist */}
                 <div className="space-y-2 max-h-48 overflow-auto">
                   {(pool.payments ?? []).length === 0 ? (
@@ -589,7 +589,7 @@ function PoolDetail() {
                     ))
                   )}
                 </div>
-                
+
                 <div className="flex gap-2 pt-1.5 border-t border-border">
                   <div className="text-xs bg-muted px-2.5 py-1 rounded border border-border">
                     Final fees: <strong>{rupees(pool.final_overhead)}</strong>
@@ -620,9 +620,9 @@ function PoolDetail() {
                     {pool.status === "completed" ? (
                       <span className={`h-2.5 w-2.5 rounded-full ${
                         details.paymentStatus === "verified" || details.paymentStatus === "host"
-                          ? "bg-green-500" 
-                          : details.paymentStatus === "pending" 
-                            ? "bg-amber-500 animate-pulse" 
+                          ? "bg-green-500"
+                          : details.paymentStatus === "pending"
+                            ? "bg-amber-500 animate-pulse"
                             : "bg-red-500"
                       }`} />
                     ) : (
@@ -697,10 +697,10 @@ function PoolDetail() {
                     {participants.filter(p => splitBreakdown[p]).map(p => (
                       <option key={p} value={p}>
                         {p} ({rupees(splitBreakdown[p].total)}) - {
-                          splitBreakdown[p].paymentStatus === "verified" 
-                            ? "Verified ✓" 
-                            : splitBreakdown[p].paymentStatus === "pending" 
-                              ? "Pending Verify ⏳" 
+                          splitBreakdown[p].paymentStatus === "verified"
+                            ? "Verified ✓"
+                            : splitBreakdown[p].paymentStatus === "pending"
+                              ? "Pending Verify ⏳"
                               : splitBreakdown[p].paymentStatus === "host"
                                 ? "Host 👑"
                                 : "Unpaid ❌"
@@ -748,8 +748,8 @@ function PoolDetail() {
                             <span>Pay Wing Host</span>
                           </p>
                           {/* Mobile Click to Pay Button */}
-                          <a 
-                            href={upiPayUrl} 
+                          <a
+                            href={upiPayUrl}
                             className="block w-full sm:hidden"
                             onClick={() => {
                               toast.info("Opening UPI mobile app...");
@@ -843,15 +843,15 @@ function PoolDetail() {
                       <div key={it.id} className={`flex items-center justify-between py-2.5 transition-opacity ${it.is_purchased === false ? "opacity-40 line-through" : ""}`}>
                         <div className="flex-1 min-w-0 pr-2 flex flex-col items-start gap-0.5">
                           <p className="text-sm font-semibold text-foreground truncate">{it.item_description}</p>
-                          
+
                           {it.product_url && (
                             <a
                               href={formatExternalUrl(it.product_url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className={`inline-flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all border shadow-sm ${
-                                pool.platform === 'zepto' 
-                                  ? 'bg-[#5E17EB]/10 border-[#5E17EB]/20 text-[#5E17EB] hover:bg-[#5E17EB]/20' 
+                                pool.platform === 'zepto'
+                                  ? 'bg-[#5E17EB]/10 border-[#5E17EB]/20 text-[#5E17EB] hover:bg-[#5E17EB]/20'
                                   : pool.platform === 'blinkit'
                                   ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-700 hover:bg-yellow-500/20 dark:text-yellow-400 font-bold'
                                   : pool.platform === 'swiggy_instamart'
@@ -874,7 +874,7 @@ function PoolDetail() {
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="font-bold text-xs text-foreground tnum">{rupees(it.estimated_price)}</span>
-                          
+
                           {/* Item Actions (Host/Owner) */}
                           {canEditItem && (
                             <div className="flex items-center gap-1.5">
@@ -882,8 +882,8 @@ function PoolDetail() {
                                 <button
                                   onClick={() => toggleAvailability(it.id, it.is_purchased !== false)}
                                   className={`p-1 rounded hover:bg-muted border text-xs font-semibold ${
-                                    it.is_purchased !== false 
-                                      ? "text-green-500 hover:text-green-600 border-green-500/10 bg-green-500/5" 
+                                    it.is_purchased !== false
+                                      ? "text-green-500 hover:text-green-600 border-green-500/10 bg-green-500/5"
                                       : "text-red-500 hover:text-red-600 border-red-500/10 bg-red-500/5"
                                   }`}
                                   title={it.is_purchased !== false ? "Mark Out of Stock" : "Mark Available"}

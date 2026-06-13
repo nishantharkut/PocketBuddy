@@ -27,7 +27,10 @@ class PocketBuddyNotificationListener : NotificationListenerService() {
 
         val notificationText = extractNotificationText(sbn.notification)
         if (BuildConfig.DEBUG) {
-            Log.d(TAG, "Observed notification package=${sbn.packageName} text=$notificationText")
+            Log.d(
+                TAG,
+                "Observed notification package=${sbn.packageName} hasText=${notificationText != null}",
+            )
         }
         if (notificationText == null) return
 

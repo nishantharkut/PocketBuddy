@@ -137,6 +137,7 @@ function TxnsPage() {
         )}
         {visible.map((t) => {
           const isCompanion = t.source.startsWith("companion");
+          const notificationPreview = t.notification_preview;
           return (
             <div key={t.id} className="rounded-xl reactbits-card p-3">
               <div className="flex items-start justify-between">
@@ -156,12 +157,12 @@ function TxnsPage() {
                         {t.category}
                       </Badge>
                     )}
-                    {isCompanion && t.raw_notification_body && (
+                    {isCompanion && notificationPreview && (
                       <button
                         onClick={() => setExpanded(expanded === t.id ? null : t.id)}
                         className="text-[10px] text-[color:var(--pb-blue)]"
                       >
-                        {expanded === t.id ? "Hide raw" : "Show raw"}
+                        {expanded === t.id ? "Hide preview" : "Show preview"}
                       </button>
                     )}
                   </div>
@@ -172,9 +173,9 @@ function TxnsPage() {
                   <p className="text-[10px] text-muted-foreground">{absoluteDate(t.created_at)}</p>
                 </div>
               </div>
-              {expanded === t.id && t.raw_notification_body && (
+              {expanded === t.id && notificationPreview && (
                 <pre className="mt-2 rounded bg-[color:var(--surface-raised)] p-2 text-[11px] font-mono whitespace-pre-wrap">
-                  {t.raw_notification_body}
+                  {notificationPreview}
                 </pre>
               )}
             </div>

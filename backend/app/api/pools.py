@@ -48,29 +48,29 @@ async def get_cart_pools(user_id: str = Depends(get_current_user)):
     profile = await db.profiles.find_one({"_id": user_id})
     if not profile or not profile.get("wing_label"):
         return []
-    
+
     cursor = db.cart_pools.find({
         "wing_label": profile["wing_label"]
     }).sort("created_at", -1)
-    
+
     pools = await cursor.to_list(length=50)
-    
+
     for p in pools:
         p["id"] = str(p.pop("_id"))
         items_cursor = db.cart_pool_items.find({"pool_id": p["id"]})
         items = await items_cursor.to_list(length=100)
         p["items"] = map_docs(items)
-        
+
     return pools
 
 @router.post("")
 async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user)):
     db = get_db()
     pool_id = str(uuid.uuid4())
-    
+
     profile = await db.profiles.find_one({"_id": user_id})
     host_upi = profile.get("upi_id") if profile else None
-    
+
     new_pool = {
         "_id": pool_id,
         "host_id": user_id,
@@ -87,7 +87,7 @@ async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user
         "expires_at": datetime.datetime.fromisoformat(req.expires_at.replace("Z", "+00:00")),
         "created_at": datetime.datetime.utcnow()
     }
-    
+
     await db.cart_pools.insert_one(new_pool)
     return map_doc(new_pool)
 
@@ -105,36 +105,36 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
-        
+
     # Security Guard: Only host can finalize checkout or cancel
     if pool.get("host_id") != user_id:
         raise HTTPException(status_code=403, detail="Only the pool host can update pool configurations")
-        
+
     updates = {k: v for k, v in req.dict(exclude_unset=True).items() if v is not None}
     if not updates:
         return map_doc(pool)
-        
+
     # Check if transitioning to 'completed' to auto-log host split transaction
     if updates.get("status") == "completed" and pool.get("status") != "completed":
         items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
         items = await items_cursor.to_list(length=1000)
-        
+
         participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
         num_people = len(participants)
-        
+
         host_name = pool.get("created_by_name")
         host_items_total = 0
         for it in items:
             if it.get("is_purchased", True) and it["added_by_name"] == host_name:
                 host_items_total += it["estimated_price"]
-                
+
         final_overhead = updates.get("final_overhead", pool.get("final_overhead", 0))
         final_discount = updates.get("final_discount", pool.get("final_discount", 0))
         net_overhead = final_overhead - final_discount
         overhead_per_person = int(net_overhead / num_people) if num_people > 0 else 0
-        
+
         host_share = host_items_total + overhead_per_person
-        
+
         if host_share > 0:
             txn_id = str(uuid.uuid4())
             new_txn = {
@@ -149,7 +149,7 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
                 "created_at": datetime.datetime.utcnow()
             }
             await db.transactions.insert_one(new_txn)
-            
+
     await db.cart_pools.update_one({"_id": pool_id}, {"$set": updates})
     updated_pool = await db.cart_pools.find_one({"_id": pool_id})
     return map_doc(updated_pool)
@@ -160,30 +160,30 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
-        
+
     utr = req.utr.strip()
     if not utr.isdigit() or len(utr) != 12:
         raise HTTPException(status_code=400, detail="Invalid UTR format. Must be a 12-digit numeric reference.")
-        
+
     payment_entry = {
         "name": req.roommate_name,
         "utr": utr,
         "status": "pending",
         "submitted_at": datetime.datetime.utcnow().isoformat()
     }
-    
+
     # Remove any existing payment record for this roommate
     await db.cart_pools.update_one(
         {"_id": pool_id},
         {"$pull": {"payments": {"name": req.roommate_name}}}
     )
-    
+
     # Append the payment entry
     await db.cart_pools.update_one(
         {"_id": pool_id},
         {"$push": {"payments": payment_entry}}
     )
-    
+
     updated = await db.cart_pools.find_one({"_id": pool_id})
     return map_doc(updated)
 
@@ -193,11 +193,11 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
-        
+
     # Security Guard: Only the host can verify payments
     if pool.get("host_id") != user_id:
         raise HTTPException(status_code=403, detail="Only the pool host can verify payment logs")
-        
+
     if req.action == "verify":
         await db.cart_pools.update_one(
             {"_id": pool_id, "payments.name": req.roommate_name},
@@ -210,7 +210,7 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
         )
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
-        
+
     updated = await db.cart_pools.find_one({"_id": pool_id})
     return map_doc(updated)
 
@@ -224,13 +224,13 @@ async def get_pool_items(pool_id: str):
 @router.post("/{pool_id}/items")
 async def insert_pool_item(pool_id: str, req: PoolItemReq):
     db = get_db()
-    
+
     # Robustness Limit Validation
     if req.estimated_price <= 0 or req.estimated_price > 500000:
          raise HTTPException(status_code=400, detail="Estimated price must be between ₹1 and ₹5,000")
-         
+
     item_id = str(uuid.uuid4())
-    
+
     new_item = {
         "_id": item_id,
         "pool_id": pool_id,
@@ -241,7 +241,7 @@ async def insert_pool_item(pool_id: str, req: PoolItemReq):
         "is_purchased": True,
         "created_at": datetime.datetime.utcnow()
     }
-    
+
     await db.cart_pool_items.insert_one(new_item)
     return map_doc(new_item)
 
@@ -256,17 +256,17 @@ async def delete_pool_item(pool_id: str, item_id: str):
 @router.patch("/{pool_id}/items/{item_id}")
 async def update_pool_item(pool_id: str, item_id: str, req: PoolItemUpdateReq):
     db = get_db()
-    
+
     if req.estimated_price is not None and (req.estimated_price <= 0 or req.estimated_price > 500000):
          raise HTTPException(status_code=400, detail="Estimated price must be between ₹1 and ₹5,000")
-         
+
     item = await db.cart_pool_items.find_one({"_id": item_id, "pool_id": pool_id})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-        
+
     updates = {k: v for k, v in req.dict(exclude_unset=True).items() if v is not None}
     if updates:
         await db.cart_pool_items.update_one({"_id": item_id, "pool_id": pool_id}, {"$set": updates})
         item = await db.cart_pool_items.find_one({"_id": item_id, "pool_id": pool_id})
-        
+
     return map_doc(item)

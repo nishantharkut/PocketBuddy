@@ -79,7 +79,7 @@ The webhook should:
 
 1. Validate the payload structure and reject non-payment events.
 2. Bind the event to a user from `userId`, `X-PocketBuddy-User-Id`, bearer token, or a future pairing flow.
-3. Store a raw `companion_sync_log` row for observability.
+3. Store a masked `companion_sync_log` row for observability.
 4. De-duplicate app notification and SMS pairs for the same payment.
 5. Create or update one canonical `transactions` row.
 6. Update the user's profile with companion status.
@@ -103,7 +103,7 @@ Suggested sync-log fields:
   "device_id": "installation-scoped-uuid",
   "device_name": "PocketBuddy Android Connector",
   "notification_source": "sms_notification",
-  "raw_body": "Sent Rs.1.00...",
+  "notification_preview": "Sent Rs.1.00 from XXXXXX[digits] to CAMPUS CANTEEN...",
   "processing_status": "parsed",
   "parsed_amount": 1.0,
   "parsed_merchant": "CAMPUS CANTEEN",
@@ -135,7 +135,7 @@ GET /api/transactions
   {
     "id": "log-id",
     "notification_source": "sms_notification",
-    "raw_body": "Sent Rs.1.00...",
+    "notification_preview": "Sent Rs.1.00 from XXXXXX[digits] to CAMPUS CANTEEN...",
     "processing_status": "parsed",
     "created_at": "2026-06-13T17:12:08.232975Z"
   }
@@ -149,6 +149,10 @@ The frontend treats the Android connector as connected only when at least one of
 - `/api/companion/logs` returns at least one row
 
 The frontend does not mark the device connected by itself. Real connection state must come from backend ingest.
+
+## Privacy Rule
+
+The Android request body includes `text` because older payloads and fallback parsers need it. The backend should use that value only in-memory during request processing. New database rows should persist parsed fields plus `notification_preview`; they should not persist full raw notification or SMS text.
 
 ## Compatibility Note
 

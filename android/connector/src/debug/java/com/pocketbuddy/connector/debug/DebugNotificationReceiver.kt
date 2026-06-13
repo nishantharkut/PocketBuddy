@@ -50,7 +50,7 @@ class DebugNotificationReceiver : BroadcastReceiver() {
                 }
             val parsedNotification = UpiNotificationParser().parse(parserPackageName, notificationText)
             if (parsedNotification == null) {
-                Log.w(TAG, "Debug parser rejected notification package=$parserPackageName text=$notificationText")
+                Log.w(TAG, "Debug parser rejected notification package=$parserPackageName")
                 return
             }
 

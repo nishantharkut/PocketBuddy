@@ -175,7 +175,9 @@ function CompanionPage() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px]">{l.notification_source}</p>
-                      <p className="truncate text-[12px] text-muted-foreground">{l.raw_body}</p>
+                      <p className="truncate text-[12px] text-muted-foreground">
+                        {l.notification_preview ?? "Structured event received"}
+                      </p>
                     </div>
                     <div className="text-right">
                       <StatusBadge status={l.processing_status} />

@@ -1,0 +1,112 @@
+[
+  {
+    "id": "bh2-night-canteen-maggi",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "bh2-night-canteen",
+    "venue_name": "BH-2 Night Canteen",
+    "item_name": "Masala Maggi",
+    "category": "food",
+    "price": 3000,
+    "available_from": "20:00",
+    "available_until": "02:00"
+  },
+  {
+    "id": "bh2-night-canteen-egg-paratha",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "bh2-night-canteen",
+    "venue_name": "BH-2 Night Canteen",
+    "item_name": "Egg Paratha",
+    "category": "food",
+    "price": 4500,
+    "available_from": "20:00",
+    "available_until": "02:00"
+  },
+  {
+    "id": "bh2-night-canteen-tea",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "bh2-night-canteen",
+    "venue_name": "BH-2 Night Canteen",
+    "item_name": "Tea",
+    "category": "beverage",
+    "price": 1000,
+    "available_from": "20:00",
+    "available_until": "02:00"
+  },
+  {
+    "id": "juice-center-poha",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "juice-center",
+    "venue_name": "Campus Juice Center",
+    "item_name": "Poha",
+    "category": "food",
+    "price": 2500,
+    "available_from": "07:30",
+    "available_until": "11:00"
+  },
+  {
+    "id": "juice-center-banana-shake",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "juice-center",
+    "venue_name": "Campus Juice Center",
+    "item_name": "Banana Shake",
+    "category": "beverage",
+    "price": 3500,
+    "available_from": "09:00",
+    "available_until": "21:30"
+  },
+  {
+    "id": "main-canteen-veg-thali",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "main-canteen",
+    "venue_name": "Main Canteen",
+    "item_name": "Veg Thali",
+    "category": "food",
+    "price": 7000,
+    "available_from": "12:00",
+    "available_until": "15:00"
+  },
+  {
+    "id": "main-canteen-rajma-rice",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "main-canteen",
+    "venue_name": "Main Canteen",
+    "item_name": "Rajma Rice",
+    "category": "food",
+    "price": 6000,
+    "available_from": "12:00",
+    "available_until": "16:00"
+  },
+  {
+    "id": "library-cafe-samosa",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "library-cafe",
+    "venue_name": "Library Cafe",
+    "item_name": "Samosa",
+    "category": "snack",
+    "price": 1500,
+    "available_from": "10:00",
+    "available_until": "19:00"
+  },
+  {
+    "id": "library-cafe-coffee",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "library-cafe",
+    "venue_name": "Library Cafe",
+    "item_name": "Coffee",
+    "category": "beverage",
+    "price": 2000,
+    "available_from": "10:00",
+    "available_until": "22:00"
+  },
+  {
+    "id": "bh1-canteen-aloo-paratha",
+    "campus": "ABV-IIITM Gwalior",
+    "venue_id": "bh1-canteen",
+    "venue_name": "BH-1 Canteen",
+    "item_name": "Aloo Paratha",
+    "category": "food",
+    "price": 4000,
+    "available_from": "08:00",
+    "available_until": "12:00"
+  }
+]

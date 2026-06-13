@@ -1,7 +1,8 @@
 // Currency + date formatting (INR, IST)
 const inrFmt = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 export const rupees = (paisa: number): string => `₹${inrFmt.format(Math.round(paisa / 100))}`;
-export const rupeesFromInt = (rupeesInt: number): string => `₹${inrFmt.format(Math.round(rupeesInt))}`;
+export const rupeesFromInt = (rupeesInt: number): string =>
+  `₹${inrFmt.format(Math.round(rupeesInt))}`;
 
 export function relativeTime(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
@@ -20,7 +21,11 @@ export function relativeTime(iso: string | Date): string {
 export function absoluteDate(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
   return d.toLocaleString("en-IN", {
-    day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true,
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   });
 }
 
@@ -31,7 +36,9 @@ export function shortDate(iso: string | Date): string {
 
 // Cycle calculation
 export function getCycleStart(cycleStartDay: number, now = new Date()): Date {
-  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+  const y = now.getFullYear(),
+    m = now.getMonth(),
+    d = now.getDate();
   const candidate = new Date(y, m, cycleStartDay, 0, 0, 0, 0);
   if (d >= cycleStartDay) return candidate;
   return new Date(y, m - 1, cycleStartDay, 0, 0, 0, 0);

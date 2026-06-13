@@ -8,9 +8,19 @@ async function hashPassword(password: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function signUpUser({ email, password, fullName, phone }: { email: string; password?: string; fullName: string; phone?: string }) {
+export async function signUpUser({
+  email,
+  password,
+  fullName,
+  phone,
+}: {
+  email: string;
+  password?: string;
+  fullName: string;
+  phone?: string;
+}) {
   const { db } = await connectToDatabase();
-  
+
   const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
   if (existing) {
     throw new Error("User already exists");
@@ -55,7 +65,13 @@ export async function signUpUser({ email, password, fullName, phone }: { email: 
   return createSession(userId);
 }
 
-export async function signInWithPassword({ email, password }: { email: string; password?: string }) {
+export async function signInWithPassword({
+  email,
+  password,
+}: {
+  email: string;
+  password?: string;
+}) {
   const { db } = await connectToDatabase();
 
   const user = await db.collection("users").findOne({ email: email.toLowerCase() });
@@ -75,12 +91,12 @@ export async function signInWithPassword({ email, password }: { email: string; p
 
 export async function signInWithPhone({ phone, fullName }: { phone: string; fullName?: string }) {
   const { db } = await connectToDatabase();
-  
+
   const cleaned = phone.replace(/\D/g, "").slice(-10);
   const demoEmail = `phone${cleaned}@pocketbuddy.local`;
 
   let user = await db.collection("users").findOne({ email: demoEmail });
-  
+
   if (!user) {
     // Demo auto-signup for phone login
     const userId = globalThis.crypto.randomUUID();
@@ -138,12 +154,14 @@ async function createSession(userId: string) {
   return {
     sessionToken,
     userId,
-    user: user ? {
-      id: user._id.toString(),
-      email: user.email,
-      fullName: user.fullName,
-      phone: user.phone || null
-    } : null
+    user: user
+      ? {
+          id: user._id.toString(),
+          email: user.email,
+          fullName: user.fullName,
+          phone: user.phone || null,
+        }
+      : null,
   };
 }
 

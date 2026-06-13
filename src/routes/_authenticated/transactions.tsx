@@ -6,7 +6,11 @@ import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { rupees, relativeTime, absoluteDate, getCycleStart } from "@/lib/format";
 import { getProfile, getTransactions } from "@/lib/api/db.functions";
@@ -22,8 +26,12 @@ type Source = "all" | "companion" | "manual";
 type Range = "cycle" | "7" | "30" | "all";
 
 const CAT_FILTERS: { v: Cat; l: string }[] = [
-  { v: "all", l: "All" }, { v: "food", l: "Food" }, { v: "stationery", l: "Stationery" },
-  { v: "travel", l: "Travel" }, { v: "subscription", l: "Subscription" }, { v: "other", l: "Other" },
+  { v: "all", l: "All" },
+  { v: "food", l: "Food" },
+  { v: "stationery", l: "Stationery" },
+  { v: "travel", l: "Travel" },
+  { v: "subscription", l: "Subscription" },
+  { v: "other", l: "Other" },
   { v: "unmapped", l: "Unmapped" },
 ];
 
@@ -56,10 +64,12 @@ function TxnsPage() {
       const start = getCycleStart(profile.cycle_start_day);
       out = out.filter((t) => new Date(t.created_at) >= start);
     } else if (range === "7") {
-      const c = new Date(now); c.setDate(c.getDate() - 7);
+      const c = new Date(now);
+      c.setDate(c.getDate() - 7);
       out = out.filter((t) => new Date(t.created_at) >= c);
     } else if (range === "30") {
-      const c = new Date(now); c.setDate(c.getDate() - 30);
+      const c = new Date(now);
+      c.setDate(c.getDate() - 30);
       out = out.filter((t) => new Date(t.created_at) >= c);
     }
     if (cat === "unmapped") out = out.filter((t) => !t.is_mapped);
@@ -80,8 +90,12 @@ function TxnsPage() {
         </div>
         <div className="flex gap-1.5 overflow-x-auto px-4 pb-2">
           {CAT_FILTERS.map((c) => (
-            <button key={c.v} id={`filter-txn-${c.v}`} onClick={() => setCat(c.v)}
-              className={`whitespace-nowrap rounded-full px-3 py-1 text-[12px] ${cat === c.v ? "bg-[color:var(--pb-blue)] text-white" : "bg-[color:var(--surface-raised)] border border-border text-muted-foreground"}`}>
+            <button
+              key={c.v}
+              id={`filter-txn-${c.v}`}
+              onClick={() => setCat(c.v)}
+              className={`whitespace-nowrap rounded-full px-3 py-1 text-[12px] ${cat === c.v ? "bg-[color:var(--pb-blue)] text-white" : "bg-[color:var(--surface-raised)] border border-border text-muted-foreground"}`}
+            >
               {c.l}
             </button>
           ))}
@@ -89,14 +103,20 @@ function TxnsPage() {
         <div className="flex items-center gap-2 px-4 pb-2">
           <span className="text-[11px] text-muted-foreground">Source:</span>
           {(["all", "companion", "manual"] as const).map((s) => (
-            <button key={s} id={`filter-source-${s}`} onClick={() => setSrc(s)}
-              className={`rounded-full px-2.5 py-0.5 text-[11px] capitalize ${src === s ? "bg-[color:var(--pb-purple)] text-white" : "bg-[color:var(--surface-raised)] text-muted-foreground"}`}>
+            <button
+              key={s}
+              id={`filter-source-${s}`}
+              onClick={() => setSrc(s)}
+              className={`rounded-full px-2.5 py-0.5 text-[11px] capitalize ${src === s ? "bg-[color:var(--pb-purple)] text-white" : "bg-[color:var(--surface-raised)] text-muted-foreground"}`}
+            >
               {s === "companion" ? "📲 Companion" : s === "manual" ? "✍️ Manual" : "All"}
             </button>
           ))}
           <div className="ml-auto">
             <Select value={range} onValueChange={(v) => setRange(v as Range)}>
-              <SelectTrigger id="select-txn-range" className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="select-txn-range" className="h-7 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="cycle">This Cycle</SelectItem>
                 <SelectItem value="7">Last 7 Days</SelectItem>
@@ -111,7 +131,9 @@ function TxnsPage() {
       <div className="px-4 py-3 pb-24 space-y-1.5">
         {isLoading && <Skeleton className="h-40 w-full" />}
         {!isLoading && visible.length === 0 && (
-          <p className="py-10 text-center text-[13px] text-muted-foreground">No transactions found.</p>
+          <p className="py-10 text-center text-[13px] text-muted-foreground">
+            No transactions found.
+          </p>
         )}
         {visible.map((t) => {
           const isCompanion = t.source.startsWith("companion");
@@ -119,15 +141,26 @@ function TxnsPage() {
             <div key={t.id} className="rounded-md bg-[color:var(--surface)] p-2.5">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <p className={`text-[13px] truncate ${t.is_mapped ? "" : "italic text-[color:var(--pb-amber)]"}`}>
+                  <p
+                    className={`text-[13px] truncate ${t.is_mapped ? "" : "italic text-[color:var(--pb-amber)]"}`}
+                  >
                     <span className="mr-1">{isCompanion ? "📲" : "✍️"}</span>
                     {t.mapped_merchant_name ?? t.raw_merchant_string}
                   </p>
                   <div className="mt-0.5 flex flex-wrap gap-1">
-                    {t.category && <Badge variant="outline" className="text-[9px] py-0 px-1.5 text-muted-foreground">{t.category}</Badge>}
+                    {t.category && (
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] py-0 px-1.5 text-muted-foreground"
+                      >
+                        {t.category}
+                      </Badge>
+                    )}
                     {isCompanion && t.raw_notification_body && (
-                      <button onClick={() => setExpanded(expanded === t.id ? null : t.id)}
-                        className="text-[10px] text-[color:var(--pb-blue)]">
+                      <button
+                        onClick={() => setExpanded(expanded === t.id ? null : t.id)}
+                        className="text-[10px] text-[color:var(--pb-blue)]"
+                      >
                         {expanded === t.id ? "Hide raw" : "Show raw"}
                       </button>
                     )}
@@ -140,13 +173,18 @@ function TxnsPage() {
                 </div>
               </div>
               {expanded === t.id && t.raw_notification_body && (
-                <pre className="mt-2 rounded bg-[color:var(--surface-raised)] p-2 text-[11px] font-mono whitespace-pre-wrap">{t.raw_notification_body}</pre>
+                <pre className="mt-2 rounded bg-[color:var(--surface-raised)] p-2 text-[11px] font-mono whitespace-pre-wrap">
+                  {t.raw_notification_body}
+                </pre>
               )}
             </div>
           );
         })}
         {filtered.length > visible.length && (
-          <button onClick={() => setLimit((l) => l + 20)} className="mt-2 w-full rounded-md border border-border bg-[color:var(--surface)] py-2 text-[13px]">
+          <button
+            onClick={() => setLimit((l) => l + 20)}
+            className="mt-2 w-full rounded-md border border-border bg-[color:var(--surface)] py-2 text-[13px]"
+          >
             Load more
           </button>
         )}

@@ -9,7 +9,7 @@ export const signUpFn = createServerFn({ method: "POST" })
       password: z.string().optional(),
       fullName: z.string(),
       phone: z.string().optional(),
-    })
+    }),
   )
   .handler(async ({ data }) => {
     return await signUpUser(data);
@@ -20,7 +20,7 @@ export const signInWithPasswordFn = createServerFn({ method: "POST" })
     z.object({
       email: z.string().email(),
       password: z.string().optional(),
-    })
+    }),
   )
   .handler(async ({ data }) => {
     return await signInWithPassword(data);
@@ -31,7 +31,7 @@ export const signInWithPhoneFn = createServerFn({ method: "POST" })
     z.object({
       phone: z.string(),
       fullName: z.string().optional(),
-    })
+    }),
   )
   .handler(async ({ data }) => {
     return await signInWithPhone(data);

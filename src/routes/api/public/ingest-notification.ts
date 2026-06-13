@@ -19,8 +19,9 @@ function parseUpiBody(text: string): { amount: number | null; merchant: string |
 
   let merchant: string | null = null;
   const toMatch =
-    text.match(/(?:paid|debited)[^a-z0-9]*(?:₹|Rs\.?|INR)?\s*[0-9.,]+\s*(?:to|at)\s+([A-Za-z0-9_ .&\-/]+?)(?:\s+(?:on|via|from|for|UPI|Ref|Bal|—)|$|\.)/i) ??
-    text.match(/(?:to|at)\s+([A-Z][A-Z0-9_\- ]{3,40})/);
+    text.match(
+      /(?:paid|debited)[^a-z0-9]*(?:₹|Rs\.?|INR)?\s*[0-9.,]+\s*(?:to|at)\s+([A-Za-z0-9_ .&\-/]+?)(?:\s+(?:on|via|from|for|UPI|Ref|Bal|—)|$|\.)/i,
+    ) ?? text.match(/(?:to|at)\s+([A-Z][A-Z0-9_\- ]{3,40})/);
   if (toMatch) merchant = toMatch[1].trim().replace(/\s+/g, "_").slice(0, 80);
 
   const upiMatch = text.match(/UPI\/([A-Z0-9_\-]+)/i);
@@ -50,21 +51,37 @@ export const Route = createFileRoute("/api/public/ingest-notification")({
         try {
           body = (await request.json()) as IngestBody;
         } catch {
-          return new Response(JSON.stringify({ status: "bad_json" }), { status: 400, headers: cors });
+          return new Response(JSON.stringify({ status: "bad_json" }), {
+            status: 400,
+            headers: cors,
+          });
         }
 
         if (!body.user_id || !body.body) {
-          return new Response(JSON.stringify({ status: "missing_fields" }), { status: 400, headers: cors });
+          return new Response(JSON.stringify({ status: "missing_fields" }), {
+            status: 400,
+            headers: cors,
+          });
         }
 
         const { db } = await connectToDatabase();
 
         const profile = await db.collection("profiles").findOne({ _id: body.user_id as any });
         if (!profile) {
-          return new Response(JSON.stringify({ status: "user_not_found" }), { status: 404, headers: cors });
+          return new Response(JSON.stringify({ status: "user_not_found" }), {
+            status: 404,
+            headers: cors,
+          });
         }
-        if (profile.pairing_code && body.pairing_code && profile.pairing_code !== body.pairing_code) {
-          return new Response(JSON.stringify({ status: "invalid_pairing_code" }), { status: 401, headers: cors });
+        if (
+          profile.pairing_code &&
+          body.pairing_code &&
+          profile.pairing_code !== body.pairing_code
+        ) {
+          return new Response(JSON.stringify({ status: "invalid_pairing_code" }), {
+            status: 401,
+            headers: cors,
+          });
         }
 
         const deviceName = body.device_name ?? "Unknown Device";
@@ -86,11 +103,13 @@ export const Route = createFileRoute("/api/public/ingest-notification")({
         const { amount, merchant } = parseUpiBody(body.body);
 
         if (!amount || !merchant) {
-          await db.collection("companion_sync_log").updateOne(
-            { _id: logId as any },
-            { $set: { processing_status: "failed" } }
-          );
-          return new Response(JSON.stringify({ status: "parse_failed" }), { status: 200, headers: cors });
+          await db
+            .collection("companion_sync_log")
+            .updateOne({ _id: logId as any }, { $set: { processing_status: "failed" } });
+          return new Response(JSON.stringify({ status: "parse_failed" }), {
+            status: 200,
+            headers: cors,
+          });
         }
 
         // Look up merchant directory
@@ -121,7 +140,7 @@ export const Route = createFileRoute("/api/public/ingest-notification")({
               parsed_amount: amount,
               parsed_merchant: merchant,
             },
-          }
+          },
         );
 
         await db.collection("profiles").updateOne(
@@ -132,13 +151,13 @@ export const Route = createFileRoute("/api/public/ingest-notification")({
               companion_device_name: deviceName,
               companion_last_sync: new Date(),
             },
-          }
+          },
         );
 
-        return new Response(
-          JSON.stringify({ status: "ok", transaction_id: txnId }),
-          { status: 200, headers: cors }
-        );
+        return new Response(JSON.stringify({ status: "ok", transaction_id: txnId }), {
+          status: 200,
+          headers: cors,
+        });
       },
     },
   },

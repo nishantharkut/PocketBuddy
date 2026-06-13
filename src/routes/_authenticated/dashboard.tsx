@@ -10,15 +10,23 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import {
-  rupees, shortDate, relativeTime, getCycleStart, getCycleEnd, daysBetween,
-  isTimeInRange, fmtTime,
+  rupees,
+  shortDate,
+  relativeTime,
+  getCycleStart,
+  getCycleEnd,
+  daysBetween,
+  isTimeInRange,
+  fmtTime,
 } from "@/lib/format";
 import {
   getProfile,
@@ -44,8 +52,10 @@ type Pool = any;
 type PoolItem = any;
 
 const CATEGORIES = [
-  { v: "food", l: "🍜 Food" }, { v: "stationery", l: "📎 Stationery" },
-  { v: "travel", l: "🛺 Travel" }, { v: "other", l: "📦 Other" },
+  { v: "food", l: "🍜 Food" },
+  { v: "stationery", l: "📎 Stationery" },
+  { v: "travel", l: "🛺 Travel" },
+  { v: "other", l: "📦 Other" },
 ] as const;
 
 function CountUp({ to, duration = 400 }: { to: number; duration?: number }) {
@@ -124,11 +134,19 @@ function Dashboard() {
     const runwayDays = avgDailySpend > 0 ? Math.floor(remaining / avgDailySpend) : daysLeft;
     const safeDailyLimit = daysLeft > 0 ? Math.round(remaining / daysLeft) : 0;
     const todayStr = today.toDateString();
-    const spentToday = (txns ?? []).filter((t) => new Date(t.created_at).toDateString() === todayStr)
-      .reduce((s, t) => s + t.amount, 0) / 100;
+    const spentToday =
+      (txns ?? [])
+        .filter((t) => new Date(t.created_at).toDateString() === todayStr)
+        .reduce((s, t) => s + t.amount, 0) / 100;
     return {
-      totalAllowance, totalSpent, remaining, cycleEnd, daysLeft,
-      runwayDays: Math.min(runwayDays, daysLeft + 5), safeDailyLimit, spentToday,
+      totalAllowance,
+      totalSpent,
+      remaining,
+      cycleEnd,
+      daysLeft,
+      runwayDays: Math.min(runwayDays, daysLeft + 5),
+      safeDailyLimit,
+      spentToday,
       pct: Math.min(100, Math.round((totalSpent / totalAllowance) * 100)),
     };
   }, [profile, txns]);
@@ -145,7 +163,11 @@ function Dashboard() {
   }, [foods]);
 
   const runwayColor = calc
-    ? calc.runwayDays >= 15 ? "var(--pb-green)" : calc.runwayDays >= 7 ? "var(--pb-amber)" : "var(--pb-red)"
+    ? calc.runwayDays >= 15
+      ? "var(--pb-green)"
+      : calc.runwayDays >= 7
+        ? "var(--pb-amber)"
+        : "var(--pb-red)"
     : "var(--pb-blue)";
 
   // Companion indicator
@@ -161,13 +183,13 @@ function Dashboard() {
   const collisions = useMemo(() => {
     if (!subs || !calc) return [];
     const today = new Date();
-    const week = new Date(today); week.setDate(week.getDate() + 7);
+    const week = new Date(today);
+    week.setDate(week.getDate() + 7);
     return subs
       .filter((s) => new Date(s.next_debit_date) <= week)
       .map((s) => {
-        const newLimit = calc.daysLeft > 0
-          ? Math.round((calc.remaining - s.amount / 100) / calc.daysLeft)
-          : 0;
+        const newLimit =
+          calc.daysLeft > 0 ? Math.round((calc.remaining - s.amount / 100) / calc.daysLeft) : 0;
         return { ...s, newLimit, critical: newLimit < 80 };
       });
   }, [subs, calc]);
@@ -191,7 +213,9 @@ function Dashboard() {
     checkinChecked.current = true;
     const now = new Date();
     if (!profile.exam_start_date || !profile.exam_end_date) return;
-    const inExam = now >= new Date(profile.exam_start_date) && now <= new Date(profile.exam_end_date + "T23:59:59");
+    const inExam =
+      now >= new Date(profile.exam_start_date) &&
+      now <= new Date(profile.exam_end_date + "T23:59:59");
     if (!inExam) return;
     const lastFood = txns.find((t) => t.category === "food");
     const hours = lastFood ? (Date.now() - new Date(lastFood.created_at).getTime()) / 3600000 : 999;
@@ -231,7 +255,9 @@ function Dashboard() {
 
   async function handleCheckInSkipped() {
     if (!user) return;
-    const suggestion = bestFood ? `${bestFood.venue_name} ${bestFood.item_name} ${rupees(bestFood.price)}` : "Campus Café";
+    const suggestion = bestFood
+      ? `${bestFood.venue_name} ${bestFood.item_name} ${rupees(bestFood.price)}`
+      : "Campus Café";
     await insertCheckinLog({
       data: {
         response: "skipped",
@@ -241,9 +267,13 @@ function Dashboard() {
       },
     });
     localStorage.setItem("pocketbuddy_last_checkin", String(Date.now()));
-    setShowCheckIn(false); setStressNote(""); setCheckInExpanded(false);
+    setShowCheckIn(false);
+    setStressNote("");
+    setCheckInExpanded(false);
     if (bestFood) {
-      toast(`${bestFood.venue_name} has ${bestFood.item_name} (${rupees(bestFood.price)}) — go grab something.`);
+      toast(
+        `${bestFood.venue_name} has ${bestFood.item_name} (${rupees(bestFood.price)}) — go grab something.`,
+      );
     }
   }
 
@@ -251,15 +281,29 @@ function Dashboard() {
     <AppShell>
       {/* Top bar */}
       <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-[color:var(--surface)] px-4">
-        <h1 id="logo-dashboard" className="text-[14px] font-semibold tracking-[0.15em]">POCKETBUDDY</h1>
+        <h1 id="logo-dashboard" className="text-[14px] font-semibold tracking-[0.15em]">
+          POCKETBUDDY
+        </h1>
         <button
           onClick={() => nav({ to: "/companion" })}
-          title={compStatus === "green" ? "Companion syncing" : compStatus === "amber" ? "Companion idle" : "No companion"}
+          title={
+            compStatus === "green"
+              ? "Companion syncing"
+              : compStatus === "amber"
+                ? "Companion idle"
+                : "No companion"
+          }
           className="flex items-center gap-1.5"
         >
-          <span className={`h-1.5 w-1.5 rounded-full pulse-dot ${
-            compStatus === "green" ? "bg-[color:var(--pb-green)]"
-            : compStatus === "amber" ? "bg-[color:var(--pb-amber)]" : "bg-[color:var(--pb-red)]"}`} />
+          <span
+            className={`h-1.5 w-1.5 rounded-full pulse-dot ${
+              compStatus === "green"
+                ? "bg-[color:var(--pb-green)]"
+                : compStatus === "amber"
+                  ? "bg-[color:var(--pb-amber)]"
+                  : "bg-[color:var(--pb-red)]"
+            }`}
+          />
         </button>
         <Badge variant="outline" id="badge-wing" className="text-muted-foreground">
           {profile?.wing_label ?? "—"}
@@ -269,8 +313,12 @@ function Dashboard() {
       <div className="space-y-4 px-4 py-4">
         {/* Runway */}
         <Card id="card-runway-status" className="bg-[color:var(--surface-raised)] p-4">
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">RUNWAY STATUS</p>
-          {!calc ? <Skeleton className="mt-2 h-8 w-48" /> : (
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">
+            RUNWAY STATUS
+          </p>
+          {!calc ? (
+            <Skeleton className="mt-2 h-8 w-48" />
+          ) : (
             <>
               <h2 className="mt-2 text-[28px] font-bold tnum" style={{ color: runwayColor }}>
                 <CountUp to={calc.runwayDays} /> DAYS REMAINING
@@ -291,7 +339,9 @@ function Dashboard() {
                     Auto-tracking via {profile.companion_device_name ?? "companion"}
                   </>
                 ) : (
-                  <Link to="/companion" className="text-[color:var(--pb-amber)]">⚠ Manual tracking only — connect companion</Link>
+                  <Link to="/companion" className="text-[color:var(--pb-amber)]">
+                    ⚠ Manual tracking only — connect companion
+                  </Link>
                 )}
               </p>
             </>
@@ -300,19 +350,27 @@ function Dashboard() {
 
         {/* Alert */}
         {calc && (calc.runwayDays < 7 || calc.safeDailyLimit < 150) && (
-          <Card id="card-runway-alert" className="border-l-4 border-l-[color:var(--pb-amber)] bg-[color:var(--surface)] p-4">
+          <Card
+            id="card-runway-alert"
+            className="border-l-4 border-l-[color:var(--pb-amber)] bg-[color:var(--surface)] p-4"
+          >
             <p className="text-[11px] font-semibold text-[color:var(--pb-amber)] flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-[color:var(--pb-amber)]" /> RUNWAY ALERT
             </p>
             <p className="mt-2 text-[13px] leading-relaxed">
-              Your daily budget is {rupees(calc.safeDailyLimit * 100)}. Skip ordering delivery tonight.
+              Your daily budget is {rupees(calc.safeDailyLimit * 100)}. Skip ordering delivery
+              tonight.
             </p>
             {bestFood && (
               <p className="mt-1 text-[13px]">
-                → {bestFood.venue_name} has {bestFood.item_name} ({rupees(bestFood.price)}), open until {fmtTime(bestFood.available_until)}.
+                → {bestFood.venue_name} has {bestFood.item_name} ({rupees(bestFood.price)}), open
+                until {fmtTime(bestFood.available_until)}.
               </p>
             )}
-            <button onClick={() => setShowFoodSheet(true)} className="mt-2 text-[12px] text-[color:var(--pb-blue)]">
+            <button
+              onClick={() => setShowFoodSheet(true)}
+              className="mt-2 text-[12px] text-[color:var(--pb-blue)]"
+            >
               View all campus food options →
             </button>
           </Card>
@@ -321,27 +379,55 @@ function Dashboard() {
         {/* Active pools */}
         <section id="section-active-pools">
           <div className="flex items-center justify-between">
-            <h3 className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">ACTIVE POOLS</h3>
-            <Link to="/pool" id="btn-new-pool-dash" className="text-[12px] text-[color:var(--pb-purple)]">+ New Pool</Link>
+            <h3 className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">
+              ACTIVE POOLS
+            </h3>
+            <Link
+              to="/pool"
+              id="btn-new-pool-dash"
+              className="text-[12px] text-[color:var(--pb-purple)]"
+            >
+              + New Pool
+            </Link>
           </div>
           <div className="mt-2 space-y-2">
-            {(pools ?? []).length === 0 && <p className="py-4 text-center text-[12px] text-muted-foreground">No active pools in your wing.</p>}
+            {(pools ?? []).length === 0 && (
+              <p className="py-4 text-center text-[12px] text-muted-foreground">
+                No active pools in your wing.
+              </p>
+            )}
             {(pools ?? []).map((p) => {
               const total = p.items.reduce((s: number, i: any) => s + i.estimated_price, 0);
-              const minsLeft = Math.max(0, Math.round((new Date(p.expires_at).getTime() - Date.now()) / 60000));
-              const perPerson = p.items.length ? Math.round(p.delivery_fee / new Set(p.items.map((i: any) => i.added_by_name)).size) : 0;
+              const minsLeft = Math.max(
+                0,
+                Math.round((new Date(p.expires_at).getTime() - Date.now()) / 60000),
+              );
+              const perPerson = p.items.length
+                ? Math.round(
+                    p.delivery_fee / new Set(p.items.map((i: any) => i.added_by_name)).size,
+                  )
+                : 0;
               return (
                 <Link key={p.id} to="/pool/$id" params={{ id: p.id }}>
                   <Card className="p-3 bg-[color:var(--surface)] hover:border-[color:var(--pb-purple)]/40 transition-colors">
-                     <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium capitalize">{p.platform.replace("_", " ")}</span>
-                        <Badge variant="outline" className="text-muted-foreground">{p.wing_label}</Badge>
+                        <span className="text-sm font-medium capitalize">
+                          {p.platform.replace("_", " ")}
+                        </span>
+                        <Badge variant="outline" className="text-muted-foreground">
+                          {p.wing_label}
+                        </Badge>
                       </div>
-                      <span className={`text-[12px] font-medium text-[color:var(--pb-purple)] tnum ${minsLeft < 5 ? "countdown-pulse" : ""}`}>{minsLeft}m left</span>
+                      <span
+                        className={`text-[12px] font-medium text-[color:var(--pb-purple)] tnum ${minsLeft < 5 ? "countdown-pulse" : ""}`}
+                      >
+                        {minsLeft}m left
+                      </span>
                     </div>
                     <p className="mt-1 text-[12px] text-muted-foreground">
-                      Host: {p.created_by_name || "—"} • Cart: {rupees(total)}/{rupees(p.min_cart_value)} min
+                      Host: {p.created_by_name || "—"} • Cart: {rupees(total)}/
+                      {rupees(p.min_cart_value)} min
                     </p>
                     <p className="mt-1 text-[12px] text-[color:var(--pb-green)]">
                       {p.items.length} items • Split delivery: {rupees(perPerson)}/person
@@ -356,20 +442,35 @@ function Dashboard() {
         {/* Collisions */}
         {collisions.length > 0 && (
           <section id="section-collisions">
-            <h3 className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">UPCOMING COLLISIONS</h3>
+            <h3 className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">
+              UPCOMING COLLISIONS
+            </h3>
             <div className="mt-2 space-y-2">
               {collisions.map((c) => (
-                <Card key={c.id} className={`p-3 bg-[color:var(--surface)] ${c.critical ? "border-l-4 border-l-[color:var(--pb-red)]" : ""}`}>
+                <Card
+                  key={c.id}
+                  className={`p-3 bg-[color:var(--surface)] ${c.critical ? "border-l-4 border-l-[color:var(--pb-red)]" : ""}`}
+                >
                   <div className="flex items-center justify-between">
                     <p className="text-[13px]">
                       {c.service_name} • {shortDate(new Date(c.next_debit_date))}
-                      {c.detected_from === "auto_detected" && <Badge className="ml-2 bg-[color:var(--pb-purple)]/20 text-[color:var(--pb-purple)] text-[10px]">Auto-detected</Badge>}
+                      {c.detected_from === "auto_detected" && (
+                        <Badge className="ml-2 bg-[color:var(--pb-purple)]/20 text-[color:var(--pb-purple)] text-[10px]">
+                          Auto-detected
+                        </Badge>
+                      )}
                     </p>
-                    <p className="text-[13px] font-semibold text-[color:var(--pb-red)] tnum">−{rupees(c.amount)}</p>
+                    <p className="text-[13px] font-semibold text-[color:var(--pb-red)] tnum">
+                      −{rupees(c.amount)}
+                    </p>
                   </div>
                   <p className="mt-1 text-[12px] text-muted-foreground">
                     Daily food budget drops to {rupees(c.newLimit * 100)}
-                    {c.critical && <span className="ml-2 text-[color:var(--pb-red)] font-medium">⚠ CRITICAL</span>}
+                    {c.critical && (
+                      <span className="ml-2 text-[color:var(--pb-red)] font-medium">
+                        ⚠ CRITICAL
+                      </span>
+                    )}
                   </p>
                 </Card>
               ))}
@@ -380,38 +481,78 @@ function Dashboard() {
         {/* Recent */}
         <section id="section-recent">
           <div className="flex items-center justify-between">
-            <h3 className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">RECENT</h3>
-            <Link to="/transactions" id="link-see-all-txns" className="text-[12px] text-[color:var(--pb-blue)]">See all →</Link>
+            <h3 className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">
+              RECENT
+            </h3>
+            <Link
+              to="/transactions"
+              id="link-see-all-txns"
+              className="text-[12px] text-[color:var(--pb-blue)]"
+            >
+              See all →
+            </Link>
           </div>
           <div className="mt-2 space-y-1.5">
-            {!txns ? <Skeleton className="h-32 w-full" /> : recent.length === 0 ? (
-              <p className="py-4 text-center text-[12px] text-muted-foreground">No transactions yet.</p>
-            ) : recent.map((t, i) => (
-              <div key={t.id} className="flex items-center justify-between rounded-md bg-[color:var(--surface)] p-2.5"
-                style={{ animation: `pb-stagger 300ms ${i * 50}ms backwards ease-out` }}>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-[13px] truncate ${t.is_mapped ? "" : "italic text-[color:var(--pb-amber)]"}`}>
-                    {t.mapped_merchant_name ?? t.raw_merchant_string}
-                  </p>
-                  <div className="mt-0.5 flex gap-1">
-                    {t.category && <Badge variant="outline" className="text-[9px] py-0 px-1.5 text-muted-foreground">{t.category}</Badge>}
-                    {t.source !== "manual" && <Badge className="text-[9px] py-0 px-1.5 bg-[color:var(--pb-purple)]/20 text-[color:var(--pb-purple)]">📲 {t.source.split("_")[1]}</Badge>}
-                    {!t.is_mapped && (
-                      <button id={`btn-identify-${t.id}`} onClick={() => setIdentifying(t)}
-                        className="rounded bg-[color:var(--pb-amber)]/20 px-1.5 py-0 text-[9px] text-[color:var(--pb-amber)]">
-                        Identify?
-                      </button>
-                    )}
+            {!txns ? (
+              <Skeleton className="h-32 w-full" />
+            ) : recent.length === 0 ? (
+              <p className="py-4 text-center text-[12px] text-muted-foreground">
+                No transactions yet.
+              </p>
+            ) : (
+              recent.map((t, i) => (
+                <div
+                  key={t.id}
+                  className="flex items-center justify-between rounded-md bg-[color:var(--surface)] p-2.5"
+                  style={{ animation: `pb-stagger 300ms ${i * 50}ms backwards ease-out` }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-[13px] truncate ${t.is_mapped ? "" : "italic text-[color:var(--pb-amber)]"}`}
+                    >
+                      {t.mapped_merchant_name ?? t.raw_merchant_string}
+                    </p>
+                    <div className="mt-0.5 flex gap-1">
+                      {t.category && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] py-0 px-1.5 text-muted-foreground"
+                        >
+                          {t.category}
+                        </Badge>
+                      )}
+                      {t.source !== "manual" && (
+                        <Badge className="text-[9px] py-0 px-1.5 bg-[color:var(--pb-purple)]/20 text-[color:var(--pb-purple)]">
+                          📲 {t.source.split("_")[1]}
+                        </Badge>
+                      )}
+                      {!t.is_mapped && (
+                        <button
+                          id={`btn-identify-${t.id}`}
+                          onClick={() => setIdentifying(t)}
+                          className="rounded bg-[color:var(--pb-amber)]/20 px-1.5 py-0 text-[9px] text-[color:var(--pb-amber)]"
+                        >
+                          Identify?
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[13px] font-semibold tnum">{rupees(t.amount)}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {relativeTime(t.created_at)}
+                    </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[13px] font-semibold tnum">{rupees(t.amount)}</p>
-                  <p className="text-[11px] text-muted-foreground">{relativeTime(t.created_at)}</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
-          <Button id="btn-add-transaction" variant="outline" className="mt-3 w-full" onClick={() => setAdding(true)}>
+          <Button
+            id="btn-add-transaction"
+            variant="outline"
+            className="mt-3 w-full"
+            onClick={() => setAdding(true)}
+          >
             Log Transaction
           </Button>
         </section>
@@ -422,35 +563,58 @@ function Dashboard() {
       {/* Identify dialog */}
       <Dialog open={!!identifying} onOpenChange={(o) => !o && setIdentifying(null)}>
         <DialogContent id="dialog-merchant-mapping">
-          {identifying && <IdentifyForm txn={identifying} onClose={() => { setIdentifying(null); qc.invalidateQueries(); }} />}
+          {identifying && (
+            <IdentifyForm
+              txn={identifying}
+              onClose={() => {
+                setIdentifying(null);
+                qc.invalidateQueries();
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
       {/* Add txn */}
       <Dialog open={adding} onOpenChange={setAdding}>
         <DialogContent id="dialog-add-transaction">
-          <AddTxnForm onClose={() => { setAdding(false); qc.invalidateQueries(); }} />
+          <AddTxnForm
+            onClose={() => {
+              setAdding(false);
+              qc.invalidateQueries();
+            }}
+          />
         </DialogContent>
       </Dialog>
 
       {/* Food options */}
       <Sheet open={showFoodSheet} onOpenChange={setShowFoodSheet}>
         <SheetContent side="bottom" className="max-h-[80vh] overflow-auto">
-          <SheetHeader><SheetTitle>Campus Food Options</SheetTitle></SheetHeader>
+          <SheetHeader>
+            <SheetTitle>Campus Food Options</SheetTitle>
+          </SheetHeader>
           <div className="mt-4 space-y-4">
-            {Object.entries((foods ?? []).reduce<Record<string, Food[]>>((acc, f) => {
-              (acc[f.venue_name] ??= []).push(f); return acc;
-            }, {})).map(([venue, items]) => (
+            {Object.entries(
+              (foods ?? []).reduce<Record<string, Food[]>>((acc, f) => {
+                (acc[f.venue_name] ??= []).push(f);
+                return acc;
+              }, {}),
+            ).map(([venue, items]) => (
               <div key={venue}>
                 <h4 className="text-[12px] font-semibold text-muted-foreground">{venue}</h4>
                 <div className="mt-1 space-y-1">
                   {items.map((it) => {
                     const open = isTimeInRange(new Date(), it.available_from, it.available_until);
                     return (
-                      <div key={it.id} className="flex items-center justify-between rounded bg-[color:var(--surface)] p-2">
+                      <div
+                        key={it.id}
+                        className="flex items-center justify-between rounded bg-[color:var(--surface)] p-2"
+                      >
                         <div>
                           <p className="text-sm">{it.item_name}</p>
-                          <p className={`text-[11px] ${open ? "text-[color:var(--pb-green)]" : "text-muted-foreground"}`}>
+                          <p
+                            className={`text-[11px] ${open ? "text-[color:var(--pb-green)]" : "text-muted-foreground"}`}
+                          >
                             {open ? "Open Now" : `Opens at ${fmtTime(it.available_from)}`}
                           </p>
                         </div>
@@ -466,28 +630,54 @@ function Dashboard() {
       </Sheet>
 
       {/* Check-in dialog */}
-      <Dialog open={showCheckIn} onOpenChange={() => { /* not dismissible */ }}>
-        <DialogContent id="dialog-checkin" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+      <Dialog
+        open={showCheckIn}
+        onOpenChange={() => {
+          /* not dismissible */
+        }}
+      >
+        <DialogContent
+          id="dialog-checkin"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Hey, it's been a while since your last meal.</DialogTitle>
           </DialogHeader>
           <p className="text-[13px] text-muted-foreground">It's exam season. Quick check:</p>
-          <p className="text-[12px] text-[color:var(--pb-amber)]">Last food transaction was {Math.round(foodGapHours)} hours ago</p>
+          <p className="text-[12px] text-[color:var(--pb-amber)]">
+            Last food transaction was {Math.round(foodGapHours)} hours ago
+          </p>
           <div className="mt-3 space-y-2">
-            <button id="btn-checkin-ate" onClick={handleCheckInAte}
-              className="w-full rounded-md border-l-4 border-l-[color:var(--pb-green)] bg-[color:var(--surface)] p-3 text-left text-[13px]">
+            <button
+              id="btn-checkin-ate"
+              onClick={handleCheckInAte}
+              className="w-full rounded-md border-l-4 border-l-[color:var(--pb-green)] bg-[color:var(--surface)] p-3 text-left text-[13px]"
+            >
               ✓ I ate at mess / cooked / ordered in
             </button>
             <div className="rounded-md border-l-4 border-l-[color:var(--pb-red)] bg-[color:var(--surface)] p-3">
-              <button id="btn-checkin-skipped" onClick={() => setCheckInExpanded(true)} className="w-full text-left text-[13px]">
+              <button
+                id="btn-checkin-skipped"
+                onClick={() => setCheckInExpanded(true)}
+                className="w-full text-left text-[13px]"
+              >
                 ✗ Skipped / couldn't eat
               </button>
               {checkInExpanded && (
                 <div className="mt-2 space-y-2">
                   <p className="text-[12px] text-muted-foreground">What happened?</p>
-                  <Input id="input-checkin-note" value={stressNote} onChange={(e) => setStressNote(e.target.value)}
-                    placeholder="e.g., was studying, mess closed, no money" />
-                  <Button variant="outline" className="w-full border-[color:var(--pb-red)] text-[color:var(--pb-red)]" onClick={handleCheckInSkipped}>
+                  <Input
+                    id="input-checkin-note"
+                    value={stressNote}
+                    onChange={(e) => setStressNote(e.target.value)}
+                    placeholder="e.g., was studying, mess closed, no money"
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full border-[color:var(--pb-red)] text-[color:var(--pb-red)]"
+                    onClick={handleCheckInSkipped}
+                  >
                     Submit
                   </Button>
                 </div>
@@ -501,7 +691,11 @@ function Dashboard() {
 }
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-full bg-[color:var(--surface)] px-2.5 py-1 text-[11px] tnum">{children}</span>;
+  return (
+    <span className="rounded-full bg-[color:var(--surface)] px-2.5 py-1 text-[11px] tnum">
+      {children}
+    </span>
+  );
 }
 
 function IdentifyForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
@@ -509,7 +703,10 @@ function IdentifyForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
   const [cat, setCat] = useState<string>("food");
   const [busy, setBusy] = useState(false);
   async function save() {
-    if (!name) { toast.error("Enter shop name"); return; }
+    if (!name) {
+      toast.error("Enter shop name");
+      return;
+    }
     setBusy(true);
     try {
       await identifyMerchant({
@@ -529,22 +726,40 @@ function IdentifyForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
   }
   return (
     <>
-      <DialogHeader><DialogTitle>What is this shop?</DialogTitle></DialogHeader>
-      <code className="block rounded bg-[color:var(--surface-raised)] px-3 py-1.5 text-xs">{txn.raw_merchant_string}</code>
+      <DialogHeader>
+        <DialogTitle>What is this shop?</DialogTitle>
+      </DialogHeader>
+      <code className="block rounded bg-[color:var(--surface-raised)] px-3 py-1.5 text-xs">
+        {txn.raw_merchant_string}
+      </code>
       <div>
         <label className="text-[12px] text-muted-foreground">Shop name on campus</label>
-        <Input id="input-map-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Hostel 1 Night Canteen" className="mt-1" />
+        <Input
+          id="input-map-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g., Hostel 1 Night Canteen"
+          className="mt-1"
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         {CATEGORIES.map((c) => (
-          <button key={c.v} onClick={() => setCat(c.v)}
-            className={`rounded-md border p-3 text-center text-sm ${cat === c.v ? "border-[color:var(--pb-blue)] bg-[color:var(--pb-blue)]/10" : "border-border bg-[color:var(--surface)]"}`}>
+          <button
+            key={c.v}
+            onClick={() => setCat(c.v)}
+            className={`rounded-md border p-3 text-center text-sm ${cat === c.v ? "border-[color:var(--pb-blue)] bg-[color:var(--pb-blue)]/10" : "border-border bg-[color:var(--surface)]"}`}
+          >
             {c.l}
           </button>
         ))}
       </div>
       <DialogFooter>
-        <Button id="btn-save-merchant" disabled={busy} onClick={save} className="w-full bg-[color:var(--pb-green)] text-white hover:bg-[color:var(--pb-green)]/90">
+        <Button
+          id="btn-save-merchant"
+          disabled={busy}
+          onClick={save}
+          className="w-full bg-[color:var(--pb-green)] text-white hover:bg-[color:var(--pb-green)]/90"
+        >
           Save for everyone on campus
         </Button>
       </DialogFooter>
@@ -558,7 +773,10 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
   const [cat, setCat] = useState<string>("food");
   const [busy, setBusy] = useState(false);
   async function save() {
-    if (!amount || !merchant) { toast.error("Fill all fields"); return; }
+    if (!amount || !merchant) {
+      toast.error("Fill all fields");
+      return;
+    }
     setBusy(true);
     try {
       await insertTransaction({
@@ -580,23 +798,41 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
   }
   return (
     <>
-      <DialogHeader><DialogTitle>Log a transaction</DialogTitle></DialogHeader>
+      <DialogHeader>
+        <DialogTitle>Log a transaction</DialogTitle>
+      </DialogHeader>
       <div className="flex items-center rounded-md border border-input bg-[color:var(--surface)]">
         <span className="px-3 text-sm text-muted-foreground">₹</span>
-        <input id="input-txn-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
-          className="flex-1 bg-transparent py-2 pr-3 text-sm outline-none" placeholder="Amount" />
+        <input
+          id="input-txn-amount"
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="flex-1 bg-transparent py-2 pr-3 text-sm outline-none"
+          placeholder="Amount"
+        />
       </div>
-      <Input id="input-txn-merchant" value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder="BH-2 Night Canteen" />
+      <Input
+        id="input-txn-merchant"
+        value={merchant}
+        onChange={(e) => setMerchant(e.target.value)}
+        placeholder="BH-2 Night Canteen"
+      />
       <div className="grid grid-cols-2 gap-2">
         {CATEGORIES.map((c) => (
-          <button key={c.v} onClick={() => setCat(c.v)}
-            className={`rounded-md border p-3 text-center text-sm ${cat === c.v ? "border-[color:var(--pb-blue)] bg-[color:var(--pb-blue)]/10" : "border-border bg-[color:var(--surface)]"}`}>
+          <button
+            key={c.v}
+            onClick={() => setCat(c.v)}
+            className={`rounded-md border p-3 text-center text-sm ${cat === c.v ? "border-[color:var(--pb-blue)] bg-[color:var(--pb-blue)]/10" : "border-border bg-[color:var(--surface)]"}`}
+          >
             {c.l}
           </button>
         ))}
       </div>
       <DialogFooter>
-        <Button id="btn-submit-txn" disabled={busy} onClick={save} className="w-full">Add</Button>
+        <Button id="btn-submit-txn" disabled={busy} onClick={save} className="w-full">
+          Add
+        </Button>
       </DialogFooter>
     </>
   );

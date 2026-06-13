@@ -39,7 +39,8 @@
   --font-sans: "Inter", system-ui, sans-serif;
 }
 
-:root, .dark {
+:root,
+.dark {
   --radius: 0.75rem;
   --background: hsl(224 30% 8%);
   --foreground: hsl(0 0% 95%);
@@ -77,25 +78,47 @@
   --sidebar-ring: hsl(217 85% 60%);
 }
 
-html { color-scheme: dark; }
+html {
+  color-scheme: dark;
+}
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
-  .tnum { font-variant-numeric: tabular-nums; }
-  .pulse-dot { animation: pb-pulse 3s ease-in-out infinite; }
-  @keyframes pb-pulse {
-    0%, 100% { opacity: 0.8; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.3); }
+  .tnum {
+    font-variant-numeric: tabular-nums;
   }
-  .countdown-pulse { animation: pb-cd 2s ease-in-out infinite; }
+  .pulse-dot {
+    animation: pb-pulse 3s ease-in-out infinite;
+  }
+  @keyframes pb-pulse {
+    0%,
+    100% {
+      opacity: 0.8;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.3);
+    }
+  }
+  .countdown-pulse {
+    animation: pb-cd 2s ease-in-out infinite;
+  }
   @keyframes pb-cd {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.65; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.65;
+    }
   }
 }

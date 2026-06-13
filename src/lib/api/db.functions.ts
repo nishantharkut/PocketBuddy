@@ -29,10 +29,9 @@ export const updateProfile = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { userId } = context;
     const { db } = await connectToDatabase();
-    await db.collection("profiles").updateOne(
-      { _id: userId as any },
-      { $set: { ...data, updated_at: new Date() } }
-    );
+    await db
+      .collection("profiles")
+      .updateOne({ _id: userId as any }, { $set: { ...data, updated_at: new Date() } });
     return { success: true };
   });
 
@@ -121,10 +120,9 @@ export const updateSubscriptionIsActive = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { userId } = context;
     const { db } = await connectToDatabase();
-    await db.collection("subscriptions").updateOne(
-      { _id: data.id as any, user_id: userId },
-      { $set: { is_active: data.is_active } }
-    );
+    await db
+      .collection("subscriptions")
+      .updateOne({ _id: data.id as any, user_id: userId }, { $set: { is_active: data.is_active } });
     return { success: true };
   });
 
@@ -153,7 +151,7 @@ export const getCartPools = createServerFn({ method: "GET" })
     const { db } = await connectToDatabase();
     const profile = await db.collection("profiles").findOne({ _id: userId as any });
     if (!profile || !profile.wing_label) return [];
-    
+
     const pools = await db
       .collection("cart_pools")
       .find({ wing_label: profile.wing_label })
@@ -267,17 +265,24 @@ export const identifyMerchant = createServerFn({ method: "POST" })
       raw_merchant_string: z.string(),
       display_name: z.string(),
       category: z.string(),
-    })
+    }),
   )
   .handler(async ({ context, data }) => {
     const { userId } = context;
     const { db } = await connectToDatabase();
-    const existing = await db.collection("merchant_directory").findOne({ raw_string: data.raw_merchant_string });
+    const existing = await db
+      .collection("merchant_directory")
+      .findOne({ raw_string: data.raw_merchant_string });
     if (existing) {
-      await db.collection("merchant_directory").updateOne(
-        { _id: existing._id },
-        { $set: { display_name: data.display_name, category: data.category }, $inc: { confirmation_count: 1 } }
-      );
+      await db
+        .collection("merchant_directory")
+        .updateOne(
+          { _id: existing._id },
+          {
+            $set: { display_name: data.display_name, category: data.category },
+            $inc: { confirmation_count: 1 },
+          },
+        );
     } else {
       await db.collection("merchant_directory").insertOne({
         _id: globalThis.crypto.randomUUID() as any,
@@ -290,10 +295,18 @@ export const identifyMerchant = createServerFn({ method: "POST" })
         created_at: new Date(),
       });
     }
-    await db.collection("transactions").updateMany(
-      { user_id: userId, raw_merchant_string: data.raw_merchant_string },
-      { $set: { mapped_merchant_name: data.display_name, category: data.category, is_mapped: true } }
-    );
+    await db
+      .collection("transactions")
+      .updateMany(
+        { user_id: userId, raw_merchant_string: data.raw_merchant_string },
+        {
+          $set: {
+            mapped_merchant_name: data.display_name,
+            category: data.category,
+            is_mapped: true,
+          },
+        },
+      );
     return { success: true };
   });
 

@@ -101,7 +101,10 @@ function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-[380px]">
         <div className="text-center">
-          <h1 id="logo-login" className="text-[20px] font-semibold tracking-[0.2em] text-foreground">
+          <h1
+            id="logo-login"
+            className="text-[20px] font-semibold tracking-[0.2em] text-foreground"
+          >
             POCKETBUDDY
           </h1>
           <p className="mt-1 text-[13px] text-muted-foreground">Campus Financial Guard</p>
@@ -192,10 +195,10 @@ function LoginPage() {
               {tab === "phone" && !otpSent
                 ? "Send OTP"
                 : mode === "signup"
-                ? "Create Account"
-                : tab === "phone"
-                ? "Verify & Sign In"
-                : "Sign In"}
+                  ? "Create Account"
+                  : tab === "phone"
+                    ? "Verify & Sign In"
+                    : "Sign In"}
             </Button>
           )}
         </div>

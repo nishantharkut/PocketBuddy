@@ -4,7 +4,11 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -17,10 +21,22 @@ export const Route = createFileRoute("/_authenticated/onboarding")({
 });
 
 const UPI_OPTIONS = ["Google Pay", "PhonePe", "Paytm", "Amazon Pay", "CRED"] as const;
-const COLLEGES = ["ABV-IIITM Gwalior", "IIT Delhi", "IIT Bombay", "NIT Trichy", "BITS Pilani", "NIT Warangal", "IIIT Hyderabad", "Other"] as const;
+const COLLEGES = [
+  "ABV-IIITM Gwalior",
+  "IIT Delhi",
+  "IIT Bombay",
+  "NIT Trichy",
+  "BITS Pilani",
+  "NIT Warangal",
+  "IIIT Hyderabad",
+  "Other",
+] as const;
 const CYCLE_DAYS = [
-  { v: 1, l: "1st of month" }, { v: 5, l: "5th" }, { v: 10, l: "10th" },
-  { v: 15, l: "15th" }, { v: 28, l: "Last day" },
+  { v: 1, l: "1st of month" },
+  { v: 5, l: "5th" },
+  { v: 10, l: "10th" },
+  { v: 15, l: "15th" },
+  { v: 28, l: "Last day" },
 ];
 
 function randomPairingCode() {
@@ -48,7 +64,9 @@ function Onboarding() {
   // Step 2
   const [mess, setMess] = useState(true);
   const [meals, setMeals] = useState<{ breakfast: boolean; lunch: boolean; dinner: boolean }>({
-    breakfast: false, lunch: true, dinner: true,
+    breakfast: false,
+    lunch: true,
+    dinner: true,
   });
   const [examStart, setExamStart] = useState("");
   const [examEnd, setExamEnd] = useState("");
@@ -76,7 +94,8 @@ function Onboarding() {
   async function saveStep1() {
     if (!user) return;
     if (!allowance || !hostel || !wing || !room) {
-      toast.error("Fill all fields"); return;
+      toast.error("Fill all fields");
+      return;
     }
     setBusy(true);
     try {
@@ -133,7 +152,11 @@ function Onboarding() {
         },
       });
       // Seed demo data
-      try { await seedFn(); } catch (e) { console.warn("seed", e); }
+      try {
+        await seedFn();
+      } catch (e) {
+        console.warn("seed", e);
+      }
       toast.success(skipPairing ? "Welcome! Add expenses manually." : "Device connected! 🎉");
       nav({ to: "/dashboard", replace: true });
     } catch (err: any) {
@@ -149,11 +172,13 @@ function Onboarding() {
   }
 
   function toggleUpi(app: string) {
-    setUpiApps((prev) => prev.includes(app) ? prev.filter((a) => a !== app) : [...prev, app]);
+    setUpiApps((prev) => (prev.includes(app) ? prev.filter((a) => a !== app) : [...prev, app]));
   }
 
   const Dot = ({ active, done }: { active?: boolean; done?: boolean }) => (
-    <span className={`h-2 w-2 rounded-full ${done ? "bg-[color:var(--pb-green)]" : active ? "bg-[color:var(--pb-blue)]" : "border border-border"}`} />
+    <span
+      className={`h-2 w-2 rounded-full ${done ? "bg-[color:var(--pb-green)]" : active ? "bg-[color:var(--pb-blue)]" : "border border-border"}`}
+    />
   );
 
   return (
@@ -169,33 +194,72 @@ function Onboarding() {
           <div id="onboarding-step-1" className="space-y-5">
             <div>
               <h2 className="text-[18px] font-semibold">Let's set up your financial guard</h2>
-              <p className="mt-1 text-[13px] text-muted-foreground">This takes 60 seconds. No bank access needed.</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                This takes 60 seconds. No bank access needed.
+              </p>
             </div>
-            <Field label="Monthly Allowance" helper="Total amount you receive each month from family">
+            <Field
+              label="Monthly Allowance"
+              helper="Total amount you receive each month from family"
+            >
               <div className="flex items-center rounded-md border border-input bg-[color:var(--surface)]">
                 <span className="px-3 text-sm text-muted-foreground">₹</span>
-                <input id="input-ob-allowance" type="number" value={allowance} onChange={(e) => setAllowance(e.target.value)}
-                  className="flex-1 bg-transparent py-2 pr-3 text-sm outline-none" />
+                <input
+                  id="input-ob-allowance"
+                  type="number"
+                  value={allowance}
+                  onChange={(e) => setAllowance(e.target.value)}
+                  className="flex-1 bg-transparent py-2 pr-3 text-sm outline-none"
+                />
               </div>
             </Field>
             <Field label="Allowance Arrives On" helper="Day your allowance hits your account">
               <Select value={cycleDay} onValueChange={setCycleDay}>
-                <SelectTrigger id="select-ob-cycle"><SelectValue /></SelectTrigger>
-                <SelectContent>{CYCLE_DAYS.map((d) => <SelectItem key={d.v} value={String(d.v)}>{d.l}</SelectItem>)}</SelectContent>
+                <SelectTrigger id="select-ob-cycle">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CYCLE_DAYS.map((d) => (
+                    <SelectItem key={d.v} value={String(d.v)}>
+                      {d.l}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </Field>
             <Field label="College">
               <Select value={college} onValueChange={setCollege}>
-                <SelectTrigger id="select-ob-college"><SelectValue /></SelectTrigger>
-                <SelectContent>{COLLEGES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                <SelectTrigger id="select-ob-college">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COLLEGES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </Field>
-            <Field label="Hostel Block"><Input id="input-ob-hostel" value={hostel} onChange={(e) => setHostel(e.target.value)} /></Field>
-            <Field label="Wing / Floor" helper="Your hostel corridor — for pooling orders with neighbors">
+            <Field label="Hostel Block">
+              <Input
+                id="input-ob-hostel"
+                value={hostel}
+                onChange={(e) => setHostel(e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Wing / Floor"
+              helper="Your hostel corridor — for pooling orders with neighbors"
+            >
               <Input id="input-ob-wing" value={wing} onChange={(e) => setWing(e.target.value)} />
             </Field>
-            <Field label="Room Number"><Input id="input-ob-room" value={room} onChange={(e) => setRoom(e.target.value)} /></Field>
-            <Button id="btn-ob-next-1" className="w-full" onClick={saveStep1} disabled={busy}>Next →</Button>
+            <Field label="Room Number">
+              <Input id="input-ob-room" value={room} onChange={(e) => setRoom(e.target.value)} />
+            </Field>
+            <Button id="btn-ob-next-1" className="w-full" onClick={saveStep1} disabled={busy}>
+              Next →
+            </Button>
           </div>
         )}
 
@@ -203,20 +267,35 @@ function Onboarding() {
           <div id="onboarding-step-2" className="space-y-5">
             <div>
               <h2 className="text-[18px] font-semibold">Your daily routine</h2>
-              <p className="mt-1 text-[13px] text-muted-foreground">Helps us detect meal-skipping patterns.</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Helps us detect meal-skipping patterns.
+              </p>
             </div>
             <Field label="Enrolled in Hostel Mess?">
               <div id="toggle-ob-mess" className="grid grid-cols-2 gap-2">
-                <button onClick={() => setMess(true)} className={`rounded-md border bg-[color:var(--surface)] p-3 text-left text-sm ${mess ? "border-l-4 border-l-[color:var(--pb-green)]" : "border-border"}`}>Yes, mess enrolled</button>
-                <button onClick={() => setMess(false)} className={`rounded-md border bg-[color:var(--surface)] p-3 text-left text-sm ${!mess ? "border-l-4 border-l-[color:var(--pb-amber)]" : "border-border"}`}>No, self-catering</button>
+                <button
+                  onClick={() => setMess(true)}
+                  className={`rounded-md border bg-[color:var(--surface)] p-3 text-left text-sm ${mess ? "border-l-4 border-l-[color:var(--pb-green)]" : "border-border"}`}
+                >
+                  Yes, mess enrolled
+                </button>
+                <button
+                  onClick={() => setMess(false)}
+                  className={`rounded-md border bg-[color:var(--surface)] p-3 text-left text-sm ${!mess ? "border-l-4 border-l-[color:var(--pb-amber)]" : "border-border"}`}
+                >
+                  No, self-catering
+                </button>
               </div>
             </Field>
             {mess && (
               <Field label="Meals You Typically Eat">
                 <div id="pills-ob-meals" className="flex gap-2">
                   {(["breakfast", "lunch", "dinner"] as const).map((m) => (
-                    <button key={m} onClick={() => setMeals({ ...meals, [m]: !meals[m] })}
-                      className={`rounded-full px-4 py-1.5 text-sm capitalize transition-colors ${meals[m] ? "bg-[color:var(--pb-blue)] text-white" : "bg-[color:var(--surface)] text-muted-foreground"}`}>
+                    <button
+                      key={m}
+                      onClick={() => setMeals({ ...meals, [m]: !meals[m] })}
+                      className={`rounded-full px-4 py-1.5 text-sm capitalize transition-colors ${meals[m] ? "bg-[color:var(--pb-blue)] text-white" : "bg-[color:var(--surface)] text-muted-foreground"}`}
+                    >
                       {m === "breakfast" ? "🌅" : m === "lunch" ? "☀️" : "🌙"} {m}
                     </button>
                   ))}
@@ -226,18 +305,33 @@ function Onboarding() {
             <div>
               <p className="text-[12px] text-muted-foreground">Upcoming exams (optional)</p>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                <Input id="input-ob-exam-start" type="date" value={examStart} onChange={(e) => setExamStart(e.target.value)} />
-                <Input id="input-ob-exam-end" type="date" value={examEnd} onChange={(e) => setExamEnd(e.target.value)} />
+                <Input
+                  id="input-ob-exam-start"
+                  type="date"
+                  value={examStart}
+                  onChange={(e) => setExamStart(e.target.value)}
+                />
+                <Input
+                  id="input-ob-exam-end"
+                  type="date"
+                  value={examEnd}
+                  onChange={(e) => setExamEnd(e.target.value)}
+                />
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">We'll watch for meal-skipping during this window</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                We'll watch for meal-skipping during this window
+              </p>
             </div>
             <Field label="UPI Apps You Use">
               <div id="pills-ob-upi" className="flex flex-wrap gap-2">
                 {UPI_OPTIONS.map((app) => {
                   const on = upiApps.includes(app);
                   return (
-                    <button key={app} onClick={() => toggleUpi(app)}
-                      className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-[color:var(--pb-purple)] text-white" : "bg-[color:var(--surface)] text-muted-foreground"}`}>
+                    <button
+                      key={app}
+                      onClick={() => toggleUpi(app)}
+                      className={`rounded-full px-3 py-1.5 text-xs ${on ? "bg-[color:var(--pb-purple)] text-white" : "bg-[color:var(--surface)] text-muted-foreground"}`}
+                    >
                       {app}
                     </button>
                   );
@@ -245,8 +339,15 @@ function Onboarding() {
               </div>
             </Field>
             <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => setStep(1)} className="text-sm text-muted-foreground text-left py-2">← Back</button>
-              <Button id="btn-ob-next-2" onClick={saveStep2} disabled={busy}>Next →</Button>
+              <button
+                onClick={() => setStep(1)}
+                className="text-sm text-muted-foreground text-left py-2"
+              >
+                ← Back
+              </button>
+              <Button id="btn-ob-next-2" onClick={saveStep2} disabled={busy}>
+                Next →
+              </Button>
             </div>
           </div>
         )}
@@ -255,33 +356,64 @@ function Onboarding() {
           <div id="onboarding-step-3" className="space-y-5">
             <div>
               <h2 className="text-[18px] font-semibold">Last step — auto-track spending</h2>
-              <p className="mt-1 text-[13px] text-muted-foreground">Install our tiny companion app to capture UPI notifications automatically. No bank access, no passwords.</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Install our tiny companion app to capture UPI notifications automatically. No bank
+                access, no passwords.
+              </p>
             </div>
             <div className="flex gap-2">
-              {[{ e: "📲", l: "Install APK" }, { e: "🔔", l: "Grant notification access" }, { e: "✨", l: "Auto-syncs expenses" }].map((c) => (
-                <div key={c.l} className="flex-1 rounded-lg bg-[color:var(--surface-raised)] p-3 text-center">
+              {[
+                { e: "📲", l: "Install APK" },
+                { e: "🔔", l: "Grant notification access" },
+                { e: "✨", l: "Auto-syncs expenses" },
+              ].map((c) => (
+                <div
+                  key={c.l}
+                  className="flex-1 rounded-lg bg-[color:var(--surface-raised)] p-3 text-center"
+                >
                   <div className="text-2xl">{c.e}</div>
                   <p className="mt-1 text-[11px] text-muted-foreground leading-tight">{c.l}</p>
                 </div>
               ))}
             </div>
-            <button onClick={downloadApk} className="w-full rounded-lg border-2 border-[color:var(--pb-blue)] bg-[color:var(--surface-raised)] p-5 text-center">
-              <div className="text-[15px] font-semibold text-[color:var(--pb-blue)]">⬇ Download PocketBuddy Companion</div>
-              <p className="mt-1 text-[12px] text-muted-foreground">Android only • 1.2 MB • No sign-in required</p>
+            <button
+              onClick={downloadApk}
+              className="w-full rounded-lg border-2 border-[color:var(--pb-blue)] bg-[color:var(--surface-raised)] p-5 text-center"
+            >
+              <div className="text-[15px] font-semibold text-[color:var(--pb-blue)]">
+                ⬇ Download PocketBuddy Companion
+              </div>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Android only • 1.2 MB • No sign-in required
+              </p>
             </button>
             <div className="text-center">
               <p className="text-[12px] text-muted-foreground">Your pairing code:</p>
-              <div id="text-pairing-code" className="mt-2 inline-block rounded-md bg-[color:var(--surface-raised)] px-5 py-3 text-[24px] font-bold tracking-[4px] text-[color:var(--pb-blue)] font-mono">
+              <div
+                id="text-pairing-code"
+                className="mt-2 inline-block rounded-md bg-[color:var(--surface-raised)] px-5 py-3 text-[24px] font-bold tracking-[4px] text-[color:var(--pb-blue)] font-mono"
+              >
                 {pairingCode}
               </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">Enter this code in the companion app after installing</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Enter this code in the companion app after installing
+              </p>
             </div>
             <div className="space-y-2">
-              <Button id="btn-ob-verify" onClick={() => finish(false)} disabled={busy}
-                className="w-full bg-[color:var(--pb-green)] text-white hover:bg-[color:var(--pb-green)]/90">
+              <Button
+                id="btn-ob-verify"
+                onClick={() => finish(false)}
+                disabled={busy}
+                className="w-full bg-[color:var(--pb-green)] text-white hover:bg-[color:var(--pb-green)]/90"
+              >
                 I've installed it — verify connection
               </Button>
-              <button id="link-ob-skip" onClick={() => finish(true)} disabled={busy} className="w-full text-center text-[13px] text-muted-foreground py-2">
+              <button
+                id="link-ob-skip"
+                onClick={() => finish(true)}
+                disabled={busy}
+                className="w-full text-center text-[13px] text-muted-foreground py-2"
+              >
                 Skip for now — I'll add expenses manually
               </button>
             </div>
@@ -292,7 +424,15 @@ function Onboarding() {
   );
 }
 
-function Field({ label, helper, children }: { label: string; helper?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  helper,
+  children,
+}: {
+  label: string;
+  helper?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label className="text-[13px] font-medium text-foreground">{label}</label>

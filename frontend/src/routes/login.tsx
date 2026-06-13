@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,12 @@ import { signUpFn, signInWithPasswordFn, signInWithPhoneFn } from "@/lib/api/aut
 
 export const Route = createFileRoute("/login")({
   ssr: false,
+  beforeLoad: () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("pb_session_token") : null;
+    if (token) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   component: LoginPage,
 });
 
@@ -32,13 +38,6 @@ function LoginPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (mounted && !loading && session) {
-      nav({ to: "/dashboard", replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, loading, session]);
 
   if (!mounted) {
     return null;

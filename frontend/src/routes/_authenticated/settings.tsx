@@ -269,7 +269,7 @@ function SettingsPage() {
             COMPANION DEVICE
           </h3>
           {profile.companion_paired ? (
-            <Card className="bg-[color:var(--surface-raised)] p-3">
+            <Card className="reactbits-card p-3">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-[color:var(--pb-green)] pulse-dot" />
                 <p className="text-[13px] font-medium">{profile.companion_device_name}</p>
@@ -321,7 +321,7 @@ function SettingsPage() {
               <p className="text-[12px] text-muted-foreground py-2">No subscriptions tracked.</p>
             )}
             {(subs ?? []).map((s) => (
-              <Card key={s.id} className="bg-[color:var(--surface)] p-3">
+              <Card key={s.id} className="reactbits-card p-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[13px]">

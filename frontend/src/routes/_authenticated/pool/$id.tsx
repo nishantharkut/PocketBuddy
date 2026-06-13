@@ -126,7 +126,7 @@ function PoolDetail() {
       </div>
 
       <div className="space-y-4 px-4 py-4 pb-72">
-        <div className="bg-[color:var(--surface)] rounded-lg p-3">
+        <Card className="reactbits-card p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-[16px] font-semibold capitalize">
@@ -147,7 +147,7 @@ function PoolDetail() {
               size="sm"
               variant="outline"
               onClick={share}
-              className="border-[color:var(--pb-purple)] text-[color:var(--pb-purple)]"
+              className="reactbits-btn"
             >
               <Share2 className="h-3 w-3 mr-1" /> Share
             </Button>
@@ -158,7 +158,7 @@ function PoolDetail() {
               {rupees(cartTotal)} / {rupees(pool.min_cart_value)} minimum
             </p>
           </div>
-        </div>
+        </Card>
 
         <Card id="card-split-summary" className="bg-[color:var(--surface-raised)] p-3">
           <h3 className="text-[11px] font-semibold tracking-[0.15em] text-muted-foreground">

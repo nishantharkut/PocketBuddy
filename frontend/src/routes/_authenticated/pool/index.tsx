@@ -64,7 +64,7 @@ function PoolList() {
           <SheetTrigger asChild>
             <button
               id="card-create-pool"
-              className="w-full rounded-lg border border-dashed border-[color:var(--pb-purple)] bg-[color:var(--surface-raised)] p-5 text-center"
+              className="w-full rounded-lg border border-dashed border-[color:var(--pb-purple)]/50 bg-[color:var(--surface)] p-5 text-center transition-all hover:bg-[color:var(--surface-raised)] hover:border-[color:var(--pb-purple)] active:scale-95"
             >
               <p className="text-[14px] font-semibold text-[color:var(--pb-purple)]">
                 + Start a new cart pool
@@ -123,7 +123,7 @@ function PoolCard({ pool }: { pool: Pool }) {
   );
   return (
     <Link to="/pool/$id" params={{ id: pool.id }}>
-      <Card className="p-3 bg-[color:var(--surface)]">
+      <Card className="p-3 reactbits-card">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium capitalize">

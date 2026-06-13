@@ -138,7 +138,7 @@ function TxnsPage() {
         {visible.map((t) => {
           const isCompanion = t.source.startsWith("companion");
           return (
-            <div key={t.id} className="rounded-md bg-[color:var(--surface)] p-2.5">
+            <div key={t.id} className="rounded-xl reactbits-card p-3">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <p
@@ -183,7 +183,7 @@ function TxnsPage() {
         {filtered.length > visible.length && (
           <button
             onClick={() => setLimit((l) => l + 20)}
-            className="mt-2 w-full rounded-md border border-border bg-[color:var(--surface)] py-2 text-[13px]"
+            className="mt-2 w-full rounded-md reactbits-btn py-2 text-[13px]"
           >
             Load more
           </button>

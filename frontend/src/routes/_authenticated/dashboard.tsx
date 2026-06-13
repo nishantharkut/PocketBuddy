@@ -409,7 +409,7 @@ function Dashboard() {
                 : 0;
               return (
                 <Link key={p.id} to="/pool/$id" params={{ id: p.id }}>
-                  <Card className="p-3 bg-[color:var(--surface)] hover:border-[color:var(--pb-purple)]/40 transition-colors">
+                  <Card className="p-3 reactbits-card z-10">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium capitalize">
@@ -449,7 +449,7 @@ function Dashboard() {
               {collisions.map((c) => (
                 <Card
                   key={c.id}
-                  className={`p-3 bg-[color:var(--surface)] ${c.critical ? "border-l-4 border-l-[color:var(--pb-red)]" : ""}`}
+                  className={`p-3 reactbits-card z-10 ${c.critical ? "border-l-4 border-l-[color:var(--pb-red)]" : ""}`}
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-[13px]">
@@ -503,7 +503,7 @@ function Dashboard() {
               recent.map((t, i) => (
                 <div
                   key={t.id}
-                  className="flex items-center justify-between rounded-md bg-[color:var(--surface)] p-2.5"
+                  className="flex items-center justify-between rounded-xl reactbits-card p-3 mb-2 z-10"
                   style={{ animation: `pb-stagger 300ms ${i * 50}ms backwards ease-out` }}
                 >
                   <div className="flex-1 min-w-0">
@@ -550,7 +550,7 @@ function Dashboard() {
           <Button
             id="btn-add-transaction"
             variant="outline"
-            className="mt-3 w-full"
+            className="mt-4 w-full reactbits-btn"
             onClick={() => setAdding(true)}
           >
             Log Transaction

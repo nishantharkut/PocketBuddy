@@ -49,3 +49,8 @@ __pycache__/
 *.pyc
 android/tools/ingest_test_backend/.venv/
 android/tools/ingest_test_backend/data/
+
+# Environment variables
+.env
+.env.*
+!.env.example

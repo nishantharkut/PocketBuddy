@@ -1,0 +1,12 @@
+# Copy to local.properties and point this at the FastAPI webhook exposed to the device.
+# For the Android emulator, 10.0.2.2 reaches the host machine.
+# For a physical phone, use an HTTPS ngrok URL.
+POCKETBUDDY_WEBHOOK_URL=http://10.0.2.2:8000/api/ingest/notification
+
+# Optional. Backend can issue this later. When set, Android sends:
+# Authorization: Bearer <token>
+POCKETBUDDY_WEBHOOK_TOKEN=
+
+# Optional. Use when a web/backend account exists. Android always also sends
+# a generated installation-scoped deviceId.
+POCKETBUDDY_USER_ID=

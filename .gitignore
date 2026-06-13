@@ -30,3 +30,22 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Android / Gradle
+.gradle/
+.kotlin/
+build/
+android/.gradle/
+android/.kotlin/
+android/build/
+android/**/build/
+local.properties
+android/local.properties
+*.iml
+
+# Python tooling
+.venv/
+__pycache__/
+*.pyc
+android/tools/ingest_test_backend/.venv/
+android/tools/ingest_test_backend/data/

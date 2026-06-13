@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.security import get_current_user
+from app.core.database import get_db
 from app.services.campus_food import load_campus_food
 
 router = APIRouter()
@@ -20,7 +21,12 @@ class RagReq(BaseModel):
 
 @router.post("/food-rag")
 async def get_food_recommendation(req: RagReq, user_id: str = Depends(get_current_user)):
-    campus_foods = load_campus_food()
+    db = get_db()
+    cursor = db.campus_food.find({})
+    campus_foods = await cursor.to_list(length=1000)
+    if not campus_foods:
+        campus_foods = load_campus_food()
+        
     fallback = build_local_recommendation(req, campus_foods)
 
     if not settings.BEDROCK_ENABLED:

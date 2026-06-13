@@ -49,6 +49,17 @@ async def get_cart_pools(user_id: str = Depends(get_current_user)):
     if not profile or not profile.get("wing_label"):
         return []
 
+    # Auto-expire pools that have passed their expiration date
+    now = datetime.datetime.utcnow()
+    await db.cart_pools.update_many(
+        {
+            "wing_label": profile["wing_label"],
+            "status": "open",
+            "expires_at": {"$lt": now}
+        },
+        {"$set": {"status": "closed"}}
+    )
+
     cursor = db.cart_pools.find({
         "wing_label": profile["wing_label"]
     }).sort("created_at", -1)
@@ -57,6 +68,10 @@ async def get_cart_pools(user_id: str = Depends(get_current_user)):
 
     for p in pools:
         p["id"] = str(p.pop("_id"))
+        # Serialize datetime fields with Z suffix for frontend UTC compatibility
+        from app.core.security import _serialize_value
+        for k, v in list(p.items()):
+            p[k] = _serialize_value(v)
         items_cursor = db.cart_pool_items.find({"pool_id": p["id"]})
         items = await items_cursor.to_list(length=100)
         p["items"] = map_docs(items)
@@ -97,6 +112,12 @@ async def get_pool(pool_id: str):
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    
+    # Auto-expire if expired and still open
+    if pool.get("status") == "open" and pool.get("expires_at") and pool["expires_at"] < datetime.datetime.utcnow():
+        await db.cart_pools.update_one({"_id": pool_id}, {"$set": {"status": "closed"}})
+        pool["status"] = "closed"
+
     return map_doc(pool)
 
 @router.put("/{pool_id}")
@@ -122,6 +143,9 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
         participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
         num_people = len(participants)
 
+        if num_people == 0:
+            raise HTTPException(status_code=400, detail="Cannot complete a pool with no purchased items.")
+
         host_name = pool.get("created_by_name")
         host_items_total = 0
         for it in items:
@@ -134,6 +158,7 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
         overhead_per_person = int(net_overhead / num_people) if num_people > 0 else 0
 
         host_share = host_items_total + overhead_per_person
+        platform_name = pool.get("platform", "delivery").replace("_", " ").title()
 
         if host_share > 0:
             txn_id = str(uuid.uuid4())
@@ -141,8 +166,8 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
                 "_id": txn_id,
                 "user_id": user_id,
                 "amount": host_share,
-                "raw_merchant_string": f"Zepto Pool Split - Host",
-                "mapped_merchant_name": f"{pool['platform'].capitalize()} Pool Split",
+                "raw_merchant_string": f"{platform_name} Pool Split - Host",
+                "mapped_merchant_name": f"{platform_name} Pool Split",
                 "category": "food",
                 "source": "manual",
                 "is_mapped": True,
@@ -225,6 +250,15 @@ async def get_pool_items(pool_id: str):
 async def insert_pool_item(pool_id: str, req: PoolItemReq):
     db = get_db()
 
+    # Verify pool exists and is open
+    pool = await db.cart_pools.find_one({"_id": pool_id})
+    if not pool:
+        raise HTTPException(status_code=404, detail="Pool not found")
+    if pool.get("status") != "open":
+        raise HTTPException(status_code=400, detail="This pool is no longer accepting items.")
+    if pool.get("expires_at") and pool["expires_at"] < datetime.datetime.utcnow():
+        raise HTTPException(status_code=400, detail="This pool has expired.")
+
     # Robustness Limit Validation
     if req.estimated_price <= 0 or req.estimated_price > 500000:
          raise HTTPException(status_code=400, detail="Estimated price must be between ₹1 and ₹5,000")
@@ -264,7 +298,12 @@ async def update_pool_item(pool_id: str, item_id: str, req: PoolItemUpdateReq):
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    updates = {k: v for k, v in req.dict(exclude_unset=True).items() if v is not None}
+    # Build updates dict, handling booleans (False is a valid value, not None)
+    updates = {}
+    for k, v in req.dict(exclude_unset=True).items():
+        if isinstance(v, bool) or v is not None:
+            updates[k] = v
+
     if updates:
         await db.cart_pool_items.update_one({"_id": item_id, "pool_id": pool_id}, {"$set": updates})
         item = await db.cart_pool_items.find_one({"_id": item_id, "pool_id": pool_id})

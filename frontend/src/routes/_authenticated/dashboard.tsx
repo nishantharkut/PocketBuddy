@@ -185,11 +185,15 @@ function Dashboard() {
   const collisions = useMemo(() => {
     if (!subs || !calc) return [];
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const week = new Date(today);
     week.setDate(week.getDate() + 7);
     return subs
       .filter((s) => s.is_active !== false)
-      .filter((s) => new Date(s.next_debit_date) <= week)
+      .filter((s) => {
+        const d = new Date(s.next_debit_date);
+        return d >= today && d <= week;
+      })
       .map((s) => {
         const newLimit =
           calc.daysLeft > 0 ? Math.round((calc.remaining - s.amount / 100) / calc.daysLeft) : 0;
@@ -410,12 +414,14 @@ function Dashboard() {
             </Link>
           </div>
           <div className="mt-2 space-y-2">
-            {(pools ?? []).length === 0 && (
+            {(pools ?? []).filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now()).length === 0 && (
               <p className="py-4 text-center text-[12px] text-muted-foreground">
                 No active pools in your wing.
               </p>
             )}
-            {(pools ?? []).map((p) => {
+            {(pools ?? [])
+              .filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now())
+              .map((p) => {
               const total = (p.items ?? []).reduce((s: number, i: any) => s + i.estimated_price, 0);
               const minsLeft = Math.max(
                 0,

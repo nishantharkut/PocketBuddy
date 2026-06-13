@@ -207,6 +207,43 @@ async def mark_sync_log(
     )
 
 
+async def try_auto_verify_pool_payment(db, user_id: str, text: str, amount_from_req: Optional[float] = None, utr_from_req: Optional[str] = None) -> bool:
+    # Look for credit keywords
+    text_lower = text.lower()
+    credit_keywords = ["received", "credited", "deposit", "added", "plus", "credited to a/c"]
+    is_credit = any(kw in text_lower for kw in credit_keywords) or (amount_from_req is not None and "credit" in text_lower)
+    
+    if not is_credit:
+        return False
+        
+    utr = utr_from_req or parse_transaction_id(text)
+    if not utr:
+        return False
+        
+    # Find completed pool hosted by this user with a pending payment matching this UTR
+    pool = await db.cart_pools.find_one({
+        "host_id": user_id,
+        "status": "completed",
+        "payments": {
+            "$elemMatch": {
+                "utr": utr,
+                "status": "pending"
+            }
+        }
+    })
+    
+    if pool:
+        # Mark roommate status to verified
+        res = await db.cart_pools.update_one(
+            {"_id": pool["_id"], "payments.utr": utr},
+            {"$set": {"payments.$.status": "verified"}}
+        )
+        if res.modified_count > 0:
+            return True
+            
+    return False
+
+
 @router.post("/")
 @router.post("/notification")
 async def ingest_notification(
@@ -250,6 +287,27 @@ async def ingest_notification(
             "created_at": now,
         }
     )
+
+    # Intercept roommate split payments sent to the host via UPI
+    is_auto_verified = await try_auto_verify_pool_payment(
+        db,
+        user_id,
+        raw_body,
+        amount_from_req=req.amount,
+        utr_from_req=req.transactionId
+    )
+    if is_auto_verified:
+        await db.companion_sync_log.update_one(
+            {"_id": log_id},
+            {
+                "$set": {
+                    "processing_status": "auto_verified",
+                    "updated_at": datetime.datetime.utcnow(),
+                }
+            }
+        )
+        await update_profile_sync_state(db, user_id, req, now)
+        return {"status": "auto_verified", "reason": "verified_pool_payment"}
 
     direction = (req.direction or "debit").lower()
     if direction != "debit":

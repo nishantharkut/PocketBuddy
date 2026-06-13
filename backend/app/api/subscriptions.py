@@ -8,6 +8,19 @@ from app.core.security import get_current_user, map_doc, map_docs
 
 router = APIRouter()
 
+def to_naive_utc(dt: datetime.datetime) -> datetime.datetime:
+    if dt.tzinfo is not None:
+        return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return dt
+
+def parse_to_naive_utc(date_str: str) -> datetime.datetime:
+    clean_str = date_str.replace("Z", "+00:00")
+    if len(clean_str) == 10:
+        clean_str += "T00:00:00+00:00"
+    dt = datetime.datetime.fromisoformat(clean_str)
+    return to_naive_utc(dt)
+
+
 class SubReq(BaseModel):
     name: Optional[str] = None
     service_name: Optional[str] = None
@@ -58,16 +71,22 @@ async def get_subscriptions(user_id: str = Depends(get_current_user)):
 
                     # Gap matching regular monthly auto-debit billing cycles (25-35 days)
                     if 25 <= days_diff <= 35:
-                        service_name = m_name.capitalize()
+                        service_name = m_name.strip()
 
-                        # Verify if subscription already exists
+                        # Case-insensitive duplicate check across both name and service_name fields
+                        import re
+                        name_regex = re.compile(f"^{re.escape(service_name)}$", re.IGNORECASE)
                         existing = await db.subscriptions.find_one({
                             "user_id": user_id,
-                            "service_name": service_name
+                            "$or": [
+                                {"service_name": name_regex},
+                                {"name": name_regex}
+                            ]
                         })
 
                         if not existing:
                             next_debit = d2 + datetime.timedelta(days=30)
+                            next_debit = to_naive_utc(next_debit)
                             await db.subscriptions.insert_one({
                                 "_id": str(uuid.uuid4()),
                                 "user_id": user_id,
@@ -103,7 +122,7 @@ async def insert_subscription(req: SubReq, user_id: str = Depends(get_current_us
         "service_name": service_name,
         "amount": req.amount,
         "billing_cycle": req.billing_cycle or "monthly",
-        "next_debit_date": datetime.datetime.fromisoformat(req.next_debit_date.replace("Z", "+00:00")),
+        "next_debit_date": parse_to_naive_utc(req.next_debit_date),
         "is_active": True if req.is_active is None else req.is_active,
         "detected_from": req.detected_from or "manual",
         "created_at": datetime.datetime.utcnow()

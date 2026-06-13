@@ -76,6 +76,7 @@ function PoolDetail() {
   // Queries
   const { data: pool } = useQuery({
     queryKey: ["pool", id],
+    refetchInterval: 3000, // Poll pool status for real-time updates
     queryFn: () => getCartPool({ data: { id } }),
   });
 
@@ -404,7 +405,23 @@ function PoolDetail() {
       {/* Dynamic Header Banner */}
       <div className={`sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-[color:var(--surface)] px-4`}>
         <div className="flex items-center gap-3">
-          <button onClick={() => nav({ to: isHost ? "/pool" : "/dashboard" })} className="text-muted-foreground">
+          <button onClick={() => {
+            if (isHost) {
+              nav({ to: "/pool" });
+            } else if (user) {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                nav({ to: "/dashboard" });
+              }
+            } else {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                nav({ to: "/login" });
+              }
+            }
+          }} className="text-muted-foreground">
             <ChevronLeft className="h-5 w-5" />
           </button>
           <span className="text-[14px] font-bold tracking-[0.15em] flex items-center gap-1.5 uppercase">
@@ -499,7 +516,13 @@ function PoolDetail() {
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     id="btn-host-checkout"
-                    onClick={() => setCheckoutOpen(true)}
+                    onClick={() => {
+                      if (purchasedItems.length === 0) {
+                        toast.error("Cannot checkout a pool with no items!");
+                        return;
+                      }
+                      setCheckoutOpen(true);
+                    }}
                     className="bg-[color:var(--pb-purple)] text-white hover:bg-[color:var(--pb-purple)]/90"
                   >
                     Complete & Split
@@ -615,39 +638,41 @@ function PoolDetail() {
             </h3>
             <div className="space-y-2.5 mt-2">
               {Object.entries(splitBreakdown).map(([pName, details]) => (
-                <div key={pName} className="flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-2">
-                    {pool.status === "completed" ? (
-                      <span className={`h-2.5 w-2.5 rounded-full ${
-                        details.paymentStatus === "verified" || details.paymentStatus === "host"
-                          ? "bg-green-500"
-                          : details.paymentStatus === "pending"
-                            ? "bg-amber-500 animate-pulse"
-                            : "bg-red-500"
-                      }`} />
-                    ) : (
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
-                    )}
-                    <span className="font-medium capitalize">{pName}</span>
-                    {pName === name && (
-                      <Badge variant="outline" className="text-[10px] py-0 px-1 border-muted bg-muted/40">You</Badge>
-                    )}
-                  </div>
-                  <div className="text-right flex items-center gap-2">
-                    <span className="font-mono text-xs text-muted-foreground">
-                      ({rupees(details.itemsTotal)} + {rupees(details.share)} fee)
+                <div key={pName} className="flex justify-between items-start text-sm py-1.5 border-b border-border/10 last:border-0">
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      {pool.status === "completed" ? (
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${
+                          details.paymentStatus === "verified" || details.paymentStatus === "host"
+                            ? "bg-green-500"
+                            : details.paymentStatus === "pending"
+                              ? "bg-amber-500 animate-pulse"
+                              : "bg-red-500"
+                        }`} />
+                      ) : (
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+                      )}
+                      <span className="font-semibold capitalize truncate">{pName}</span>
+                      {pName === name && (
+                        <Badge variant="outline" className="text-[9px] py-0 px-1 border-muted bg-muted/40 font-bold shrink-0">You</Badge>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-mono pl-4">
+                      Items: {rupees(details.itemsTotal)} + Share: {rupees(details.share)}
                     </span>
+                  </div>
+                  <div className="text-right flex flex-col items-end shrink-0 pl-2">
                     <span className="font-bold text-sm tnum">{rupees(details.total)}</span>
                     {pool.status === "completed" && (
-                      <span className="text-[10px] opacity-85 font-semibold">
+                      <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">
                         {details.paymentStatus === "verified" ? (
-                          <span className="text-green-500 font-medium">Verified</span>
+                          <span className="text-green-500">Paid</span>
                         ) : details.paymentStatus === "pending" ? (
-                          <span className="text-amber-500 font-medium">Pending Verify</span>
+                          <span className="text-amber-500">Pending</span>
                         ) : details.paymentStatus === "host" ? (
-                          <span className="text-[color:var(--pb-purple)] font-bold">Host 👑</span>
+                          <span className="text-[color:var(--pb-purple)]">Host 👑</span>
                         ) : (
-                          <span className="text-red-500 font-medium">Unpaid</span>
+                          <span className="text-red-500">Unpaid</span>
                         )}
                       </span>
                     )}

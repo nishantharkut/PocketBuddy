@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { 
   LayoutDashboard, 
   List, 
@@ -17,6 +18,7 @@ import {
   BarChart3
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { getProfile } from "@/lib/api/db.functions";
 import { BottomNav } from "./BottomNav";
 
 type Ctx = { 
@@ -44,6 +46,17 @@ function SidebarBody({ onNavigate, isMobile = false }: { onNavigate?: () => void
   const collapsed = isMobile ? false : ctx.collapsed;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user, logout } = useAuth();
+  const { data: profile } = useQuery({
+    queryKey: ["profile", user?.id],
+    enabled: !!user,
+    queryFn: () => getProfile(),
+    staleTime: 30_000,
+  });
+  const companionConnected = Boolean(profile?.companion_paired);
+  const syncLabel = companionConnected ? "Companion Linked" : "Companion Off";
+  const syncDescription = companionConnected
+    ? "Last sync shown in Companion"
+    : "Pair Android companion";
 
   return (
     <div className="flex h-full flex-col">
@@ -166,22 +179,30 @@ function SidebarBody({ onNavigate, isMobile = false }: { onNavigate?: () => void
         </nav>
       </div>
 
-      {/* Footer: User profile + Sync Active + Theme */}
+      {/* Footer: User profile + companion sync status + theme */}
       <div className="border-t border-border p-3 space-y-3 bg-surface">
-        {/* Sync active */}
+        {/* Companion sync status */}
         {!collapsed ? (
           <div className="rounded-lg border border-border bg-surface-raised/50 p-3">
             <div className="flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-pb-green pulse-dot" />
-              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Sync Active</span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  companionConnected ? "bg-pb-green pulse-dot" : "bg-muted-foreground/50"
+                }`}
+              />
+              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{syncLabel}</span>
             </div>
             <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
-              Auto-tracking on companion
+              {syncDescription}
             </p>
           </div>
         ) : (
-          <div className="grid place-items-center py-2" title="Sync active">
-            <span className="h-2 w-2 rounded-full bg-pb-green pulse-dot" />
+          <div className="grid place-items-center py-2" title={syncLabel}>
+            <span
+              className={`h-2 w-2 rounded-full ${
+                companionConnected ? "bg-pb-green pulse-dot" : "bg-muted-foreground/50"
+              }`}
+            />
           </div>
         )}
 

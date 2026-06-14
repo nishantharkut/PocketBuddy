@@ -64,6 +64,7 @@ function SettingsPage() {
     queryKey: ["profile", user?.id],
     enabled: !!user,
     queryFn: () => getProfile(),
+    refetchInterval: 5000,
   });
 
   const { data: subs } = useQuery({

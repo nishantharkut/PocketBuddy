@@ -73,8 +73,7 @@ function CompanionPage() {
 
   const syncLogs: SyncLog[] = Array.isArray(logs) ? logs : logs?.logs ?? [];
   const latestSyncAt = profile?.companion_last_sync ?? syncLogs[0]?.created_at;
-  const hasRealSync = Boolean(profile?.companion_last_sync || syncLogs.length > 0);
-  const isConnected = Boolean(profile?.companion_paired || hasRealSync);
+  const isConnected = Boolean(profile?.companion_paired);
   const companionWebhookUrl = getCompanionWebhookUrl();
   const pairingForDisplay = profile?.pairing_code || pairing;
   const isPairingSaved = Boolean(profile?.pairing_code && profile.pairing_code === pairingForDisplay);
@@ -109,7 +108,7 @@ function CompanionPage() {
     }
 
     const mins = (Date.now() - new Date(nextLatestSyncAt).getTime()) / 60000;
-    if (mins < 5) toast.success("Connection active");
+    if (mins < 5) toast.success("Recent sync confirmed");
     else toast(`Last sync was ${Math.round(mins)}m ago. Send another Android test notification.`);
   }
 
@@ -219,7 +218,7 @@ function CompanionPage() {
             >
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                <p className="text-[14px] font-semibold text-success">Connected</p>
+                <p className="text-[14px] font-semibold text-success">Companion linked</p>
               </div>
               <p className="mt-1 text-[13px]">
                 {profile.companion_device_name ?? "PocketBuddy Android Connector"}
@@ -236,6 +235,25 @@ function CompanionPage() {
             </Card>
 
             <AndroidInstallGuideCard />
+
+            <Card className="bg-surface-raised p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[13px] font-semibold">Pair another phone or reconnect</p>
+                  <p className="mt-0.5 text-[12px] text-muted-foreground">
+                    Copy this config, paste it in the Android connector, then save it on the phone.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={copyConnectorConfig}>
+                  <Copy />
+                  Copy Android config
+                </Button>
+              </div>
+              <details className="mt-3 rounded-md bg-surface p-3 text-left text-xs text-muted-foreground">
+                <summary className="cursor-pointer font-semibold text-foreground">Show copied values</summary>
+                <pre className="mt-3 overflow-x-auto leading-5">{connectorConfig}</pre>
+              </details>
+            </Card>
 
             <div>
               <h3 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground">

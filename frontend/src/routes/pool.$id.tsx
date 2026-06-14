@@ -115,6 +115,7 @@ function PoolDetail() {
   const [price, setPrice] = useState("");
   const [productUrl, setProductUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [addItemOpen, setAddItemOpen] = useState(false);
 
   // Host checkout modal state
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -349,6 +350,7 @@ function PoolDetail() {
       setItem("");
       setPrice("");
       setProductUrl("");
+      setAddItemOpen(false);
       toast.success("Item added!");
       qc.invalidateQueries({ queryKey: ["pool-items", id] });
     } catch (err: any) {
@@ -1047,10 +1049,24 @@ function PoolDetail() {
 
         {/* List of items inside pool */}
         <div id="list-pool-items" className="space-y-4">
-          <h3 className="text-xs font-bold text-zinc-500 tracking-[0.25em] uppercase border-b border-border pb-2 flex items-center gap-1.5">
-            <ShoppingBag className="h-3.5 w-3.5" />
-            <span>Roommate Carts</span>
-          </h3>
+          <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+            <h3 className="text-xs font-bold text-zinc-500 tracking-[0.25em] uppercase flex items-center gap-1.5 min-w-0">
+              <ShoppingBag className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Roommate Carts</span>
+            </h3>
+            {pool.status === "open" && (
+              <Button
+                id="btn-open-add-pool-item"
+                type="button"
+                size="sm"
+                onClick={() => setAddItemOpen(true)}
+                className="hidden md:inline-flex h-9 shrink-0 items-center gap-2 bg-primary px-4 text-xs font-black uppercase tracking-wider text-primary-foreground hover:opacity-95"
+              >
+                <ShoppingBag className="h-3.5 w-3.5" />
+                Add Item
+              </Button>
+            )}
+          </div>
           {participants.length === 0 && (
             <p className="text-center py-8 text-xs text-zinc-500 font-semibold uppercase tracking-wider">
               No items in this cart pool yet.
@@ -1150,7 +1166,7 @@ function PoolDetail() {
             e.preventDefault();
             addItem();
           }}
-          className="fixed inset-x-0 bottom-16 bottom-[calc(4rem+env(safe-area-inset-bottom))] md:bottom-0 z-30 space-y-3 border-t border-border bg-card/90 backdrop-blur-md px-4 py-3.5 pb-3.5 md:py-5 md:pb-5 shadow-2xl rounded-t-2xl animate-in slide-in-from-bottom max-h-[calc(100vh-6rem)] md:max-h-none overflow-y-auto no-scrollbar"
+          className="fixed inset-x-0 bottom-16 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 space-y-3 border-t border-border bg-card/90 backdrop-blur-md px-4 py-3.5 pb-3.5 shadow-2xl rounded-t-2xl animate-in slide-in-from-bottom max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar md:hidden"
         >
           <div className="flex justify-between items-center pb-0.5">
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Quick Add Item</h4>
@@ -1211,6 +1227,108 @@ function PoolDetail() {
           </div>
         </form>
       )}
+
+      <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
+        <DialogContent id="dialog-add-pool-item" className="max-w-[440px]">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              addItem();
+            }}
+            className="space-y-4"
+          >
+            <DialogHeader>
+              <DialogTitle>Add Item to Cart Pool</DialogTitle>
+            </DialogHeader>
+            <p className="text-xs font-semibold leading-relaxed text-muted-foreground">
+              Add your item estimate now. The host can finalize the actual split after checkout.
+            </p>
+
+            <div className="space-y-3 text-sm">
+              <div className="space-y-1.5">
+                <label htmlFor="input-pool-name-dialog" className="text-xs font-semibold text-muted-foreground">
+                  Your name
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                  <Input
+                    id="input-pool-name-dialog"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Kanika"
+                    className="h-10 bg-background pl-9 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="input-pool-item-dialog" className="text-xs font-semibold text-muted-foreground">
+                  Item
+                </label>
+                <div className="relative">
+                  <ShoppingBag className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                  <Input
+                    id="input-pool-item-dialog"
+                    value={item}
+                    onChange={(e) => setItem(e.target.value)}
+                    placeholder="e.g. Bread, chips, notebook"
+                    className="h-10 bg-background pl-9 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
+                <div className="space-y-1.5">
+                  <label htmlFor="input-pool-price-dialog" className="text-xs font-semibold text-muted-foreground">
+                    Price
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-zinc-500">₹</span>
+                    <Input
+                      id="input-pool-price-dialog"
+                      type="number"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="80"
+                      className="h-10 bg-background pl-6 pr-3 text-right text-sm font-bold text-foreground"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label htmlFor="input-pool-link-dialog" className="text-xs font-semibold text-muted-foreground">
+                    Product link, optional
+                  </label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                    <Input
+                      id="input-pool-link-dialog"
+                      value={productUrl}
+                      onChange={(e) => setProductUrl(e.target.value)}
+                      placeholder="Paste item URL"
+                      className="h-10 bg-background pl-9 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button type="button" variant="outline" onClick={() => setAddItemOpen(false)} disabled={busy}>
+                Cancel
+              </Button>
+              <Button
+                id="btn-add-pool-item-dialog"
+                type="submit"
+                disabled={busy}
+                className="bg-primary text-primary-foreground hover:opacity-95"
+              >
+                {busy ? "Adding..." : "Add to Cart Split"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Host Checkout Modal */}
       <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>

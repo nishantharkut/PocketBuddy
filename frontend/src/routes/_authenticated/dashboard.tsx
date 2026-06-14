@@ -184,15 +184,25 @@ function SurviveCountdown({ runwayMs }: { runwayMs: number }) {
   const mins = Math.floor((remaining % 3600000) / 60000);
   const secs = Math.floor((remaining % 60000) / 1000);
   const pad = (n: number) => String(n).padStart(2, "0");
+  const parts = [
+    ...(days > 0 ? [{ value: String(days), label: "d" }] : []),
+    { value: pad(hrs), label: "h" },
+    { value: pad(mins), label: "m" },
+    { value: pad(secs), label: "s", pulse: true },
+  ];
   return (
-    <div className="flex items-end gap-1 tnum">
-      {days > 0 && <><span className="text-[22px] font-black leading-none text-foreground">{days}</span><span className="text-[9px] text-zinc-500 font-bold mb-1">d</span></>}
-      <span className="text-[22px] font-black leading-none text-foreground">{pad(hrs)}</span>
-      <span className="text-[9px] text-zinc-500 font-bold mb-1">h</span>
-      <span className="text-[22px] font-black leading-none text-foreground">{pad(mins)}</span>
-      <span className="text-[9px] text-zinc-500 font-bold mb-1">m</span>
-      <span className="text-[22px] font-black leading-none text-foreground transition-opacity duration-300" style={{ opacity: secs % 2 === 0 ? 1 : 0.5 }}>{pad(secs)}</span>
-      <span className="text-[9px] text-zinc-500 font-bold mb-1">s</span>
+    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 tnum">
+      {parts.map((part) => (
+        <span key={part.label} className="inline-flex items-baseline gap-1 whitespace-nowrap">
+          <span
+            className="text-[23px] font-black leading-none text-foreground transition-opacity duration-300"
+            style={{ opacity: part.pulse && secs % 2 !== 0 ? 0.68 : 1 }}
+          >
+            {part.value}
+          </span>
+          <span className="text-[11px] text-zinc-400 font-black leading-none">{part.label}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -1033,21 +1043,21 @@ function Dashboard() {
                       </h2>
                       <span className="text-[16px] md:text-[20px] font-bold tracking-widest text-zinc-500 uppercase">Days</span>
                     </div>
-                    <p className="mt-3 text-xs md:text-sm text-zinc-400 font-semibold leading-relaxed">
+                    <p className="mt-3 max-w-full text-[13px] md:text-sm text-zinc-400 font-medium leading-6 tracking-normal">
                       Remaining allowance until <span className="text-foreground font-bold">{rupees(calc.totalAllowance * 100)}</span> resets on <span className="text-foreground font-bold">{shortDate(calc.cycleEnd)}</span>
                     </p>
 
-                    <div className="mt-8 grid grid-cols-3 gap-3 md:gap-6 border-t border-border pt-6">
-                      <div className="flex flex-col gap-1">
-                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Balance</p>
+                    <div className="mt-8 grid grid-cols-3 gap-2 md:gap-6 border-t border-border pt-6">
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Balance</p>
                         <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.remaining * 100)}</p>
                       </div>
-                      <div className="flex flex-col gap-1 border-l border-border pl-4 md:pl-6">
-                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Safe Limit</p>
+                      <div className="flex min-w-0 flex-col gap-1 border-l border-border pl-3 md:pl-6">
+                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Safe limit</p>
                         <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.safeDailyLimit * 100)}</p>
                       </div>
-                      <div className="flex flex-col gap-1 border-l border-border pl-4 md:pl-6">
-                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Today</p>
+                      <div className="flex min-w-0 flex-col gap-1 border-l border-border pl-3 md:pl-6">
+                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Today</p>
                         <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.spentToday * 100)}</p>
                       </div>
                     </div>
@@ -1251,9 +1261,9 @@ function Dashboard() {
             {/* ── Survive Until Broke Card ─────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">
               <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.05), transparent 65%)" }} />
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Survive Until Broke</p>
-                <span className="text-xs font-black px-2 py-0.5 rounded-full border text-primary border-primary/30 bg-primary/5">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase">Survive Until Broke</p>
+                <span className="text-[11px] font-black px-2.5 py-1 rounded-full border text-primary border-primary/30 bg-primary/5">
                   LIVE COUNTDOWN
                 </span>
               </div>

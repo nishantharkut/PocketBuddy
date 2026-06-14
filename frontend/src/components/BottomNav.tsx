@@ -30,10 +30,10 @@ export function BottomNav() {
                 }`}
               >
                 {active && (
-                  <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-10 bg-primary rounded-full" />
+                  <span className="absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary" />
                 )}
                 <Icon className="h-5 w-5" />
-                <span className="text-[11px] font-medium tracking-wide">{t.label}</span>
+                <span className="text-[11px] font-semibold tracking-normal">{t.label}</span>
               </Link>
             </li>
           );

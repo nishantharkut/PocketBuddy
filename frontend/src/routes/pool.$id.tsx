@@ -457,8 +457,8 @@ function PoolDetail() {
   return (
     <AppShell>
       {/* Dynamic Header Banner */}
-      <div className={`sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-4 flex h-14 items-center justify-between border-b border-border bg-surface px-6 md:px-10 lg:px-12`}>
-        <div className="flex items-center gap-3">
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+        <div className="flex items-center gap-3 min-w-0">
           <button onClick={() => {
             if (isHost) {
               nav({ to: "/pool" });
@@ -475,11 +475,11 @@ function PoolDetail() {
                 nav({ to: "/login" });
               }
             }
-          }} className="text-muted-foreground">
+          }} className="text-muted-foreground cursor-pointer">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <span className="text-lg font-black tracking-wider flex items-center gap-2 uppercase">
-            <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
+          <span className="text-base sm:text-lg font-black tracking-wider flex items-center gap-2 uppercase truncate text-foreground">
+            <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse shrink-0" />
             Pooler
           </span>
         </div>

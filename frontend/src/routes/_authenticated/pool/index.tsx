@@ -109,9 +109,11 @@ function PoolList() {
 
   return (
     <AppShell>
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center gap-3 border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
-        <MobileMenuButton />
-        <h1 className="text-lg font-black tracking-wider text-foreground uppercase">Cart Pools</h1>
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+        <div className="flex items-center gap-3 min-w-0">
+          <MobileMenuButton />
+          <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">Cart Pools</h1>
+        </div>
       </div>
       <div className="space-y-6 py-6">
         <Sheet open={open} onOpenChange={setOpen}>

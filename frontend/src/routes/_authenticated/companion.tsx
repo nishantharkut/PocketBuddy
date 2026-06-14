@@ -165,12 +165,14 @@ function CompanionPage() {
 
   return (
     <AppShell>
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-4 flex h-14 items-center gap-3 border-b border-border bg-surface px-6 md:px-10 lg:px-12">
-        <MobileMenuButton />
-        <button onClick={() => nav({ to: "/settings" })} className="text-muted-foreground">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <h1 className="text-lg font-black tracking-wider text-foreground uppercase">Companion Device</h1>
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+        <div className="flex items-center gap-3 min-w-0">
+          <MobileMenuButton />
+          <button onClick={() => nav({ to: "/settings" })} className="text-muted-foreground cursor-pointer">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">Companion Device</h1>
+        </div>
       </div>
 
       <div className="space-y-4 px-4 py-4">

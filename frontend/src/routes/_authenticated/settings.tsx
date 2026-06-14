@@ -234,10 +234,10 @@ function SettingsPage() {
   return (
     <AppShell>
       {/* Page Header */}
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/92 backdrop-blur-md px-6 md:px-10 lg:px-12">
-        <div className="flex items-center gap-3">
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+        <div className="flex items-center gap-3 min-w-0">
           <MobileMenuButton />
-          <h1 className="text-lg font-black tracking-wider text-foreground uppercase">
+          <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">
             Settings
           </h1>
         </div>

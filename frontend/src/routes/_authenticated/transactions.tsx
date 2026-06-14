@@ -112,52 +112,63 @@ function TxnsPage() {
 
   return (
     <AppShell>
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 border-b border-border bg-background/85 backdrop-blur-md pb-4 pt-2 px-6 md:px-10 lg:px-12">
-        <div className="flex h-14 items-center gap-3 mb-2">
+      {/* Page Header */}
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+        <div className="flex items-center gap-3 min-w-0">
           <MobileMenuButton />
-          <h1 className="text-lg font-black tracking-wider text-foreground uppercase">Transaction History</h1>
-        </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-3 no-scrollbar">
-          {catFilters.map((c) => (
-            <button
-              key={c.v}
-              id={`filter-txn-${c.v}`}
-              onClick={() => setCat(c.v)}
-              className={`whitespace-nowrap rounded-full px-3.5 py-1 text-xs uppercase tracking-wider font-bold transition-all border cursor-pointer ${cat === c.v ? "bg-primary border-primary text-primary-foreground" : "bg-surface-raised border-border text-muted-foreground hover:text-foreground hover:bg-surface-interactive"}`}
-            >
-              {c.l}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 pb-1">
-          <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">Source:</span>
-          {(["all", "companion", "manual"] as const).map((s) => (
-            <button
-              key={s}
-              id={`filter-source-${s}`}
-              onClick={() => setSrc(s)}
-              className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider transition-all border cursor-pointer ${src === s ? "bg-primary border-primary text-primary-foreground" : "bg-surface-raised border-border text-muted-foreground hover:text-foreground"}`}
-            >
-              {s === "companion" ? "Companion" : s === "manual" ? "Manual" : "All"}
-            </button>
-          ))}
-          <div className="ml-auto">
-            <Select value={range} onValueChange={(v) => setRange(v as Range)}>
-              <SelectTrigger id="select-txn-range" className="h-7 text-xs font-bold uppercase tracking-wider bg-surface border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cycle">This Cycle</SelectItem>
-                <SelectItem value="7">Last 7 Days</SelectItem>
-                <SelectItem value="30">Last 30 Days</SelectItem>
-                <SelectItem value="all">All Time</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">Transaction History</h1>
         </div>
       </div>
 
-      <div className="py-6 pb-32 space-y-1.5">
+      <div className="py-4 pb-32 space-y-6">
+        {/* Filter controls */}
+        <div className="space-y-3.5 border-b border-border/50 pb-4">
+          <div className="flex gap-1.5 overflow-x-auto pb-2 no-scrollbar">
+            {catFilters.map((c) => (
+              <button
+                key={c.v}
+                id={`filter-txn-${c.v}`}
+                onClick={() => setCat(c.v)}
+                className={`whitespace-nowrap rounded-full px-3.5 py-1 text-xs uppercase tracking-wider font-bold transition-all border cursor-pointer ${cat === c.v ? "bg-primary border-primary text-primary-foreground" : "bg-surface-raised border-border text-muted-foreground hover:text-foreground hover:bg-surface-interactive"}`}
+              >
+                {c.l}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">Source</span>
+              <div className="bg-surface-raised border border-border/80 p-0.5 rounded-full flex items-center shadow-inner">
+                {(["all", "companion", "manual"] as const).map((s) => (
+                  <button
+                    key={s}
+                    id={`filter-source-${s}`}
+                    onClick={() => setSrc(s)}
+                    className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${src === s ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {s === "companion" ? "Companion" : s === "manual" ? "Manual" : "All"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1 sm:hidden">Range</span>
+              <Select value={range} onValueChange={(v) => setRange(v as Range)}>
+                <SelectTrigger id="select-txn-range" className="h-8 flex-1 sm:w-40 text-xs font-bold uppercase tracking-wider bg-surface border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background border border-border text-foreground">
+                  <SelectItem value="cycle">This Cycle</SelectItem>
+                  <SelectItem value="7">Last 7 Days</SelectItem>
+                  <SelectItem value="30">Last 30 Days</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
         {isLoading && <Skeleton className="h-40 w-full bg-white/5 border-none" />}
         {!isLoading && visible.length === 0 && (
           <p className="py-12 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">
@@ -233,6 +244,7 @@ function TxnsPage() {
           </button>
         )}
       </div>
+    </div>
 
       <div className="fixed bottom-20 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] md:bottom-8 left-0 right-0 z-40 flex justify-center pointer-events-none w-full animate-[fadeIn_0.3s_ease-out]">
         <div className="bg-surface/85 backdrop-blur-md px-5 py-2.5 rounded-full border border-border shadow-[0_12px_32px_rgba(0,0,0,0.5)] flex items-center justify-between gap-6 whitespace-nowrap text-xs font-bold uppercase tracking-wider text-muted-foreground w-fit pointer-events-auto">

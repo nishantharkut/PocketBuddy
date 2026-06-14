@@ -86,8 +86,36 @@ def parse_transaction_id(text: str) -> Optional[str]:
 def normalize_merchant(merchant: Optional[str]) -> Optional[str]:
     if not merchant:
         return None
-    normalized = re.sub(r"\s+", " ", merchant).strip(" .,-")
+    
+    cleaned = re.sub(r"\s+", " ", merchant).strip()
+    
+    # 1. Remove balance info (e.g. "Bal INR 13015.82", "Bal Rs 100", etc.)
+    cleaned = re.sub(
+        r"\b(?:avail(?:able)?\s+)?bal(?:ance)?\b.*?(?:rs\.?|inr|₹)?\s*\d+(?:\.\d{1,2})?",
+        "",
+        cleaned,
+        flags=re.IGNORECASE
+    )
+    
+    # 2. Remove standard safety alerts / SMS instructions (e.g. "Not u?...", "Fwd this SMS...")
+    cleaned = re.sub(
+        r"\b(?:not\s+u\??|not\s+you\??|fwd\s+this\s+sms\s+to|fwd\s+to).*?$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE
+    )
+    
+    # 3. Remove numeric IDs / references (e.g., 10-12 digit mobile or reference numbers)
+    cleaned = re.sub(r"\b\d{10,12}\b", "", cleaned)
+    
+    # 4. Remove generic transaction connectors ("thru/via/using UPI")
+    cleaned = re.sub(r"\b(?:thru|via|using)\s+upi\b[:\-]?\s*", "", cleaned, flags=re.IGNORECASE)
+    
+    # 5. Clean up spaces, colons, slashes, trailing periods, commas, hyphens
+    normalized = re.sub(r"\s+", " ", cleaned).strip(" .,-/:")
+    
     return normalized[:120] if normalized else None
+
 
 
 def mask_notification_text(text: str) -> str:

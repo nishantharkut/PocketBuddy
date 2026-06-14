@@ -797,7 +797,7 @@ function TravelPage() {
                       <div className="space-y-1.5">
                         <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-widest block">AI Tactical Tips</span>
                         <ul className="space-y-1 text-[11px] text-foreground/80 font-medium">
-                          {aiCoachResult.tactics.map((tip: string, idx: number) => (
+                          {aiCoachResult.tactics.map((tip, idx) => (
                             <li key={idx} className="flex gap-1.5 items-start">
                               <span className="text-primary mt-0.5">•</span>
                               <span>{tip}</span>

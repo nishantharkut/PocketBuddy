@@ -157,6 +157,44 @@ $DEVICE = "10BF821N3M0055M"
 & $ADB -s $DEVICE install -r .\android\connector\build\outputs\apk\debug\connector-debug.apk
 ```
 
+## Build A Downloadable Demo APK
+
+Use this for the hackathon demo artifact when someone needs to install the Android connector manually.
+
+From the repo root:
+
+```powershell
+cd "C:\Users\nhnis\Desktop\Amazon Hackon\PocketBuddy\PocketBuddy"
+
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:JAVA_HOME\bin;$env:LOCALAPPDATA\Android\Sdk\platform-tools;$env:Path"
+
+.\android\gradlew.bat -p android :connector:testDebugUnitTest :connector:assembleDebug
+```
+
+The APK is generated at:
+
+```text
+android/connector/build/outputs/apk/debug/connector-debug.apk
+```
+
+Suggested demo filename when sharing outside the repo:
+
+```text
+PocketBuddy-Connector-demo.apk
+```
+
+This debug APK is suitable for direct sideload testing. Android will show the normal warning for apps installed outside the Play Store. For a production release or Play Store upload, create a proper release signing key and build a signed release APK/AAB instead of sharing the debug APK.
+
+Before sharing the APK, test the exact file once on a phone:
+
+```powershell
+$ADB = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+$DEVICE = "10BF821N3M0055M"
+
+& $ADB -s $DEVICE install -r .\android\connector\build\outputs\apk\debug\connector-debug.apk
+```
+
 ## Enable Required Android Permissions
 
 Open notification listener settings:

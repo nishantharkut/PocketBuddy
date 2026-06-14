@@ -17,10 +17,12 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.Space
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -46,6 +48,7 @@ class SetupActivity : Activity() {
         configStore = ConnectorConfigStore(applicationContext)
         identityStore = DeviceIdentityStore(applicationContext)
         retryQueue = WebhookRetryQueue(applicationContext)
+        applySystemBarTheme()
         setContentView(buildContentView())
     }
 
@@ -57,9 +60,14 @@ class SetupActivity : Activity() {
     private fun buildContentView(): ScrollView {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(24) + systemBarHeight("status_bar_height"), dp(18), dp(28) + systemBarHeight("navigation_bar_height"))
+            setPadding(
+                dp(20),
+                dp(24),
+                dp(20),
+                dp(28),
+            )
             addView(titleText("PocketBuddy Connector"))
-            addView(bodyText("Link this phone once, then PocketBuddy can sync UPI notifications from payment apps and SMS alerts."))
+            addView(bodyText("Securely link this phone to sync UPI payment alerts from SMS and payment apps."))
             addView(statusCard())
             addView(configCard())
             addView(permissionCard())
@@ -67,8 +75,15 @@ class SetupActivity : Activity() {
         }
 
         return ScrollView(this).apply {
-            setBackgroundColor(Color.rgb(246, 247, 249))
+            setBackgroundColor(Color.rgb(248, 248, 249))
             isFillViewport = true
+            clipToPadding = true
+            setPadding(
+                0,
+                systemBarHeight("status_bar_height"),
+                0,
+                systemBarHeight("navigation_bar_height"),
+            )
             addView(
                 content,
                 ViewGroup.LayoutParams(
@@ -79,18 +94,34 @@ class SetupActivity : Activity() {
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun applySystemBarTheme() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            window.statusBarColor = Color.rgb(248, 248, 249)
+            window.navigationBarColor = Color.WHITE
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            var flags = window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+            }
+            window.decorView.systemUiVisibility = flags
+        }
+    }
+
     private fun statusCard(): LinearLayout {
         statusText = TextView(this).apply {
-            textSize = 18f
+            textSize = 19f
             typeface = Typeface.DEFAULT_BOLD
         }
         statusDetailText = TextView(this).apply {
-            textSize = 13f
-            setTextColor(Color.rgb(93, 100, 112))
+            textSize = 14f
+            setTextColor(Color.rgb(113, 113, 122))
             setPadding(0, dp(6), 0, 0)
         }
 
         return sectionCard().apply {
+            addView(sectionKicker("Sync status"))
             addView(statusText)
             addView(statusDetailText)
         }
@@ -98,22 +129,27 @@ class SetupActivity : Activity() {
 
     private fun configCard(): LinearLayout =
         sectionCard().apply {
-            addView(sectionTitle("1. Paste web app config"))
-            addView(bodyText("Open Companion Device in PocketBuddy web, copy the connector config, then paste it here."))
-            addView(secondaryButton("Paste copied config") {
+            addView(stepTitle("1", "Connect this phone"))
+            addView(bodyText("Copy the connector config from PocketBuddy web, paste it once, then save."))
+            addView(secondaryButton("Paste config from clipboard") {
                 pasteConnectorConfig()
             })
             addView(sectionLabel("Backend webhook URL"))
             webhookUrlInput = inputField(
                 value = configStore.webhookUrl(),
-                hint = "http://<server-ip>/api/ingest/notification",
+                hint = "https://your-pocketbuddy-url/api/ingest/notification",
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
+                minLines = 3,
+                maxLines = 4,
             )
             addView(webhookUrlInput)
             addView(sectionLabel("PocketBuddy user ID"))
             userIdInput = inputField(
                 value = configStore.userId().orEmpty(),
                 hint = "Paste user ID from Companion Device",
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                minLines = 2,
+                maxLines = 3,
             )
             addView(userIdInput)
             addView(sectionLabel("Webhook token, optional"))
@@ -135,8 +171,8 @@ class SetupActivity : Activity() {
 
     private fun permissionCard(): LinearLayout =
         sectionCard().apply {
-            addView(sectionTitle("2. Enable phone permissions"))
-            addView(bodyText("Notification Access lets this connector read payment notifications shown by apps like Kotak, Google Pay, PhonePe, Paytm, and Google Messages."))
+            addView(stepTitle("2", "Allow notification access"))
+            addView(bodyText("Enable PocketBuddy in Android Notification Access so payment and SMS alerts can be detected."))
             addView(primaryButton("Open notification access") {
                 startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             })
@@ -152,15 +188,19 @@ class SetupActivity : Activity() {
 
     private fun diagnosticsCard(): LinearLayout {
         diagnosticsText = TextView(this).apply {
-            textSize = 12f
-            setTextColor(Color.rgb(93, 100, 112))
-            setPadding(0, dp(10), 0, 0)
+            textSize = 13f
+            setTextColor(Color.rgb(113, 113, 122))
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = rounded(Color.rgb(244, 244, 245), dp(10), Color.rgb(228, 228, 231))
             setTextIsSelectable(true)
         }
         return sectionCard().apply {
-            addView(sectionTitle("3. Verify from web"))
-            addView(bodyText("Send a small UPI test payment. Then open Companion Device in PocketBuddy web and check Recent Sync Activity."))
+            addView(stepTitle("3", "Verify sync"))
+            addView(bodyText("After a test payment, check Recent Sync Activity in the web app."))
             addView(diagnosticsText)
+            addView(secondaryButton("Refresh status") {
+                refreshStatus()
+            })
         }
     }
 
@@ -168,10 +208,11 @@ class SetupActivity : Activity() {
         Button(this).apply {
             text = label
             setAllCaps(false)
-            textSize = 14f
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
-            background = rounded(Color.rgb(31, 41, 55), dp(10))
-            minHeight = dp(50)
+            background = rounded(Color.rgb(255, 107, 0), dp(10))
+            minHeight = dp(54)
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(10), dp(14), dp(10))
             layoutParams = LinearLayout.LayoutParams(
@@ -187,10 +228,10 @@ class SetupActivity : Activity() {
         Button(this).apply {
             text = label
             setAllCaps(false)
-            textSize = 14f
-            setTextColor(Color.rgb(31, 41, 55))
-            background = rounded(Color.WHITE, dp(10), Color.rgb(216, 222, 233))
-            minHeight = dp(50)
+            textSize = 15f
+            setTextColor(Color.rgb(9, 9, 11))
+            background = rounded(Color.WHITE, dp(10), Color.rgb(228, 228, 231))
+            minHeight = dp(54)
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(10), dp(14), dp(10))
             layoutParams = LinearLayout.LayoutParams(
@@ -205,10 +246,10 @@ class SetupActivity : Activity() {
     private fun sectionLabel(label: String): TextView =
         TextView(this).apply {
             text = label
-            textSize = 13f
+            textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(69, 75, 86))
-            setPadding(0, dp(16), 0, dp(5))
+            setTextColor(Color.rgb(63, 63, 70))
+            setPadding(0, dp(18), 0, dp(6))
         }
 
     private fun inputField(
@@ -226,13 +267,13 @@ class SetupActivity : Activity() {
             setHorizontallyScrolling(false)
             this.minLines = minLines
             this.maxLines = maxLines
-            minHeight = dp(if (minLines <= 1) 54 else 70)
+            minHeight = dp(if (minLines <= 1) 58 else 82)
             gravity = Gravity.TOP or Gravity.START
-            textSize = 15f
-            setTextColor(Color.rgb(17, 24, 39))
-            setHintTextColor(Color.rgb(136, 144, 158))
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = rounded(Color.WHITE, dp(8), Color.rgb(216, 222, 233))
+            textSize = 16f
+            setTextColor(Color.rgb(9, 9, 11))
+            setHintTextColor(Color.rgb(113, 113, 122))
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            background = rounded(Color.WHITE, dp(10), Color.rgb(228, 228, 231))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -266,6 +307,7 @@ class SetupActivity : Activity() {
     private fun saveConnectorConfig() {
         val webhookUrl = webhookUrlInput.text.toString().trim()
         val userId = userIdInput.text.toString().trim()
+        val webhookToken = webhookTokenInput.text.toString().trim()
 
         if (!webhookUrl.startsWith("http://") && !webhookUrl.startsWith("https://")) {
             webhookUrlInput.error = "Use a full http:// or https:// URL"
@@ -277,10 +319,15 @@ class SetupActivity : Activity() {
             return
         }
 
+        if (webhookToken.startsWith("http://") || webhookToken.startsWith("https://")) {
+            webhookTokenInput.error = "Token should not be a URL. Leave it empty."
+            return
+        }
+
         configStore.save(
             webhookUrl = webhookUrl,
             userId = userId,
-            webhookToken = webhookTokenInput.text.toString(),
+            webhookToken = webhookToken,
         )
         Toast.makeText(this, "Saved. Now enable Notification Access.", Toast.LENGTH_LONG).show()
         refreshStatus()
@@ -321,6 +368,8 @@ class SetupActivity : Activity() {
         values["POCKETBUDDY_WEBHOOK_TOKEN"]?.let {
             webhookTokenInput.setText(it)
             filled = true
+        } ?: run {
+            if (filled) webhookTokenInput.setText("")
         }
 
         if (filled) {
@@ -370,10 +419,10 @@ class SetupActivity : Activity() {
     private fun titleText(text: String): TextView =
         TextView(this).apply {
             this.text = text
-            textSize = 24f
+            textSize = 27f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(17, 24, 39))
-            setPadding(0, 0, 0, dp(10))
+            setTextColor(Color.rgb(9, 9, 11))
+            setPadding(0, 0, 0, dp(8))
         }
 
     private fun sectionTitle(text: String): TextView =
@@ -381,30 +430,71 @@ class SetupActivity : Activity() {
             this.text = text
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(17, 24, 39))
+            setTextColor(Color.rgb(9, 9, 11))
             setPadding(0, 0, 0, dp(8))
+        }
+
+    private fun sectionKicker(text: String): TextView =
+        TextView(this).apply {
+            this.text = text.uppercase()
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(113, 113, 122))
+            setPadding(0, 0, 0, dp(7))
+        }
+
+    private fun stepTitle(step: String, title: String): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(10))
+            addView(
+                TextView(this@SetupActivity).apply {
+                    text = step
+                    textSize = 14f
+                    typeface = Typeface.DEFAULT_BOLD
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    background = rounded(Color.rgb(255, 107, 0), dp(16))
+                },
+                LinearLayout.LayoutParams(dp(32), dp(32)),
+            )
+            addView(
+                Space(this@SetupActivity),
+                LinearLayout.LayoutParams(dp(10), dp(1)),
+            )
+            addView(
+                sectionTitle(title).apply {
+                    setPadding(0, 0, 0, 0)
+                },
+                LinearLayout.LayoutParams(
+                    0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    1f,
+                ),
+            )
         }
 
     private fun bodyText(text: String): TextView =
         TextView(this).apply {
             this.text = text
-            textSize = 13f
-            setTextColor(Color.rgb(93, 100, 112))
-            setLineSpacing(dp(2).toFloat(), 1.05f)
-            setPadding(0, 0, 0, dp(8))
+            textSize = 14f
+            setTextColor(Color.rgb(113, 113, 122))
+            setLineSpacing(dp(3).toFloat(), 1.05f)
+            setPadding(0, 0, 0, dp(10))
         }
 
     private fun sectionCard(): LinearLayout =
         LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(16))
-            background = rounded(Color.WHITE, dp(16), Color.rgb(229, 233, 240))
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = rounded(Color.WHITE, dp(14), Color.rgb(228, 228, 231))
             gravity = Gravity.START
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
-                setMargins(0, dp(12), 0, 0)
+                setMargins(0, dp(14), 0, 0)
             }
         }
 

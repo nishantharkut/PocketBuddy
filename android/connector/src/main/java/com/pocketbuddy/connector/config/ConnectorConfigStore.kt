@@ -16,7 +16,9 @@ class ConnectorConfigStore(context: Context) {
         preferences.getString(KEY_WEBHOOK_TOKEN, null)
             ?.trim()
             ?.takeIf(String::isNotBlank)
+            ?.takeUnless(::looksLikeUrl)
             ?: BuildConfig.POCKETBUDDY_WEBHOOK_TOKEN.trim().takeIf(String::isNotBlank)
+                ?.takeUnless(::looksLikeUrl)
 
     fun userId(): String? =
         preferences.getString(KEY_USER_ID, null)
@@ -45,5 +47,8 @@ class ConnectorConfigStore(context: Context) {
         private const val KEY_WEBHOOK_URL = "webhook_url"
         private const val KEY_WEBHOOK_TOKEN = "webhook_token"
         private const val KEY_USER_ID = "user_id"
+
+        private fun looksLikeUrl(value: String): Boolean =
+            value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true)
     }
 }

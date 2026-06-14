@@ -21,6 +21,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Space
 import android.widget.ScrollView
@@ -28,6 +29,7 @@ import android.widget.TextView
 import android.widget.Toast
 import com.pocketbuddy.connector.BuildConfig
 import com.pocketbuddy.connector.PocketBuddyNotificationListener
+import com.pocketbuddy.connector.R
 import com.pocketbuddy.connector.config.ConnectorConfigStore
 import com.pocketbuddy.connector.identity.DeviceIdentityStore
 import com.pocketbuddy.connector.retry.WebhookRetryQueue
@@ -66,7 +68,7 @@ class SetupActivity : Activity() {
                 dp(20),
                 dp(28),
             )
-            addView(titleText("PocketBuddy Connector"))
+            addView(headerView())
             addView(bodyText("Securely link this phone to sync UPI payment alerts from SMS and payment apps."))
             addView(statusCard())
             addView(configCard())
@@ -415,6 +417,34 @@ class SetupActivity : Activity() {
         }
         startActivity(intent)
     }
+
+    private fun headerView(): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(8))
+            addView(
+                ImageView(this@SetupActivity).apply {
+                    setImageResource(R.drawable.ic_pocketbuddy_logo)
+                    contentDescription = "PocketBuddy logo"
+                },
+                LinearLayout.LayoutParams(dp(52), dp(52)),
+            )
+            addView(
+                Space(this@SetupActivity),
+                LinearLayout.LayoutParams(dp(12), dp(1)),
+            )
+            addView(
+                titleText("PocketBuddy Connector").apply {
+                    setPadding(0, 0, 0, 0)
+                },
+                LinearLayout.LayoutParams(
+                    0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    1f,
+                ),
+            )
+        }
 
     private fun titleText(text: String): TextView =
         TextView(this).apply {

@@ -8,7 +8,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronDown, ChevronLeft, ChevronRight, Copy, RefreshCw, Save } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Download,
+  ExternalLink,
+  RefreshCw,
+  Save,
+  ShieldAlert,
+  Smartphone,
+} from "lucide-react";
 import { toast } from "sonner";
 import { absoluteDate, relativeTime } from "@/lib/format";
 
@@ -21,6 +32,8 @@ type Profile = any;
 type SyncLog = any;
 
 const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification";
+const ANDROID_APK_DOWNLOAD_URL =
+  "https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk";
 
 function getCompanionWebhookUrl() {
   if (typeof window === "undefined") return LOCAL_WEBHOOK_URL;
@@ -222,6 +235,8 @@ function CompanionPage() {
               </p>
             </Card>
 
+            <AndroidInstallGuideCard />
+
             <div>
               <h3 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground">
                 RECENT SYNC ACTIVITY
@@ -305,6 +320,8 @@ function CompanionPage() {
               </div>
             </Card>
 
+            <AndroidInstallGuideCard />
+
             <div className="rounded-xl border border-border bg-surface-raised p-4 text-center">
               <p className="text-[13px] font-semibold text-foreground">No manual code required</p>
               <p className="mx-auto mt-1 max-w-sm text-[12px] leading-relaxed text-muted-foreground">
@@ -349,6 +366,54 @@ function CompanionPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function AndroidInstallGuideCard() {
+  return (
+    <Card className="bg-surface-raised p-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-primary" />
+            <p className="text-[14px] font-semibold text-foreground">Install PocketBuddy Connector</p>
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+            Download the Android connector, install it once, then paste the config from this page into the app.
+          </p>
+        </div>
+
+        <Button asChild className="w-full shrink-0 sm:w-auto">
+          <a href={ANDROID_APK_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+            <Download />
+            Download APK
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </Button>
+      </div>
+
+      <div className="mt-4 grid gap-2 text-[12px] text-muted-foreground sm:grid-cols-3">
+        <div className="rounded-md border border-border bg-surface p-3">
+          <p className="font-semibold text-foreground">1. Download</p>
+          <p className="mt-1 leading-relaxed">Open the APK link on the Android phone where UPI/SMS alerts arrive.</p>
+        </div>
+        <div className="rounded-md border border-border bg-surface p-3">
+          <p className="font-semibold text-foreground">2. Install</p>
+          <p className="mt-1 leading-relaxed">If Android asks, allow installs from the browser for this one app.</p>
+        </div>
+        <div className="rounded-md border border-border bg-surface p-3">
+          <p className="font-semibold text-foreground">3. Connect</p>
+          <p className="mt-1 leading-relaxed">Copy the Android config below, paste it in the connector, and enable notification access.</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-[12px] leading-relaxed text-muted-foreground">
+        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+        <p>
+          Google Play Protect can warn because this is a hackathon sideload APK, not a Play Store app. If it blocks installation on a demo phone, open Play Store &gt; Play Protect &gt; Settings, temporarily disable app scanning, install PocketBuddy, then turn scanning back on.
+        </p>
+      </div>
+    </Card>
   );
 }
 

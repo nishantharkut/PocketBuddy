@@ -734,10 +734,10 @@ function TravelPage() {
                   </div>
 
                   {aiCoachResult && (
-                    <div className="space-y-3 p-3.5 bg-background/50 border border-primary/20 rounded-xl animate-[fadeIn_0.25s_ease-out]">
-                      <div className="relative bg-surface p-3 border border-border rounded-lg">
+                    <div className="space-y-3 p-3.5 bg-card border border-primary/20 rounded-xl animate-[fadeIn_0.25s_ease-out] text-card-foreground">
+                      <div className="relative bg-surface-raised p-3 border border-border rounded-lg">
                         <span className="text-[8px] text-primary font-bold uppercase tracking-widest block mb-1.5">AI Dialect-tailored Script</span>
-                        <p className="text-xs text-zinc-200 font-bold leading-relaxed pr-8">
+                        <p className="text-xs text-foreground font-bold leading-relaxed pr-8">
                           "{aiCoachResult.script}"
                         </p>
                         <button 
@@ -749,8 +749,8 @@ function TravelPage() {
                       </div>
 
                       <div className="space-y-1.5">
-                        <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest block">AI Tactical Tips</span>
-                        <ul className="space-y-1 text-[11px] text-zinc-400 font-medium">
+                        <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-widest block">AI Tactical Tips</span>
+                        <ul className="space-y-1 text-[11px] text-foreground/80 font-medium">
                           {aiCoachResult.tactics.map((tip, idx) => (
                             <li key={idx} className="flex gap-1.5 items-start">
                               <span className="text-primary mt-0.5">•</span>
@@ -761,7 +761,7 @@ function TravelPage() {
                       </div>
 
                       {aiCoachResult.safety && (
-                        <div className="p-2.5 bg-destructive/5 border border-destructive/15 rounded-lg text-[10px] text-zinc-400 font-medium leading-relaxed">
+                        <div className="p-2.5 bg-destructive/5 border border-destructive/15 rounded-lg text-[10px] text-foreground font-medium leading-relaxed">
                           <span className="font-bold text-destructive uppercase tracking-wide mr-1.5">AI Safety Warning:</span>
                           {aiCoachResult.safety}
                         </div>

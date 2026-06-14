@@ -11,6 +11,8 @@ Passive UPI tracking, spending runway, companion Android sync, cart pooling, cam
   &nbsp;|&nbsp;
   <a href="https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk"><strong>Download Android Connector</strong></a>
   &nbsp;|&nbsp;
+  <a href="./android/releases/PocketBuddy-Connector-v0.1.0.apk"><strong>Repo APK</strong></a>
+  &nbsp;|&nbsp;
   <a href="./docs/Initial-PRD.md"><strong>Product Requirements</strong></a>
   &nbsp;|&nbsp;
   <a href="./docs/aws-e2e-deployment-runbook.md"><strong>AWS Runbook</strong></a>
@@ -68,12 +70,13 @@ The platform combines:
 | Surface | Link |
 | --- | --- |
 | Web app | [https://d3g6cg7q9hn7hi.cloudfront.net/](https://d3g6cg7q9hn7hi.cloudfront.net/) |
-| Android connector APK | [PocketBuddy-Connector-v0.1.0.apk](https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk) |
+| Android connector APK, hosted | [PocketBuddy-Connector-v0.1.0.apk](https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk) |
+| Android connector APK, repo copy | [android/releases/PocketBuddy-Connector-v0.1.0.apk](./android/releases/PocketBuddy-Connector-v0.1.0.apk) |
 | Mobile ingest endpoint | [CloudFront webhook route](https://d3g6cg7q9hn7hi.cloudfront.net/api/ingest/notification) |
 | AWS deployment guide | [docs/aws-e2e-deployment-runbook.md](./docs/aws-e2e-deployment-runbook.md) |
 | Mobile ingest contract | [docs/mobile-ingest-contract.md](./docs/mobile-ingest-contract.md) |
 
-> The Android APK is a sideloaded hackathon build. Android or Google Play Protect can warn because it is not distributed through Play Store and it requests notification access. Use only the APK linked above.
+> The Android APK is a sideloaded hackathon build. Android or Google Play Protect can warn because it is not distributed through Play Store and it requests notification access. Use only the hosted APK or the repository APK linked above.
 
 ---
 
@@ -285,9 +288,10 @@ The Android module is documented in [android/README.md](./android/README.md).
 
 ### Install The Demo APK
 
-Use this link on the Android phone that receives UPI/SMS alerts:
+Use either of these links on the Android phone that receives UPI/SMS alerts:
 
-[Download PocketBuddy Connector APK](https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk)
+- [Download from CloudFront](https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk)
+- [Download from this repository](./android/releases/PocketBuddy-Connector-v0.1.0.apk)
 
 If Android blocks installation:
 
@@ -296,7 +300,7 @@ If Android blocks installation:
 3. Open **Play Protect**.
 4. Open settings.
 5. Temporarily disable app scanning.
-6. Install PocketBuddy Connector from the link above.
+6. Install PocketBuddy Connector from one of the links above.
 7. Turn Play Protect scanning back on.
 
 This is only for the hackathon sideload build. Do not ask users to keep Play Protect disabled.
@@ -411,10 +415,24 @@ Public URL:
 https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk
 ```
 
+Repository copy:
+
+```text
+android/releases/PocketBuddy-Connector-v0.1.0.apk
+```
+
 Do not share unsigned or intermediate APK files such as:
 
 ```text
 PocketBuddy-Connector-v0.1.0-release-aligned.apk
+```
+
+Do not commit local signing material or scratch artifacts such as:
+
+```text
+scratch/android-signing/*.jks
+scratch/android-signing/*password*
+scratch/android-release/*.idsig
 ```
 
 </details>

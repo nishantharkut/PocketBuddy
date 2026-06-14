@@ -22,6 +22,7 @@ class PoolReq(BaseModel):
     min_cart_value: int
     expires_at: str
     platform: str
+    platform_display_label: Optional[str] = None
     delivery_fee: int
     created_by_name: str
 
@@ -193,6 +194,7 @@ async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user
         "created_by_name": clean_text(req.created_by_name, "Host name"),
         "wing_label": wing_label,
         "platform": validate_platform(req.platform),
+        "platform_display_label": clean_text(req.platform_display_label, "Platform display label", max_chars=120) if req.platform_display_label else None,
         "min_cart_value": validate_paise_amount(req.min_cart_value, "Minimum cart value", MAX_POOL_VALUE_PAISE),
         "delivery_fee": validate_paise_amount(req.delivery_fee, "Delivery fee", MAX_FEE_PAISE, allow_zero=True),
         "status": "open",

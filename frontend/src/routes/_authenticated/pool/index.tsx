@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
@@ -17,7 +17,7 @@ import {
 import { toast } from "sonner";
 import { rupees } from "@/lib/format";
 import { Clock } from "lucide-react";
-import { getProfile, getCartPools, insertCartPool } from "@/lib/api/db.functions";
+import { getProfile, getCartPools, insertCartPool, getCatalog, addCatalogItem } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/pool/")({
   ssr: false,
@@ -26,10 +26,13 @@ export const Route = createFileRoute("/_authenticated/pool/")({
 
 type Pool = any;
 
-const PLATFORMS = [
-  { v: "blinkit" as const, l: "Blinkit" },
-  { v: "zepto" as const, l: "Zepto" },
-  { v: "swiggy_instamart" as const, l: "Swiggy Instamart" },
+// Fallback platforms used ONLY if catalog API fails
+const FALLBACK_PLATFORMS = [
+  { v: "zepto", l: "Zepto" },
+  { v: "blinkit", l: "Blinkit" },
+  { v: "swiggy_instamart", l: "Swiggy Instamart" },
+  { v: "bigbasket", l: "BigBasket" },
+  { v: "jiomart", l: "JioMart" },
 ];
 
 const BRAND_THEMES: Record<string, { bg: string; text: string; name: string; gradient: string; accent: string }> = {
@@ -53,8 +56,33 @@ const BRAND_THEMES: Record<string, { bg: string; text: string; name: string; gra
     name: "Swiggy Instamart",
     gradient: "from-[#FC8019] to-[#EF4444]",
     accent: "text-[#FC8019]"
-  }
+  },
+  bigbasket: {
+    bg: "bg-[#84C225]",
+    text: "text-white",
+    name: "BigBasket",
+    gradient: "from-[#84C225] to-[#69A020]",
+    accent: "text-[#84C225]"
+  },
+  jiomart: {
+    bg: "bg-[#0078AD]",
+    text: "text-white",
+    name: "JioMart",
+    gradient: "from-[#0078AD] to-[#005B8C]",
+    accent: "text-[#0078AD]"
+  },
 };
+
+function getPlatformBorderColor(platform: string): string {
+  const map: Record<string, string> = {
+    zepto: "border-l-[#5E17EB]",
+    blinkit: "border-l-[#F7EC13]",
+    swiggy_instamart: "border-l-[#FC8019]",
+    bigbasket: "border-l-[#84C225]",
+    jiomart: "border-l-[#0078AD]",
+  };
+  return map[platform] || "border-l-primary";
+}
 
 function PoolList() {
   const { user } = useAuth();
@@ -81,7 +109,7 @@ function PoolList() {
 
   return (
     <AppShell>
-      <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/85 backdrop-blur-md">
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center gap-3 border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
         <MobileMenuButton />
         <h1 className="text-lg font-black tracking-wider text-foreground uppercase">Cart Pools</h1>
       </div>
@@ -101,7 +129,7 @@ function PoolList() {
             <CreatePoolForm
               userId={user?.id}
               userName={profile?.full_name ?? "You"}
-              wing={profile?.wing_label ?? "Wing 4B"}
+              wing={profile?.wing_label ?? ""}
               onDone={() => {
                 setOpen(false);
                 qc.invalidateQueries({ queryKey: ["all-pools"] });
@@ -154,44 +182,34 @@ function PoolCard({ pool }: { pool: Pool }) {
   const theme = BRAND_THEMES[pool.platform] || {
     bg: "bg-primary",
     text: "text-primary-foreground",
-    name: pool.platform,
+    name: pool.platform_display_label || pool.platform?.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) || "Custom",
     gradient: "from-primary to-accent",
     accent: "text-primary"
   };
 
   const active = minsLeft > 0 && pool.status === "open";
-  
-  // Platform color mapping for left border highlight
-  const platformBorderColor = 
-    pool.platform === "zepto" 
-      ? "border-l-[#5E17EB]" 
-      : pool.platform === "blinkit" 
-        ? "border-l-[#F7EC13]" 
-        : pool.platform === "swiggy_instamart" 
-          ? "border-l-[#FC8019]" 
-          : "border-l-primary";
+  const platformBorderColor = getPlatformBorderColor(pool.platform);
 
   return (
     <Link to="/pool/$id" params={{ id: pool.id }} className="block no-underline">
       <Card className={`relative overflow-hidden p-5 border border-border border-l-4 ${platformBorderColor} bg-surface transition-all duration-200 hover:bg-surface-raised hover:border-r-white/10 hover:border-t-white/10 hover:border-b-white/10 hover:shadow-lg hover:shadow-black/50 active:scale-[0.99]`}>
-        {active && (
-          <div className="absolute right-3 top-3">
-            <span className="inline-flex items-center gap-1.5 bg-white/5 border border-border px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider text-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-              Open
-            </span>
-          </div>
-        )}
-
         <div className="flex flex-col justify-between h-full">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-black uppercase tracking-wider text-foreground">
-                {theme.name} Pool
-              </span>
-              <Badge variant="outline" className="text-xs font-bold border-border bg-white/5 text-muted-foreground">
-                {pool.wing_label}
-              </Badge>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                <span className="text-sm font-black uppercase tracking-wider text-foreground truncate max-w-[150px] sm:max-w-none">
+                  {theme.name} Pool
+                </span>
+                <Badge variant="outline" className="text-xs font-bold border-border bg-white/5 text-muted-foreground">
+                  {pool.wing_label}
+                </Badge>
+              </div>
+              {active && (
+                <span className="inline-flex items-center gap-1.5 bg-white/5 border border-border px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider text-foreground shrink-0">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  Open
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Host: <span className="font-semibold text-foreground capitalize">{pool.created_by_name || "—"}</span>
@@ -243,22 +261,77 @@ function CreatePoolForm({
   wing: string;
   onDone: () => void;
 }) {
-  const [platform, setPlatform] = useState<(typeof PLATFORMS)[number]["v"]>("zepto");
+  const qc = useQueryClient();
+  const [platform, setPlatform] = useState("");
+  const [customPlatform, setCustomPlatform] = useState("");
   const [minCart, setMinCart] = useState("199");
   const [fee, setFee] = useState("25");
   const [dur, setDur] = useState("30");
   const [busy, setBusy] = useState(false);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  // Fetch platforms from catalog
+  const { data: catalogPlatforms } = useQuery({
+    queryKey: ["catalog", "cart-platforms"],
+    queryFn: () => getCatalog("cart-platforms"),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const platformOptions = useMemo(() => {
+    if (catalogPlatforms && catalogPlatforms.length > 0) {
+      return catalogPlatforms.map((p: any) => ({
+        v: p.value,
+        l: p.label,
+        metadata: p.metadata || {},
+      }));
+    }
+    return FALLBACK_PLATFORMS.map((p) => ({ ...p, metadata: {} }));
+  }, [catalogPlatforms]);
+
+  function selectPlatform(value: string) {
+    setPlatform(value);
+    setShowCustomInput(false);
+    // Auto-fill suggested min cart / fee from metadata
+    const selected = platformOptions.find((p: any) => p.v === value);
+    if (selected?.metadata?.default_min_cart) {
+      setMinCart(String(Math.round(selected.metadata.default_min_cart / 100)));
+    }
+    if (selected?.metadata?.default_delivery_fee !== undefined) {
+      setFee(String(Math.round(selected.metadata.default_delivery_fee / 100)));
+    }
+  }
+
+  async function handleAddCustomPlatform() {
+    const name = customPlatform.trim();
+    if (!name) return;
+    try {
+      const added = await addCatalogItem("cart-platforms", { label: name });
+      qc.invalidateQueries({ queryKey: ["catalog", "cart-platforms"] });
+      setPlatform(added.value);
+      setCustomPlatform("");
+      setShowCustomInput(false);
+      toast.success(`"${name}" added as a platform`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add platform");
+    }
+  }
 
   async function create() {
     if (!userId) return;
+    if (!platform) {
+      toast.error("Select or add a platform");
+      return;
+    }
     setBusy(true);
     try {
       const expires = new Date(Date.now() + parseInt(dur, 10) * 60_000).toISOString();
+      const selectedLabel = platformOptions.find((p: any) => p.v === platform)?.l || customPlatform || platform;
       const data = await insertCartPool({
         data: {
           created_by_name: userName || "You",
-          wing_label: wing,
+          wing_label: wing || "Default Wing",
           platform,
+          platform_display_label: selectedLabel,
           min_cart_value: Math.round(parseFloat(minCart) * 100),
           delivery_fee: Math.round(parseFloat(fee) * 100),
           expires_at: expires,
@@ -269,7 +342,7 @@ function CreatePoolForm({
         navigator
           .share({
             title: "Join my cart pool",
-            text: `Join my ${platform} pool on PocketBuddy!`,
+            text: `Join my ${selectedLabel} pool on PocketBuddy!`,
             url: `${window.location.origin}/pool/${data.id}`,
           })
           .catch(() => {});
@@ -288,16 +361,51 @@ function CreatePoolForm({
         <SheetTitle>New Cart Pool</SheetTitle>
       </SheetHeader>
       <div className="mt-4 space-y-4">
-        <div className="grid grid-cols-3 gap-2">
-          {PLATFORMS.map((p) => (
-            <button
-              key={p.v}
-              onClick={() => setPlatform(p.v)}
-              className={`rounded-md border p-3 text-center text-sm ${platform === p.v ? "border-primary bg-primary/10" : "border-border bg-surface"}`}
-            >
-              {p.l}
-            </button>
-          ))}
+        <div>
+          <label className="text-sm text-muted-foreground mb-2 block">Platform / Store</label>
+          <div className="flex flex-wrap gap-2">
+            {platformOptions.map((p: any) => (
+              <button
+                key={p.v}
+                onClick={() => selectPlatform(p.v)}
+                className={`rounded-md border px-3 py-2.5 text-center text-sm transition-all cursor-pointer ${platform === p.v ? "border-primary bg-primary/10 font-semibold" : "border-border bg-surface hover:bg-surface-raised"}`}
+              >
+                {p.l}
+              </button>
+            ))}
+            {!showCustomInput ? (
+              <button
+                onClick={() => { setShowCustomInput(true); setPlatform(""); }}
+                className="rounded-md border border-dashed border-primary/30 px-3 py-2.5 text-center text-sm text-primary font-semibold hover:bg-primary/5 hover:border-primary/50 transition-all cursor-pointer"
+              >
+                + Other
+              </button>
+            ) : (
+              <div className="flex gap-1.5 w-full mt-1">
+                <input
+                  type="text"
+                  value={customPlatform}
+                  onChange={(e) => setCustomPlatform(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomPlatform(); }}
+                  placeholder="e.g. Canteen Order, Local Shop"
+                  autoFocus
+                  className="flex-1 rounded-md border border-border bg-surface-raised/40 px-3 py-2 text-sm outline-none text-foreground placeholder:text-zinc-600 focus:ring-1 focus:ring-primary/40 focus:border-primary/40 transition-all"
+                />
+                <button
+                  onClick={handleAddCustomPlatform}
+                  className="rounded-md bg-primary text-primary-foreground px-3 py-2 text-sm font-bold hover:bg-primary/90 transition-colors"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => { setShowCustomInput(false); setCustomPlatform(""); }}
+                  className="rounded-md border border-border px-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <div>
           <label className="text-sm text-muted-foreground">Min cart value</label>
@@ -342,7 +450,7 @@ function CreatePoolForm({
         <Button
           id="btn-create-pool"
           onClick={create}
-          disabled={busy}
+          disabled={busy || !platform}
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
         >
           Create & Share

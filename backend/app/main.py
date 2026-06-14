@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.api import (
     auth,
     campus_food,
+    catalog,
     checkins,
     companion,
     insights,
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(transactions.router, prefix="/api/transactions", tags=["transactions"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["subscriptions"])

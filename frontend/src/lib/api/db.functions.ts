@@ -166,3 +166,14 @@ export async function getWellnessInsights() {
   return apiRequest("/api/insights/wellness");
 }
 
+export async function getCatalog(catalogType: string) {
+  return apiRequest(`/api/catalog/${catalogType}`);
+}
+
+export async function addCatalogItem(catalogType: string, data: { label: string; metadata?: any }) {
+  return apiRequest(`/api/catalog/${catalogType}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+

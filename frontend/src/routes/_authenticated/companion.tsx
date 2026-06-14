@@ -125,18 +125,47 @@ function CompanionPage() {
     }
   }
 
-  async function copyConnectorConfig() {
+  async function fallbackCopyText(text: string): Promise<boolean> {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(connectorConfig);
+      ok = document.execCommand('copy');
+    } catch (err) {
+      ok = false;
+    }
+    document.body.removeChild(textArea);
+    return ok;
+  }
+
+  async function copyConnectorConfig() {
+    let copied = false;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(connectorConfig);
+        copied = true;
+      } catch (err) {}
+    }
+    if (!copied) {
+      copied = await fallbackCopyText(connectorConfig);
+    }
+
+    if (copied) {
       toast.success("Android config copied.");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to copy config");
+    } else {
+      toast.error("Failed to copy config. Please copy manually.");
     }
   }
 
   return (
     <AppShell>
-      <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface px-4">
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-4 flex h-14 items-center gap-3 border-b border-border bg-surface px-6 md:px-10 lg:px-12">
         <MobileMenuButton />
         <button onClick={() => nav({ to: "/settings" })} className="text-muted-foreground">
           <ChevronLeft className="h-5 w-5" />

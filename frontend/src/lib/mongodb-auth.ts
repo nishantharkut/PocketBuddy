@@ -38,16 +38,16 @@ export async function signUpUser({
     createdAt: new Date(),
   });
 
-  // Automatically initialize their profile matching the SQL structure
+  // Initialize empty profile — onboarding will fill in campus-specific data
   await db.collection("profiles").insertOne({
     _id: userId as any,
     full_name: fullName,
     phone_number: phone || null,
-    college_name: "ABV-IIITM Gwalior",
-    hostel_block: "BH-2",
-    room_number: "412",
-    wing_label: "Wing 4B",
-    monthly_allowance: 800000,
+    college_name: null,
+    hostel_block: null,
+    room_number: null,
+    wing_label: null,
+    monthly_allowance: null,
     cycle_start_day: 1,
     exam_start_date: null,
     exam_end_date: null,
@@ -109,15 +109,16 @@ export async function signInWithPhone({ phone, fullName }: { phone: string; full
       createdAt: new Date(),
     });
 
+    // Initialize empty profile — onboarding will fill in campus-specific data
     await db.collection("profiles").insertOne({
       _id: userId as any,
       full_name: fullName || "Student",
       phone_number: `+91${cleaned}`,
-      college_name: "ABV-IIITM Gwalior",
-      hostel_block: "BH-2",
-      room_number: "412",
-      wing_label: "Wing 4B",
-      monthly_allowance: 800000,
+      college_name: null,
+      hostel_block: null,
+      room_number: null,
+      wing_label: null,
+      monthly_allowance: null,
       cycle_start_day: 1,
       exam_start_date: null,
       exam_end_date: null,

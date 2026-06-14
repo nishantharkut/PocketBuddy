@@ -55,7 +55,21 @@ const BRAND_THEMES: Record<string, { bg: string; text: string; name: string; gra
     name: "Swiggy Instamart",
     gradient: "from-[#FC8019] to-[#EF4444]",
     accent: "text-[#FC8019]"
-  }
+  },
+  bigbasket: {
+    bg: "bg-[#84C225]",
+    text: "text-white",
+    name: "BigBasket",
+    gradient: "from-[#84C225] to-[#69A020]",
+    accent: "text-[#84C225]"
+  },
+  jiomart: {
+    bg: "bg-[#0078AD]",
+    text: "text-white",
+    name: "JioMart",
+    gradient: "from-[#0078AD] to-[#005B8C]",
+    accent: "text-[#0078AD]"
+  },
 };
 
 function formatExternalUrl(url: string | null | undefined): string {
@@ -146,7 +160,7 @@ function PoolDetail() {
   const theme = BRAND_THEMES[pool.platform] || {
     bg: "bg-primary",
     text: "text-primary-foreground",
-    name: pool.platform,
+    name: pool.platform_display_label || pool.platform?.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) || "Custom",
     gradient: "from-primary to-accent",
     accent: "text-primary"
   };
@@ -289,6 +303,25 @@ function PoolDetail() {
     }
   }
 
+  async function fallbackCopyText(text: string): Promise<boolean> {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (err) {
+      ok = false;
+    }
+    document.body.removeChild(textArea);
+    return ok;
+  }
+
   async function share() {
     const url = `${window.location.origin}/pool/${id}`;
     if (navigator.share) {
@@ -303,8 +336,23 @@ function PoolDetail() {
         /* fallthrough */
       }
     }
-    await navigator.clipboard.writeText(url);
-    toast("Link copied to clipboard!");
+
+    let copied = false;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch (err) {}
+    }
+    if (!copied) {
+      copied = await fallbackCopyText(url);
+    }
+
+    if (copied) {
+      toast.success("Link copied to clipboard!");
+    } else {
+      toast.error("Failed to copy link. Please copy manually.");
+    }
   }
 
   async function completeCheckout() {
@@ -409,7 +457,7 @@ function PoolDetail() {
   return (
     <AppShell>
       {/* Dynamic Header Banner */}
-      <div className={`sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-surface px-4`}>
+      <div className={`sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-4 flex h-14 items-center justify-between border-b border-border bg-surface px-6 md:px-10 lg:px-12`}>
         <div className="flex items-center gap-3">
           <button onClick={() => {
             if (isHost) {
@@ -436,7 +484,7 @@ function PoolDetail() {
           </span>
         </div>
         <div className="flex gap-2">
-          <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider bg-muted/50 border-border">
+          <Badge variant="outline" className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider bg-muted/50 border-border max-w-[120px] sm:max-w-none truncate whitespace-nowrap">
             {theme.name}
           </Badge>
           <Button
@@ -452,28 +500,28 @@ function PoolDetail() {
         </div>
       </div>      {/* Platform Theme Hero Segment */}
       <div className={`w-full bg-card border border-border border-t-4 ${
-        pool.platform === "zepto" 
-          ? "border-t-[#5E17EB]" 
-          : pool.platform === "blinkit" 
-            ? "border-t-[#F7EC13]" 
-            : pool.platform === "swiggy_instamart" 
-              ? "border-t-[#FC8019]" 
-              : "border-t-primary"
+        ({
+          zepto: "border-t-[#5E17EB]",
+          blinkit: "border-t-[#F7EC13]",
+          swiggy_instamart: "border-t-[#FC8019]",
+          bigbasket: "border-t-[#84C225]",
+          jiomart: "border-t-[#0078AD]",
+        } as Record<string, string>)[pool.platform] || "border-t-primary"
       } px-6 py-8 text-foreground flex flex-col justify-between relative overflow-hidden rounded-2xl shadow-lg shadow-black/30`}>
         <div className="absolute right-0 top-0 opacity-5 transform translate-x-4 -translate-y-4 pointer-events-none">
           <Sparkles className="h-32 w-32 text-foreground" />
         </div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">Quick Commerce Pooling</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">Cart Pooling</p>
           <h2 className="text-2xl font-black mt-2 uppercase tracking-tight text-foreground">
             {theme.name} Pool
           </h2>
           <p className="text-xs text-muted-foreground mt-1 font-medium">
-            Created by <span className="text-foreground capitalize font-bold">{pool.created_by_name}</span> • Wing {pool.wing_label}
+            Created by <span className="text-foreground capitalize font-bold">{pool.created_by_name}</span> • {pool.wing_label?.toLowerCase().startsWith("wing") ? pool.wing_label : `Wing ${pool.wing_label}`}
           </p>
         </div>
 
-        <div className="mt-8 flex justify-between items-end border-t border-border pt-5">
+        <div className="mt-8 flex flex-wrap gap-4 justify-between items-end border-t border-border pt-5">
           <div>
             <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Target Cart Total</p>
             <p className="text-xl font-black text-foreground tnum mt-0.5">{rupees(cartTotal)} <span className="text-zinc-500 text-xs font-semibold">/ {rupees(pool.min_cart_value)} min</span></p>
@@ -620,7 +668,7 @@ function PoolDetail() {
                   )}
                 </div>
 
-                <div className="flex gap-2 pt-3 border-t border-border">
+                <div className="flex flex-wrap gap-2 pt-3 border-t border-border">
                   <div className="text-xs font-bold bg-white/5 border border-border px-3 py-1.5 rounded-full text-foreground uppercase tracking-wider">
                     Overhead: <strong>{rupees(pool.final_overhead)}</strong>
                   </div>
@@ -688,7 +736,7 @@ function PoolDetail() {
               ))}
             </div>
 
-            <div className="mt-4 pt-3 border-t border-border flex justify-between text-xs text-zinc-500 font-bold uppercase tracking-wider">
+            <div className="mt-4 pt-3 border-t border-border flex flex-wrap justify-between gap-2 text-xs text-zinc-500 font-bold uppercase tracking-wider">
               <span>Overhead per person:</span>
               {pool.status === "completed" ? (
                 <span>{rupees(splitBreakdown[Object.keys(splitBreakdown)[0]]?.share ?? 0)} each</span>
@@ -945,13 +993,13 @@ function PoolDetail() {
             e.preventDefault();
             addItem();
           }}
-          className="fixed inset-x-0 bottom-0 z-30 space-y-4 border-t border-border bg-card/90 backdrop-blur-md px-4 py-5 pb-12 shadow-2xl rounded-t-2xl animate-in slide-in-from-bottom"
+          className="fixed inset-x-0 bottom-16 bottom-[calc(4rem+env(safe-area-inset-bottom))] md:bottom-0 z-30 space-y-3 border-t border-border bg-card/90 backdrop-blur-md px-4 py-3.5 pb-3.5 md:py-5 md:pb-5 shadow-2xl rounded-t-2xl animate-in slide-in-from-bottom max-h-[calc(100vh-6rem)] md:max-h-none overflow-y-auto no-scrollbar"
         >
-          <div className="flex justify-between items-center pb-1">
+          <div className="flex justify-between items-center pb-0.5">
             <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Quick Add Item</h4>
             <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Registration Free</span>
           </div>
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input

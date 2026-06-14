@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,16 +12,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { seedDemoData } from "@/lib/seed.functions.js";
-import { getProfile, updateProfile } from "@/lib/api/db.functions.js";
+import { getProfile, updateProfile, getCatalog, addCatalogItem } from "@/lib/api/db.functions.js";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   ssr: false,
   component: Onboarding,
 });
 
-const UPI_OPTIONS = ["Google Pay", "PhonePe", "Paytm", "Amazon Pay", "CRED"] as const;
-const COLLEGES = [
+// Fallback constants used ONLY when catalog API fails
+const FALLBACK_UPI_OPTIONS = ["Google Pay", "PhonePe", "Paytm", "Amazon Pay", "CRED"];
+const FALLBACK_COLLEGES = [
   "ABV-IIITM Gwalior",
   "IIT Delhi",
   "IIT Bombay",
@@ -28,8 +29,8 @@ const COLLEGES = [
   "BITS Pilani",
   "NIT Warangal",
   "IIIT Hyderabad",
-  "Other",
-] as const;
+];
+
 const CYCLE_DAYS = [
   { v: 1, l: "1st of month" },
   { v: 5, l: "5th" },
@@ -48,16 +49,22 @@ function randomPairingCode() {
 function Onboarding() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [busy, setBusy] = useState(false);
 
-  // Step 1
-  const [allowance, setAllowance] = useState("8000");
+  // Step 1 — starts empty (no prefilled demo data)
+  const [allowance, setAllowance] = useState("");
   const [cycleDay, setCycleDay] = useState("1");
-  const [college, setCollege] = useState("ABV-IIITM Gwalior");
-  const [hostel, setHostel] = useState("BH-2");
-  const [wing, setWing] = useState("Wing 4B");
-  const [room, setRoom] = useState("412");
+  const [college, setCollege] = useState("");
+  const [hostel, setHostel] = useState("");
+  const [wing, setWing] = useState("");
+  const [room, setRoom] = useState("");
+
+  // College search/add
+  const [collegeSearch, setCollegeSearch] = useState("");
+  const [collegeDropdownOpen, setCollegeDropdownOpen] = useState(false);
+  const [addingCollege, setAddingCollege] = useState(false);
 
   // Step 2
   const [mess, setMess] = useState(true);
@@ -69,9 +76,46 @@ function Onboarding() {
   const [examStart, setExamStart] = useState("");
   const [examEnd, setExamEnd] = useState("");
   const [upiApps, setUpiApps] = useState<string[]>([]);
+  const [customUpiInput, setCustomUpiInput] = useState("");
+  const [showCustomUpi, setShowCustomUpi] = useState(false);
 
   // Step 3
   const pairingCode = useMemo(() => randomPairingCode(), []);
+
+  // Catalog queries
+  const { data: catalogColleges } = useQuery({
+    queryKey: ["catalog", "campuses"],
+    enabled: !!user,
+    queryFn: () => getCatalog("campuses"),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: catalogUpi } = useQuery({
+    queryKey: ["catalog", "payment-providers"],
+    enabled: !!user,
+    queryFn: () => getCatalog("payment-providers"),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const collegeOptions = useMemo(() => {
+    if (catalogColleges && catalogColleges.length > 0) {
+      return catalogColleges.map((c: any) => c.label);
+    }
+    return FALLBACK_COLLEGES;
+  }, [catalogColleges]);
+
+  const upiOptions = useMemo(() => {
+    if (catalogUpi && catalogUpi.length > 0) {
+      return catalogUpi.map((u: any) => u.label);
+    }
+    return FALLBACK_UPI_OPTIONS;
+  }, [catalogUpi]);
+
+  const filteredColleges = useMemo(() => {
+    if (!collegeSearch.trim()) return collegeOptions;
+    const q = collegeSearch.toLowerCase();
+    return collegeOptions.filter((c: string) => c.toLowerCase().includes(q));
+  }, [collegeOptions, collegeSearch]);
 
   // Pre-fill from existing profile
   useEffect(() => {
@@ -81,7 +125,10 @@ function Onboarding() {
         if (!data) return;
         if (data.monthly_allowance) setAllowance(String(Math.round(data.monthly_allowance / 100)));
         if (data.cycle_start_day) setCycleDay(String(data.cycle_start_day));
-        if (data.college_name) setCollege(data.college_name);
+        if (data.college_name) {
+          setCollege(data.college_name);
+          setCollegeSearch(data.college_name);
+        }
         if (data.hostel_block) setHostel(data.hostel_block);
         if (data.wing_label) setWing(data.wing_label);
         if (data.room_number) setRoom(data.room_number);
@@ -89,10 +136,42 @@ function Onboarding() {
       .catch((err) => console.error("Onboarding profile load error:", err));
   }, [user]);
 
+  async function handleAddCollege(name: string) {
+    if (!name.trim()) return;
+    setAddingCollege(true);
+    try {
+      await addCatalogItem("campuses", { label: name.trim() });
+      qc.invalidateQueries({ queryKey: ["catalog", "campuses"] });
+      setCollege(name.trim());
+      setCollegeSearch(name.trim());
+      setCollegeDropdownOpen(false);
+      toast.success(`"${name.trim()}" added to colleges`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add college");
+    } finally {
+      setAddingCollege(false);
+    }
+  }
+
+  async function handleAddUpi() {
+    const name = customUpiInput.trim();
+    if (!name) return;
+    try {
+      await addCatalogItem("payment-providers", { label: name });
+      qc.invalidateQueries({ queryKey: ["catalog", "payment-providers"] });
+      setUpiApps((prev) => [...prev, name]);
+      setCustomUpiInput("");
+      setShowCustomUpi(false);
+      toast.success(`"${name}" added`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add UPI app");
+    }
+  }
+
   async function saveStep1() {
     if (!user) return;
-    if (!allowance || !hostel || !wing || !room) {
-      toast.error("Fill all fields");
+    if (!allowance || !college) {
+      toast.error("Please enter your monthly allowance and select your college");
       return;
     }
     setBusy(true);
@@ -102,9 +181,9 @@ function Onboarding() {
           monthly_allowance: Math.round(parseFloat(allowance) * 100),
           cycle_start_day: parseInt(cycleDay, 10),
           college_name: college,
-          hostel_block: hostel,
-          wing_label: wing,
-          room_number: room,
+          hostel_block: hostel || null,
+          wing_label: wing || null,
+          room_number: room || null,
         },
       });
       setStep(2);
@@ -150,12 +229,6 @@ function Onboarding() {
           companion_last_sync: null,
         },
       });
-      // Seed demo data
-      try {
-        await seedDemoData();
-      } catch (e) {
-        console.warn("seed", e);
-      }
       if (connectCompanion) {
         toast.success("Profile saved. Finish Android setup from the companion page.");
         nav({ to: "/companion", replace: true });
@@ -216,7 +289,8 @@ function Onboarding() {
                   type="number"
                   value={allowance}
                   onChange={(e) => setAllowance(e.target.value)}
-                  className="flex-1 bg-transparent py-2.5 px-3 text-xs outline-none text-foreground"
+                  placeholder="e.g. 8000"
+                  className="flex-1 bg-transparent py-2.5 px-3 text-xs outline-none text-foreground placeholder:text-zinc-600"
                 />
               </div>
             </Field>
@@ -236,19 +310,68 @@ function Onboarding() {
               </Select>
             </Field>
 
-            <Field label="College">
-              <Select value={college} onValueChange={setCollege}>
-                <SelectTrigger id="select-ob-college" className="h-10 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {COLLEGES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Field label="College" helper="Search or add your college">
+              <div className="relative">
+                <input
+                  id="input-ob-college-search"
+                  type="text"
+                  value={collegeSearch}
+                  onChange={(e) => {
+                    setCollegeSearch(e.target.value);
+                    setCollegeDropdownOpen(true);
+                    // Clear selection if user is typing something different
+                    if (college && e.target.value !== college) {
+                      setCollege("");
+                    }
+                  }}
+                  onFocus={() => setCollegeDropdownOpen(true)}
+                  onBlur={() => {
+                    // Delay close to allow click events on dropdown items
+                    setTimeout(() => setCollegeDropdownOpen(false), 200);
+                  }}
+                  placeholder="Search or add your college..."
+                  className="w-full h-10 rounded-md border border-border bg-surface-raised/40 px-3 text-xs outline-none text-foreground placeholder:text-zinc-600 hover:border-white/15 focus:ring-1 focus:ring-primary/40 focus:border-primary/40 transition-all"
+                />
+                {college && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 text-xs">✓</span>
+                )}
+                {collegeDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full max-h-48 overflow-auto rounded-md border border-border bg-surface shadow-xl shadow-black/40 py-1">
+                    {filteredColleges.map((c: string) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setCollege(c);
+                          setCollegeSearch(c);
+                          setCollegeDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-surface-raised transition-colors cursor-pointer ${
+                          college === c ? "text-primary font-bold" : "text-foreground"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                    {collegeSearch.trim() && !collegeOptions.some((c: string) => c.toLowerCase() === collegeSearch.trim().toLowerCase()) && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleAddCollege(collegeSearch)}
+                        disabled={addingCollege}
+                        className="w-full text-left px-3 py-2.5 text-xs text-primary font-bold border-t border-border hover:bg-primary/5 transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <span className="bg-primary/10 border border-primary/20 rounded-full w-4 h-4 inline-flex items-center justify-center text-[10px] font-black">+</span>
+                        Add "{collegeSearch.trim()}"
+                      </button>
+                    )}
+                    {filteredColleges.length === 0 && !collegeSearch.trim() && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">No colleges loaded</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </Field>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -257,6 +380,7 @@ function Onboarding() {
                   id="input-ob-hostel"
                   value={hostel}
                   onChange={(e) => setHostel(e.target.value)}
+                  placeholder="e.g. BH-2"
                   className="h-10"
                 />
               </Field>
@@ -265,6 +389,7 @@ function Onboarding() {
                   id="input-ob-room" 
                   value={room} 
                   onChange={(e) => setRoom(e.target.value)} 
+                  placeholder="e.g. 412"
                   className="h-10"
                 />
               </Field>
@@ -278,6 +403,7 @@ function Onboarding() {
                 id="input-ob-wing" 
                 value={wing} 
                 onChange={(e) => setWing(e.target.value)} 
+                placeholder="e.g. Wing 4B"
                 className="h-10"
               />
             </Field>
@@ -335,20 +461,26 @@ function Onboarding() {
             <div>
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">Upcoming Exams (Optional)</label>
               <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  id="input-ob-exam-start"
-                  type="date"
-                  value={examStart}
-                  onChange={(e) => setExamStart(e.target.value)}
-                  className="h-10 text-xs"
-                />
-                <Input
-                  id="input-ob-exam-end"
-                  type="date"
-                  value={examEnd}
-                  onChange={(e) => setExamEnd(e.target.value)}
-                  className="h-10 text-xs"
-                />
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 pl-1">Start Date</span>
+                  <Input
+                    id="input-ob-exam-start"
+                    type="date"
+                    value={examStart}
+                    onChange={(e) => setExamStart(e.target.value)}
+                    className="h-10 text-sm w-full"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 pl-1">End Date</span>
+                  <Input
+                    id="input-ob-exam-end"
+                    type="date"
+                    value={examEnd}
+                    onChange={(e) => setExamEnd(e.target.value)}
+                    className="h-10 text-sm w-full"
+                  />
+                </div>
               </div>
               <p className="mt-1.5 text-[10px] text-zinc-500 pl-1 leading-normal">
                 We will monitor your schedule during this stressful period.
@@ -357,7 +489,7 @@ function Onboarding() {
 
             <Field label="UPI Apps You Use">
               <div id="pills-ob-upi" className="flex flex-wrap gap-2">
-                {UPI_OPTIONS.map((app) => {
+                {upiOptions.map((app: string) => {
                   const on = upiApps.includes(app);
                   return (
                     <button
@@ -369,6 +501,38 @@ function Onboarding() {
                     </button>
                   );
                 })}
+                {!showCustomUpi ? (
+                  <button
+                    onClick={() => setShowCustomUpi(true)}
+                    className="rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border border-dashed border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50"
+                  >
+                    + Add Another
+                  </button>
+                ) : (
+                  <div className="flex gap-1.5 w-full mt-1">
+                    <input
+                      type="text"
+                      value={customUpiInput}
+                      onChange={(e) => setCustomUpiInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddUpi(); }}
+                      placeholder="e.g. CRED, Kotak811"
+                      autoFocus
+                      className="flex-1 rounded-md border border-border bg-surface-raised/40 px-3 py-1.5 text-[10px] outline-none text-foreground placeholder:text-zinc-600 focus:ring-1 focus:ring-primary/40 focus:border-primary/40 transition-all"
+                    />
+                    <button
+                      onClick={handleAddUpi}
+                      className="rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => { setShowCustomUpi(false); setCustomUpiInput(""); }}
+                      className="rounded-md border border-border px-2 py-1.5 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
             </Field>
 

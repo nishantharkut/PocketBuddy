@@ -214,4 +214,49 @@ html.dark { color-scheme: dark; }
   html.light .text-zinc-600 {
     color: #71717a !important; /* zinc-500 */
   }
+
+  /* Style Webkit Date Inputs for Dark/Light mode visibility */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 0.95;
+  }
+  html.light input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0);
+  }
+
+  /* Hide scrollbars */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
+  /* Fixed totals pill with safe-area offset above bottom nav */
+  .fixed-totals-pill {
+    bottom: 5.25rem;
+    bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 768px) {
+    .fixed-totals-pill {
+      bottom: 2rem;
+    }
+  }
+
+  /* Fixed pool form with safe-area offset above bottom nav */
+  .fixed-pool-form {
+    bottom: 4rem;
+    bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 768px) {
+    .fixed-pool-form {
+      bottom: 0;
+    }
+  }
 }

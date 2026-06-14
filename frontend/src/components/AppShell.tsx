@@ -39,7 +39,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth();
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col overflow-y-auto no-scrollbar">
       {/* Logo */}
       <div className={`flex items-center gap-3 px-5 ${collapsed ? "pt-6 pb-2 justify-center px-3" : "pt-6 pb-2"}`}>
         <div className="grid h-8 w-8 shrink-0 place-items-center rounded-sm rotate-45 bg-primary">
@@ -59,7 +59,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Collapse Toggle */}
       <div className="px-3 pb-4 border-b border-border/50 mb-4">
-        <CollapseToggle />
+        <CollapseToggle onNavigate={onNavigate} />
       </div>
 
       {/* Action Button: Log Txn */}
@@ -164,19 +164,22 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         )}
 
-        <ThemeToggle />
+        <ThemeToggle onNavigate={onNavigate} />
       </div>
     </div>
   );
 }
 
-function ThemeToggle() {
+function ThemeToggle({ onNavigate }: { onNavigate?: () => void }) {
   const { theme, toggleTheme, collapsed } = useContext(SidebarCtx)!;
   const Icon = theme === "dark" ? Sun : Moon;
   return (
     <button
       id="btn-theme-toggle"
-      onClick={toggleTheme}
+      onClick={() => {
+        toggleTheme();
+        if (onNavigate) onNavigate();
+      }}
       title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
       className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-surface-raised hover:text-foreground transition-colors ${collapsed ? "justify-center" : ""}`}
     >
@@ -186,12 +189,15 @@ function ThemeToggle() {
   );
 }
 
-function CollapseToggle() {
+function CollapseToggle({ onNavigate }: { onNavigate?: () => void }) {
   const { collapsed, toggle } = useContext(SidebarCtx)!;
   return (
     <button
       id="btn-sidebar-toggle"
-      onClick={toggle}
+      onClick={() => {
+        toggle();
+        if (onNavigate) onNavigate();
+      }}
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={`mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-surface-raised hover:text-foreground transition-colors ${collapsed ? "justify-center" : ""}`}
     >
@@ -221,6 +227,17 @@ export function AppShell({
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(t);
   }, []);
+
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   const toggle = () => {
     setCollapsed((c) => {
@@ -270,7 +287,7 @@ export function AppShell({
               onClick={() => setMobileOpen(false)}
               className="absolute inset-0 bg-black/60"
             />
-            <div className="absolute left-0 top-0 h-full w-72 border-r border-border bg-surface">
+            <div className="absolute left-0 top-0 h-full w-72 border-r border-border bg-surface pb-20">
               <button
                 onClick={() => setMobileOpen(false)}
                 className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-surface-raised"

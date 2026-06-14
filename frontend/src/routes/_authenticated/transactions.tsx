@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { rupees, relativeTime, absoluteDate, getCycleStart } from "@/lib/format";
-import { getProfile, getTransactions, updateTransaction } from "@/lib/api/db.functions";
+import { getProfile, getTransactions, updateTransaction, getCatalog, addCatalogItem } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   ssr: false,
@@ -26,21 +26,11 @@ export const Route = createFileRoute("/_authenticated/transactions")({
 });
 
 type Txn = any;
-type Cat = "all" | "food" | "stationery" | "travel" | "subscription" | "other" | "unmapped";
 type Source = "all" | "companion" | "manual";
 type Range = "cycle" | "7" | "30" | "all";
 
-const CAT_FILTERS: { v: Cat; l: string }[] = [
-  { v: "all", l: "All" },
-  { v: "food", l: "Food" },
-  { v: "stationery", l: "Stationery" },
-  { v: "travel", l: "Travel" },
-  { v: "subscription", l: "Subscription" },
-  { v: "other", l: "Other" },
-  { v: "unmapped", l: "Unmapped" },
-];
-
-const CATEGORIES = [
+// Fallback categories used only if catalog API fails
+const FALLBACK_CATEGORIES = [
   { v: "food", l: "Food" },
   { v: "stationery", l: "Stationery" },
   { v: "travel", l: "Travel" },
@@ -51,7 +41,7 @@ const CATEGORIES = [
 function TxnsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [cat, setCat] = useState<Cat>("all");
+  const [cat, setCat] = useState("all");
   const [src, setSrc] = useState<Source>("all");
   const [range, setRange] = useState<Range>("cycle");
   const [limit, setLimit] = useState(20);
@@ -69,6 +59,30 @@ function TxnsPage() {
     enabled: !!user,
     queryFn: () => getTransactions(),
   });
+
+  // Catalog-driven categories
+  const { data: catalogCategories } = useQuery({
+    queryKey: ["catalog", "transaction-categories"],
+    enabled: !!user,
+    queryFn: () => getCatalog("transaction-categories"),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const categories = useMemo(() => {
+    if (catalogCategories && catalogCategories.length > 0) {
+      return catalogCategories.map((c: any) => ({ v: c.value, l: c.label }));
+    }
+    return FALLBACK_CATEGORIES;
+  }, [catalogCategories]);
+
+  // Build filter list: "All" + catalog categories + "Unmapped"
+  const catFilters = useMemo(() => {
+    return [
+      { v: "all", l: "All" },
+      ...categories,
+      { v: "unmapped", l: "Unmapped" },
+    ];
+  }, [categories]);
 
   const filtered = useMemo(() => {
     if (!txns) return [];
@@ -98,13 +112,13 @@ function TxnsPage() {
 
   return (
     <AppShell>
-      <div className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md pb-4 pt-2">
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 border-b border-border bg-background/85 backdrop-blur-md pb-4 pt-2 px-6 md:px-10 lg:px-12">
         <div className="flex h-14 items-center gap-3 mb-2">
           <MobileMenuButton />
           <h1 className="text-lg font-black tracking-wider text-foreground uppercase">Transaction History</h1>
         </div>
         <div className="flex gap-1.5 overflow-x-auto pb-3 no-scrollbar">
-          {CAT_FILTERS.map((c) => (
+          {catFilters.map((c) => (
             <button
               key={c.v}
               id={`filter-txn-${c.v}`}
@@ -115,7 +129,7 @@ function TxnsPage() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 pb-1">
+        <div className="flex flex-wrap items-center gap-2 pb-1">
           <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">Source:</span>
           {(["all", "companion", "manual"] as const).map((s) => (
             <button
@@ -220,8 +234,8 @@ function TxnsPage() {
         )}
       </div>
 
-      <div className="sticky bottom-6 left-0 right-0 z-40 flex justify-center pointer-events-none w-full">
-        <div className="bg-surface/85 backdrop-blur-md px-5 py-2.5 rounded-full border border-border shadow-[0_12px_32px_rgba(0,0,0,0.5)] flex items-center justify-between gap-6 whitespace-nowrap text-xs font-bold uppercase tracking-wider text-muted-foreground animate-[fadeIn_0.3s_ease-out] w-fit pointer-events-auto">
+      <div className="fixed bottom-20 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] md:bottom-8 left-0 right-0 z-40 flex justify-center pointer-events-none w-full animate-[fadeIn_0.3s_ease-out]">
+        <div className="bg-surface/85 backdrop-blur-md px-5 py-2.5 rounded-full border border-border shadow-[0_12px_32px_rgba(0,0,0,0.5)] flex items-center justify-between gap-6 whitespace-nowrap text-xs font-bold uppercase tracking-wider text-muted-foreground w-fit pointer-events-auto">
           <span>Showing: <strong className="text-foreground">{visible.length}</strong> txns</span>
           <span className="w-[1px] h-3 bg-border" />
           <span>Total: <strong className="text-foreground">{rupees(total)}</strong></span>
@@ -233,11 +247,13 @@ function TxnsPage() {
           {editingTxn && (
             <EditTxnForm
               txn={editingTxn}
+              categories={categories}
               onClose={() => {
                 setEditingTxn(null);
                 qc.invalidateQueries({ queryKey: ["txns"] });
                 qc.invalidateQueries({ queryKey: ["insights"] });
                 qc.invalidateQueries({ queryKey: ["wellness-insights"] });
+                qc.invalidateQueries({ queryKey: ["catalog", "transaction-categories"] });
               }}
             />
           )}
@@ -247,11 +263,12 @@ function TxnsPage() {
   );
 }
 
-function EditTxnForm({ txn, onClose }: { txn: any; onClose: () => void }) {
+function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: string; l: string }[]; onClose: () => void }) {
   const [name, setName] = useState(txn.mapped_merchant_name ?? txn.raw_merchant_string);
-  const isStandardCat = ["food", "stationery", "travel", "subscription"].includes(txn.category ?? "");
-  const [cat, setCat] = useState<string>(isStandardCat ? (txn.category ?? "food") : "other");
-  const [customCat, setCustomCat] = useState(isStandardCat ? "" : (txn.category ?? ""));
+  const knownValues = categories.map((c) => c.v);
+  const isKnownCat = knownValues.includes(txn.category ?? "");
+  const [cat, setCat] = useState<string>(isKnownCat ? (txn.category ?? "food") : "other");
+  const [customCat, setCustomCat] = useState(isKnownCat ? "" : (txn.category ?? ""));
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -265,7 +282,16 @@ function EditTxnForm({ txn, onClose }: { txn: any; onClose: () => void }) {
     }
     setBusy(true);
     try {
-      const finalCategory = cat === "other" ? customCat.trim().toLowerCase() : cat;
+      let finalCategory = cat;
+      if (cat === "other" && customCat.trim()) {
+        finalCategory = customCat.trim().toLowerCase();
+        // Also add to the catalog for reuse
+        try {
+          await addCatalogItem("transaction-categories", { label: customCat.trim() });
+        } catch {
+          // Idempotent — ignore if it already exists
+        }
+      }
       await updateTransaction({
         id: txn.id,
         data: {
@@ -307,7 +333,7 @@ function EditTxnForm({ txn, onClose }: { txn: any; onClose: () => void }) {
         <div className="space-y-1">
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Category</label>
           <div className="grid grid-cols-2 gap-2">
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <button
                 key={c.v}
                 type="button"
@@ -331,6 +357,7 @@ function EditTxnForm({ txn, onClose }: { txn: any; onClose: () => void }) {
               onChange={(e) => setCustomCat(e.target.value)}
               placeholder="e.g., Laundry, Books, Printing"
             />
+            <p className="text-[10px] text-zinc-500 pl-1">This category will be saved and available for future transactions.</p>
           </div>
         )}
       </div>

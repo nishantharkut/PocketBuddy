@@ -234,43 +234,14 @@ function SettingsPage() {
   return (
     <AppShell>
       {/* Page Header */}
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 30,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          height: "56px",
-          borderBottom: "1px solid var(--border)",
-          background: "color-mix(in srgb, var(--background) 92%, transparent)",
-          backdropFilter: "blur(20px)",
-          padding: "0 16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/92 backdrop-blur-md px-6 md:px-10 lg:px-12">
+        <div className="flex items-center gap-3">
           <MobileMenuButton />
-          <h1
-            style={{
-              fontSize: "18px",
-              fontWeight: 900,
-              letterSpacing: "0.25em",
-              color: "var(--foreground)",
-              fontFamily: "var(--font-display)",
-              textTransform: "uppercase",
-            }}
-          >
+          <h1 className="text-lg font-black tracking-wider text-foreground uppercase">
             Settings
           </h1>
         </div>
-        <div
-          style={{
-            fontSize: "12px",
-            color: "var(--muted-foreground)",
-            fontFamily: "var(--font-mono)",
-          }}
-        >
+        <div className="hidden sm:block text-xs text-muted-foreground font-mono">
           {user?.email}
         </div>
       </div>

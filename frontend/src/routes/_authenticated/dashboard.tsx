@@ -46,6 +46,8 @@ import {
   getWingFeed,
   getWellnessInsights,
   updateTransaction,
+  getCatalog,
+  addCatalogItem,
 } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -65,10 +67,11 @@ type Sub = any;
 type Pool = any;
 type PoolItem = any;
 
-const CATEGORIES = [
+const FALLBACK_CATEGORIES = [
   { v: "food", l: "Food" },
   { v: "stationery", l: "Stationery" },
   { v: "travel", l: "Travel" },
+  { v: "subscription", l: "Subscription" },
   { v: "other", l: "Other" },
 ] as const;
 
@@ -1112,7 +1115,7 @@ function Dashboard() {
                 {(pools ?? []).filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now()).length === 0 && (
                   <div className="col-span-full py-10 text-center border border-dashed border-border rounded-2xl bg-surface-raised/40">
                     <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools in your wing.</p>
-                    <p className="text-xs text-zinc-500 mt-1">Start one now to split quick commerce delivery fees.</p>
+                    <p className="text-xs text-zinc-500 mt-1">Start one now to split delivery fees with your wing.</p>
                   </div>
                 )}
                 {(pools ?? [])
@@ -1127,12 +1130,12 @@ function Dashboard() {
                       <Link key={p.id} to="/pool/$id" params={{ id: p.id }} className="group">
                         <Card className="bg-surface relative overflow-hidden border border-border p-5 transition-all duration-300 hover:border-white/15 hover:bg-surface-raised h-full flex flex-col justify-between hover:shadow-lg hover:shadow-black/40">
                           <div>
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-black uppercase tracking-wider text-foreground">{p.platform.replace("_", " ")}</span>
+                            <div className="flex items-start justify-between gap-2 mb-3">
+                              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                <span className="text-xs font-black uppercase tracking-wider text-foreground truncate max-w-[120px] sm:max-w-none">{p.platform.replace("_", " ")}</span>
                                 <Badge variant="outline" className="text-muted-foreground bg-white/5 border-border text-[10px] font-bold">{p.wing_label}</Badge>
                               </div>
-                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border border-border bg-background tnum ${minsLeft < 5 ? "text-destructive animate-pulse border-destructive/20 bg-destructive/5" : "text-foreground"}`}>
+                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border border-border bg-background tnum shrink-0 ${minsLeft < 5 ? "text-destructive animate-pulse border-destructive/20 bg-destructive/5" : "text-foreground"}`}>
                                 {minsLeft}m left
                               </span>
                             </div>
@@ -1552,18 +1555,38 @@ function Dashboard() {
 }
 
 function IdentifyForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
+  const qc = useQueryClient();
   const [name, setName] = useState("");
   const [cat, setCat] = useState<string>("food");
   const [customCat, setCustomCat] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const { data: catalogCategories } = useQuery({
+    queryKey: ["catalog", "transaction-categories"],
+    queryFn: () => getCatalog("transaction-categories"),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const categories = useMemo(() => {
+    if (catalogCategories && catalogCategories.length > 0) {
+      return catalogCategories.map((c: any) => ({ v: c.value, l: c.label }));
+    }
+    return [...FALLBACK_CATEGORIES];
+  }, [catalogCategories]);
+
   async function save() {
     if (!name) { toast.error("Enter shop name"); return; }
     if (cat === "other" && !customCat.trim()) { toast.error("Enter custom category"); return; }
     setBusy(true);
     try {
-      const finalCategory = cat === "other" ? customCat.trim().toLowerCase() : cat;
+      let finalCategory = cat;
+      if (cat === "other" && customCat.trim()) {
+        finalCategory = customCat.trim().toLowerCase();
+        try { await addCatalogItem("transaction-categories", { label: customCat.trim() }); } catch {}
+      }
       await identifyMerchant({ data: { txn_id: txn.id, raw_merchant_string: txn.raw_merchant_string, display_name: name, category: finalCategory } });
       toast.success("Mapped! This helps everyone on campus.");
+      qc.invalidateQueries({ queryKey: ["catalog", "transaction-categories"] });
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Failed to identify merchant");
@@ -1580,7 +1603,7 @@ function IdentifyForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
         <Input id="input-map-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Hostel 1 Night Canteen" className="mt-1" />
       </div>
       <div className="grid grid-cols-2 gap-2">
-        {CATEGORIES.map((c) => (
+        {categories.map((c) => (
           <button key={c.v} onClick={() => setCat(c.v)} className={`rounded-md border p-3 text-center text-sm ${cat === c.v ? "border-primary bg-primary/10" : "border-border bg-surface"}`}>{c.l}</button>
         ))}
       </div>
@@ -1588,6 +1611,7 @@ function IdentifyForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
         <div className="space-y-1">
           <label className="text-[12px] text-muted-foreground">Custom Category</label>
           <Input id="input-map-custom-category" value={customCat} onChange={(e) => setCustomCat(e.target.value)} placeholder="e.g., Laundry, Books, Printing" />
+          <p className="text-[10px] text-zinc-500 pl-1">This category will be saved for future use.</p>
         </div>
       )}
       <DialogFooter>
@@ -1600,19 +1624,39 @@ function IdentifyForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
 }
 
 function AddTxnForm({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
   const [amount, setAmount] = useState("");
   const [merchant, setMerchant] = useState("");
   const [cat, setCat] = useState<string>("food");
   const [customCat, setCustomCat] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const { data: catalogCategories } = useQuery({
+    queryKey: ["catalog", "transaction-categories"],
+    queryFn: () => getCatalog("transaction-categories"),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const categories = useMemo(() => {
+    if (catalogCategories && catalogCategories.length > 0) {
+      return catalogCategories.map((c: any) => ({ v: c.value, l: c.label }));
+    }
+    return [...FALLBACK_CATEGORIES];
+  }, [catalogCategories]);
+
   async function save() {
     if (!amount || !merchant) { toast.error("Fill all fields"); return; }
     if (cat === "other" && !customCat.trim()) { toast.error("Enter custom category"); return; }
     setBusy(true);
     try {
-      const finalCategory = cat === "other" ? customCat.trim().toLowerCase() : cat;
+      let finalCategory = cat;
+      if (cat === "other" && customCat.trim()) {
+        finalCategory = customCat.trim().toLowerCase();
+        try { await addCatalogItem("transaction-categories", { label: customCat.trim() }); } catch {}
+      }
       await insertTransaction({ data: { amount: Math.round(parseFloat(amount) * 100), raw_merchant_string: merchant, mapped_merchant_name: merchant, category: finalCategory, source: "manual" } });
       toast.success("Transaction logged.");
+      qc.invalidateQueries({ queryKey: ["catalog", "transaction-categories"] });
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Failed to log transaction");
@@ -1627,9 +1671,9 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
         <span className="px-3 text-sm text-muted-foreground">₹</span>
         <input id="input-txn-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="flex-1 bg-transparent py-2 pr-3 text-sm outline-none" placeholder="Amount" />
       </div>
-      <Input id="input-txn-merchant" value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder="BH-2 Night Canteen" />
+      <Input id="input-txn-merchant" value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder="e.g. Night Canteen" />
       <div className="grid grid-cols-2 gap-2">
-        {CATEGORIES.map((c) => (
+        {categories.map((c) => (
           <button key={c.v} onClick={() => setCat(c.v)} className={`rounded-md border p-3 text-center text-sm ${cat === c.v ? "border-primary bg-primary/10" : "border-border bg-surface"}`}>{c.l}</button>
         ))}
       </div>
@@ -1637,6 +1681,7 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
         <div className="space-y-1">
           <label className="text-[12px] text-muted-foreground">Custom Category</label>
           <Input id="input-txn-custom-category" value={customCat} onChange={(e) => setCustomCat(e.target.value)} placeholder="e.g., Laundry, Books, Printing" />
+          <p className="text-[10px] text-zinc-500 pl-1">This category will be saved for future use.</p>
         </div>
       )}
       <DialogFooter>
@@ -1647,10 +1692,26 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
 }
 
 function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
+  const qc = useQueryClient();
   const [name, setName] = useState(txn.mapped_merchant_name ?? txn.raw_merchant_string);
-  const isStandardCat = ["food", "stationery", "travel", "subscription"].includes(txn.category ?? "");
-  const [cat, setCat] = useState<string>(isStandardCat ? (txn.category ?? "food") : "other");
-  const [customCat, setCustomCat] = useState(isStandardCat ? "" : (txn.category ?? ""));
+
+  const { data: catalogCategories } = useQuery({
+    queryKey: ["catalog", "transaction-categories"],
+    queryFn: () => getCatalog("transaction-categories"),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const categories = useMemo(() => {
+    if (catalogCategories && catalogCategories.length > 0) {
+      return catalogCategories.map((c: any) => ({ v: c.value, l: c.label }));
+    }
+    return [...FALLBACK_CATEGORIES];
+  }, [catalogCategories]);
+
+  const knownValues = categories.map((c) => c.v);
+  const isKnownCat = knownValues.includes(txn.category ?? "");
+  const [cat, setCat] = useState<string>(isKnownCat ? (txn.category ?? "food") : "other");
+  const [customCat, setCustomCat] = useState(isKnownCat ? "" : (txn.category ?? ""));
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -1664,7 +1725,11 @@ function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
     }
     setBusy(true);
     try {
-      const finalCategory = cat === "other" ? customCat.trim().toLowerCase() : cat;
+      let finalCategory = cat;
+      if (cat === "other" && customCat.trim()) {
+        finalCategory = customCat.trim().toLowerCase();
+        try { await addCatalogItem("transaction-categories", { label: customCat.trim() }); } catch {}
+      }
       await updateTransaction({
         id: txn.id,
         data: {
@@ -1673,6 +1738,7 @@ function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
         },
       });
       toast.success("Transaction updated.");
+      qc.invalidateQueries({ queryKey: ["catalog", "transaction-categories"] });
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Failed to update transaction");
@@ -1706,7 +1772,7 @@ function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
         <div className="space-y-1">
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Category</label>
           <div className="grid grid-cols-2 gap-2">
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <button
                 key={c.v}
                 type="button"
@@ -1730,6 +1796,7 @@ function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
               onChange={(e) => setCustomCat(e.target.value)}
               placeholder="e.g., Laundry, Books, Printing"
             />
+            <p className="text-[10px] text-zinc-500 pl-1">This category will be saved for future use.</p>
           </div>
         )}
       </div>

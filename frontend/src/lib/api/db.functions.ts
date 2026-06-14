@@ -54,8 +54,34 @@ export async function deleteSubscription({ data }: { data: { id: string } }) {
   });
 }
 
-export async function getCampusFood() {
-  return apiRequest("/api/campus-food");
+export async function getCampusFood(status?: string) {
+  const url = status ? `/api/campus-food?status=${status}` : "/api/campus-food";
+  return apiRequest(url);
+}
+
+export async function scanMenuPhoto({ data }: { data: FormData }) {
+  return apiRequest("/api/campus-food/scan", {
+    method: "POST",
+    body: data,
+  });
+}
+
+export async function verifyCampusFoodItem({ id, vote }: { id: string; vote: "up" | "down" }) {
+  return apiRequest(`/api/campus-food/${id}/verify`, {
+    method: "POST",
+    body: JSON.stringify({ vote }),
+  });
+}
+
+export async function submitParserCorrection({ data }: { data: { transaction_id: string; corrected_amount?: number; corrected_merchant?: string; corrected_category?: string } }) {
+  return apiRequest("/api/ingest/correction", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getParserStats() {
+  return apiRequest("/api/ingest/parser-stats");
 }
 
 
@@ -212,7 +238,7 @@ export async function createTravelRoute({ data }: { data: { name: string; descri
   });
 }
 
-export async function getAiTravelCoach({ data }: { data: { route_id: string; mode: string; user_situation?: string; college?: string } }) {
+export async function getAiTravelCoach({ data }: { data: { route_id: string; mode: string; user_situation?: string; college?: string; app_quote?: number } }) {
   return apiRequest("/api/travel/ai-coach", {
     method: "POST",
     body: JSON.stringify(data),

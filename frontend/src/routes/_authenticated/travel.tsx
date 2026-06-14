@@ -97,11 +97,15 @@ function TravelPage() {
 
   // AI Coach state
   const [userSituation, setUserSituation] = useState<string>("");
+  const [appQuote, setAppQuote] = useState<string>("");
   const [aiCoachResult, setAiCoachResult] = useState<{
     script: string;
     tactics: string[];
     safety: string;
     source: string;
+    surge_factor?: number;
+    community_median?: number;
+    report_count?: number;
   } | null>(null);
 
   // Queries
@@ -339,12 +343,14 @@ function TravelPage() {
 
   const handleAiCoachCall = () => {
     if (!selectedRoute) return;
+    const parsedQuote = parseFloat(appQuote);
     aiCoachMutation.mutate({
       data: {
         route_id: selectedRoute.id,
         mode: selectedMode,
         user_situation: userSituation.trim(),
-        college: activeCollege
+        college: activeCollege,
+        app_quote: isNaN(parsedQuote) ? undefined : parsedQuote
       }
     });
   };
@@ -709,35 +715,75 @@ function TravelPage() {
                 </div>
 
                 <div className="border-t border-border/50 pt-4 space-y-4">
-                  <div className="space-y-1.5">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] font-black uppercase tracking-wider text-primary">AI Negotiation Coach</label>
-                      <span className="text-[9px] text-zinc-500 font-medium">Customizes script based on your situation</span>
+                      <span className="text-[9px] text-zinc-500 font-medium">Adapts script based on situation & surge price</span>
                     </div>
-                    <div className="flex gap-2">
-                      <Input
-                        id="input-ai-situation"
-                        placeholder="e.g. Raining, heavy bags, driver is rude..."
-                        value={userSituation}
-                        onChange={(e) => setUserSituation(e.target.value)}
-                        className="bg-surface-raised border-border text-xs h-9 flex-1"
-                      />
-                      <Button
-                        id="btn-ask-ai-coach"
-                        onClick={handleAiCoachCall}
-                        disabled={aiCoachMutation.isPending}
-                        className="bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-wider h-9 px-4 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {aiCoachMutation.isPending ? "Asking..." : "Ask AI"}
-                      </Button>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Ola/Uber Price (₹)</label>
+                        <Input
+                          id="input-ai-app-quote"
+                          type="number"
+                          placeholder="What price is your app showing?"
+                          value={appQuote}
+                          onChange={(e) => setAppQuote(e.target.value)}
+                          className="bg-surface-raised border-border text-xs h-9 w-full"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Your Situation (Optional)</label>
+                        <Input
+                          id="input-ai-situation"
+                          placeholder="e.g. Raining, heavy bags, night..."
+                          value={userSituation}
+                          onChange={(e) => setUserSituation(e.target.value)}
+                          className="bg-surface-raised border-border text-xs h-9 w-full"
+                        />
+                      </div>
                     </div>
+
+                    <Button
+                      id="btn-ask-ai-coach"
+                      onClick={handleAiCoachCall}
+                      disabled={aiCoachMutation.isPending}
+                      className="w-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-wider h-9 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {aiCoachMutation.isPending ? "Asking..." : "Ask AI Coach"}
+                    </Button>
                   </div>
 
                   {aiCoachResult && (
-                    <div className="space-y-3 p-3.5 bg-background/50 border border-primary/20 rounded-xl animate-[fadeIn_0.25s_ease-out]">
-                      <div className="relative bg-surface p-3 border border-border rounded-lg">
+                    <div className="space-y-3 p-3.5 bg-card border border-primary/20 rounded-xl animate-[fadeIn_0.25s_ease-out] text-card-foreground">
+                      {aiCoachResult.surge_factor !== undefined && (
+                        <div className="flex flex-wrap gap-1.5 mb-1">
+                          {aiCoachResult.surge_factor > 1.0 ? (
+                            <Badge className="bg-destructive/20 border-destructive/30 text-destructive border font-mono font-bold text-[9px] py-0.5 px-1.5">
+                              Surge: {aiCoachResult.surge_factor}x
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-success/20 border-success/30 text-success border font-mono font-bold text-[9px] py-0.5 px-1.5">
+                              Fair Price (No Surge)
+                            </Badge>
+                          )}
+                          {aiCoachResult.community_median && (
+                            <Badge className="bg-white/5 border border-border text-foreground font-mono text-[9px] py-0.5 px-1.5">
+                              Community Median: ₹{aiCoachResult.community_median}
+                            </Badge>
+                          )}
+                          {aiCoachResult.report_count !== undefined && (
+                            <Badge className="bg-white/5 border border-border text-muted-foreground text-[9px] py-0.5 px-1.5">
+                              {aiCoachResult.report_count} reports
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="relative bg-surface-raised p-3 border border-border rounded-lg">
                         <span className="text-[8px] text-primary font-bold uppercase tracking-widest block mb-1.5">AI Dialect-tailored Script</span>
-                        <p className="text-xs text-zinc-200 font-bold leading-relaxed pr-8">
+                        <p className="text-xs text-foreground font-bold leading-relaxed pr-8">
                           "{aiCoachResult.script}"
                         </p>
                         <button 
@@ -749,9 +795,9 @@ function TravelPage() {
                       </div>
 
                       <div className="space-y-1.5">
-                        <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest block">AI Tactical Tips</span>
-                        <ul className="space-y-1 text-[11px] text-zinc-400 font-medium">
-                          {aiCoachResult.tactics.map((tip, idx) => (
+                        <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-widest block">AI Tactical Tips</span>
+                        <ul className="space-y-1 text-[11px] text-foreground/80 font-medium">
+                          {aiCoachResult.tactics.map((tip: string, idx: number) => (
                             <li key={idx} className="flex gap-1.5 items-start">
                               <span className="text-primary mt-0.5">•</span>
                               <span>{tip}</span>
@@ -761,7 +807,7 @@ function TravelPage() {
                       </div>
 
                       {aiCoachResult.safety && (
-                        <div className="p-2.5 bg-destructive/5 border border-destructive/15 rounded-lg text-[10px] text-zinc-400 font-medium leading-relaxed">
+                        <div className="p-2.5 bg-destructive/5 border border-destructive/15 rounded-lg text-[10px] text-foreground font-medium leading-relaxed">
                           <span className="font-bold text-destructive uppercase tracking-wide mr-1.5">AI Safety Warning:</span>
                           {aiCoachResult.safety}
                         </div>

@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { PlatformIcon } from "@/components/PlatformIcon";
@@ -50,6 +50,9 @@ import {
   getCatalog,
   addCatalogItem,
   getTravelSavings,
+  scanMenuPhoto,
+  verifyCampusFoodItem,
+  submitParserCorrection,
 } from "@/lib/api/db.functions";
 
 
@@ -455,6 +458,77 @@ function Dashboard() {
   const [editingTxn, setEditingTxn] = useState<Txn | null>(null);
   const [adding, setAdding] = useState(false);
   const [showFoodSheet, setShowFoodSheet] = useState(false);
+
+  // Food scanner and crowdsourced verification state & hooks
+  const [foodTab, setFoodTab] = useState<"menus" | "scan" | "verify">("menus");
+  const [scanVenue, setScanVenue] = useState("");
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanBusy, setScanBusy] = useState(false);
+
+  const { data: pendingFoods, refetch: refetchPending } = useQuery({
+    queryKey: ["pending-foods"],
+    queryFn: () => getCampusFood("pending_verification"),
+    enabled: showFoodSheet && foodTab === "verify",
+  });
+
+  const verifyMutation = useMutation({
+    mutationFn: verifyCampusFoodItem,
+    onSuccess: (res) => {
+      refetchPending();
+      qc.invalidateQueries({ queryKey: ["foods"] });
+      toast.success(
+        res.status === "promoted_to_active"
+          ? "Item promoted to active campus menu!"
+          : res.status === "already_voted"
+          ? "You have already voted on this item."
+          : "Thank you for verifying!"
+      );
+    },
+    onError: () => {
+      toast.error("Failed to submit verification vote.");
+    }
+  });
+
+  const handleVerifyVote = (id: string, vote: "up" | "down") => {
+    verifyMutation.mutate({ id, vote });
+  };
+
+  const scanMutation = useMutation({
+    mutationFn: scanMenuPhoto,
+    onSuccess: (res) => {
+      toast.success(res.message || `Successfully parsed menu!`);
+      setScanVenue("");
+      setScanFile(null);
+      setFoodTab("verify"); // Switch to verification page to see it
+      refetchPending();
+      qc.invalidateQueries({ queryKey: ["foods"] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to scan menu. Make sure the image is under 5MB.");
+    },
+    onSettled: () => {
+      setScanBusy(false);
+    }
+  });
+
+  const handleScanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scanVenue.trim()) {
+      toast.error("Please enter a venue name.");
+      return;
+    }
+    if (!scanFile) {
+      toast.error("Please select a menu image.");
+      return;
+    }
+    setScanBusy(true);
+    const fd = new FormData();
+    fd.append("venue_name", scanVenue.trim());
+    fd.append("campus", profile?.college_name || "ABV-IIITM Gwalior");
+    fd.append("image", scanFile);
+    
+    scanMutation.mutate({ data: fd });
+  };
 
   // Exam check-in
   const [showCheckIn, setShowCheckIn] = useState(false);
@@ -1426,6 +1500,14 @@ function Dashboard() {
                                 <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">{t.source.split("_")[1]}</span>
                               </>
                             )}
+                            {t.needs_verification && (
+                              <>
+                                <span className="text-[10px] text-zinc-600 font-bold">•</span>
+                                <span className="text-[9px] font-black text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                  Verify Parser
+                                </span>
+                              </>
+                            )}
                             {!t.is_mapped && (
                               <button
                                 id={`btn-identify-${t.id}`}
@@ -1507,36 +1589,178 @@ function Dashboard() {
 
         {/* Food options */}
         <Sheet open={showFoodSheet} onOpenChange={setShowFoodSheet}>
-          <SheetContent side="bottom" className="max-h-[80vh] overflow-auto">
-            <SheetHeader><SheetTitle>Campus Food Options</SheetTitle></SheetHeader>
-            <div className="mt-4 space-y-4">
-              {Object.entries(
-                ((foods ?? []) as Food[]).reduce<Record<string, Food[]>>((acc, f) => {
-                  (acc[f.venue_name] ??= []).push(f);
-                  return acc;
-                }, {}),
-              ).map(([venue, items]) => (
-                <div key={venue}>
-                  <h4 className="text-[12px] font-semibold text-muted-foreground">{venue}</h4>
-                  <div className="mt-1 space-y-1">
-                    {items.map((it) => {
-                      const open = isTimeInRange(new Date(), it.available_from, it.available_until);
-                      return (
-                        <div key={it.id} className="flex items-center justify-between rounded bg-surface p-2">
-                          <div>
-                            <p className="text-sm">{it.item_name}</p>
-                            <p className={`text-[11px] ${open ? "text-success" : "text-muted-foreground"}`}>
-                              {open ? "Open Now" : `Opens at ${fmtTime(it.available_from)}`}
-                            </p>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-auto bg-background text-foreground border-t border-border">
+            <SheetHeader>
+              <SheetTitle className="text-sm font-black uppercase tracking-wider text-foreground">Campus Dining Hub</SheetTitle>
+              <div className="flex border-b border-border mt-2">
+                <button
+                  onClick={() => setFoodTab("menus")}
+                  className={`flex-1 py-2 text-xs font-black uppercase tracking-wider text-center border-b-2 transition-all ${
+                    foodTab === "menus"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Active Menus
+                </button>
+                <button
+                  onClick={() => setFoodTab("scan")}
+                  className={`flex-1 py-2 text-xs font-black uppercase tracking-wider text-center border-b-2 transition-all ${
+                    foodTab === "scan"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Scan Menu Board
+                </button>
+                <button
+                  onClick={() => setFoodTab("verify")}
+                  className={`flex-1 py-2 text-xs font-black uppercase tracking-wider text-center border-b-2 transition-all ${
+                    foodTab === "verify"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Verify Pending
+                </button>
+              </div>
+            </SheetHeader>
+
+            {foodTab === "menus" && (
+              <div className="mt-4 space-y-4 animate-[fadeIn_0.2s_ease-out]">
+                {Object.entries(
+                  ((foods ?? []) as Food[]).reduce<Record<string, Food[]>>((acc, f) => {
+                    (acc[f.venue_name] ??= []).push(f);
+                    return acc;
+                  }, {}),
+                ).map(([venue, items]) => (
+                  <div key={venue} className="space-y-1.5">
+                    <h4 className="text-[12px] font-black uppercase tracking-wider text-zinc-500">{venue}</h4>
+                    <div className="space-y-1">
+                      {items.map((it) => {
+                        const open = isTimeInRange(new Date(), it.available_from, it.available_until);
+                        return (
+                          <div key={it.id} className="flex items-center justify-between rounded-xl bg-surface border border-border p-3">
+                            <div>
+                              <p className="text-xs font-bold text-foreground">{it.item_name}</p>
+                              <p className={`text-[10px] ${open ? "text-success font-semibold" : "text-muted-foreground"}`}>
+                                {open ? "Available Now" : `Available ${fmtTime(it.available_from)} - ${fmtTime(it.available_until)}`}
+                              </p>
+                            </div>
+                            <span className="tnum text-xs font-black text-primary font-mono">{rupees(it.price)}</span>
                           </div>
-                          <span className="tnum text-sm font-semibold">{rupees(it.price)}</span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {(!foods || foods.length === 0) && (
+                  <p className="py-8 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">No active menus defined yet.</p>
+                )}
+              </div>
+            )}
+
+            {foodTab === "scan" && (
+              <form onSubmit={handleScanSubmit} className="space-y-4 py-4 animate-[fadeIn_0.2s_ease-out]">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Canteen / Venue Name</label>
+                  <Input
+                    id="input-scan-venue"
+                    placeholder="e.g. Hostel 4 Canteen, Nescafe, Main Cafeteria"
+                    value={scanVenue}
+                    onChange={(e) => setScanVenue(e.target.value)}
+                    className="bg-surface border-border text-xs font-semibold"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Menu Image (Max 5MB)</label>
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border border-dashed border-border rounded-xl cursor-pointer bg-surface hover:bg-surface-raised transition-all">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <ShoppingBag className="w-8 h-8 text-muted-foreground mb-2" />
+                        <p className="text-xs text-zinc-300 font-semibold">
+                          {scanFile ? scanFile.name : "Select or Drop Menu Photo"}
+                        </p>
+                        <p className="text-[10px] text-zinc-500 mt-1">PNG, JPG or JPEG up to 5MB</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            setScanFile(e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </label>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <Button
+                  id="btn-submit-scan"
+                  type="submit"
+                  disabled={scanBusy}
+                  className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-black uppercase text-xs h-10 tracking-wider disabled:opacity-50"
+                >
+                  {scanBusy ? "OCR Scanning & Structuring (AWS Nova)..." : "Analyze Menu with AI"}
+                </Button>
+              </form>
+            )}
+
+            {foodTab === "verify" && (
+              <div className="space-y-3 py-4 animate-[fadeIn_0.2s_ease-out] max-h-[50vh] overflow-y-auto">
+                <div className="bg-surface-raised border border-border p-3.5 rounded-xl text-xs text-zinc-400 leading-relaxed font-medium">
+                  <span className="font-bold text-foreground">Crowdsourced Menu Verification:</span> Verify items scanned by other students. Items require <strong>+3 votes</strong> to go live, or <strong>-3 votes</strong> to be deleted.
+                </div>
+
+                {!pendingFoods ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-14 bg-white/5" />
+                    <Skeleton className="h-14 bg-white/5" />
+                  </div>
+                ) : pendingFoods.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">
+                    No pending items to verify. Great job!
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingFoods.map((it: any) => (
+                      <div key={it.id} className="flex items-center justify-between bg-surface border border-border p-3.5 rounded-xl text-xs">
+                        <div className="space-y-1 min-w-0 pr-4">
+                          <p className="font-bold text-foreground truncate">{it.item_name}</p>
+                          <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">
+                            {it.venue_name} · {rupees(it.price)}
+                          </p>
+                          <p className="text-[9px] font-bold text-primary tracking-widest uppercase">
+                            Votes: {it.verification_votes > 0 ? `+${it.verification_votes}` : it.verification_votes}
+                          </p>
+                        </div>
+                        
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            onClick={() => handleVerifyVote(it.id, "up")}
+                            disabled={verifyMutation.isPending}
+                            className="px-3 py-2 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success font-bold text-[10px] uppercase cursor-pointer"
+                          >
+                            ✓ Upvote
+                          </button>
+                          <button
+                            onClick={() => handleVerifyVote(it.id, "down")}
+                            disabled={verifyMutation.isPending}
+                            className="px-3 py-2 rounded-lg bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive font-bold text-[10px] uppercase cursor-pointer"
+                          >
+                            ✕ Downvote
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </SheetContent>
         </Sheet>
 
@@ -1815,15 +2039,27 @@ function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
         finalCategory = customCat.trim().toLowerCase();
         try { await addCatalogItem("transaction-categories", { label: customCat.trim() }); } catch {}
       }
-      await updateTransaction({
-        id: txn.id,
-        data: {
-          mapped_merchant_name: name.trim(),
-          category: finalCategory,
-          direction: direction,
-        },
-      });
-      toast.success("Transaction updated.");
+
+      if (txn.source !== "manual" || txn.needs_verification) {
+        await submitParserCorrection({
+          data: {
+            transaction_id: txn.id,
+            corrected_merchant: name.trim(),
+            corrected_category: finalCategory,
+          }
+        });
+        toast.success("Correction logged & transaction updated.");
+      } else {
+        await updateTransaction({
+          id: txn.id,
+          data: {
+            mapped_merchant_name: name.trim(),
+            category: finalCategory,
+            direction: direction,
+          },
+        });
+        toast.success("Transaction updated.");
+      }
       qc.invalidateQueries({ queryKey: ["catalog", "transaction-categories"] });
       onClose();
     } catch (err: any) {

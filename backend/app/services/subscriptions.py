@@ -219,21 +219,111 @@ async def detect_recurring_subscriptions(db, user_id: str) -> list[dict]:
             gap_days = (second_dt - first_dt).days
             if 25 <= gap_days <= 35:
                 observed_name = service_name_from_transaction(second_txn)
-                service_name = subscription_name_for_merchant(observed_name) or observed_name
-                if not service_name:
-                    continue
-                detected.append(
-                    await upsert_subscription(
+                known_name = subscription_name_for_merchant(observed_name)
+
+                if known_name:
+                    # Known subscription — upsert directly (existing behavior)
+                    detected.append(
+                        await upsert_subscription(
+                            db,
+                            user_id=user_id,
+                            service_name=known_name,
+                            amount_paise=second_txn["amount"],
+                            next_debit_date=next_future_debit(second_dt, gap_days),
+                            detected_from="recurring_pattern",
+                            observed_at=second_dt,
+                            observed_interval_days=gap_days,
+                        )
+                    )
+                elif observed_name:
+                    # --- Dynamic Subscription Detection ---
+                    # Unknown merchant with recurring interval → flag as candidate
+                    candidate = await _flag_candidate_subscription(
                         db,
                         user_id=user_id,
-                        service_name=service_name,
+                        merchant_name=observed_name,
                         amount_paise=second_txn["amount"],
-                        next_debit_date=next_future_debit(second_dt, gap_days),
-                        detected_from="recurring_pattern",
+                        gap_days=gap_days,
                         observed_at=second_dt,
-                        observed_interval_days=gap_days,
                     )
-                )
+                    if candidate:
+                        detected.append(candidate)
                 break
 
     return detected
+
+
+async def _flag_candidate_subscription(
+    db,
+    *,
+    user_id: str,
+    merchant_name: str,
+    amount_paise: int,
+    gap_days: int,
+    observed_at: datetime.datetime,
+) -> Optional[dict]:
+    """
+    Track unknown merchants that show recurring billing patterns.
+
+    When a candidate merchant matches across 3+ distinct users, auto-promote
+    it to a real subscription for those users.
+    """
+    canonical_name = canonical_merchant(merchant_name)
+    now = datetime.datetime.utcnow()
+
+    # Upsert the candidate entry and add user to the distinct user set
+    await db.candidate_subscriptions.update_one(
+        {"canonical_name": canonical_name, "amount": amount_paise},
+        {
+            "$set": {
+                "display_name": clean_merchant_name(merchant_name),
+                "last_seen_at": now,
+                "observed_interval_days": gap_days,
+            },
+            "$addToSet": {"distinct_users": user_id},
+            "$setOnInsert": {
+                "_id": str(uuid.uuid4()),
+                "created_at": now,
+                "promoted": False,
+            },
+        },
+        upsert=True,
+    )
+
+    # Check if cross-user threshold is met (3+ distinct users)
+    candidate = await db.candidate_subscriptions.find_one(
+        {"canonical_name": canonical_name, "amount": amount_paise}
+    )
+    if not candidate:
+        return None
+
+    distinct_count = len(candidate.get("distinct_users", []))
+    if distinct_count >= 3 and not candidate.get("promoted"):
+        # Auto-promote: create a real subscription for this user
+        await db.candidate_subscriptions.update_one(
+            {"_id": candidate["_id"]},
+            {"$set": {"promoted": True, "promoted_at": now}},
+        )
+        return await upsert_subscription(
+            db,
+            user_id=user_id,
+            service_name=candidate["display_name"] or merchant_name,
+            amount_paise=amount_paise,
+            next_debit_date=next_future_debit(observed_at, gap_days),
+            detected_from="community_pattern",
+            observed_at=observed_at,
+            observed_interval_days=gap_days,
+        )
+
+    # Also create for this individual user since they have recurring pattern
+    return await upsert_subscription(
+        db,
+        user_id=user_id,
+        service_name=merchant_name,
+        amount_paise=amount_paise,
+        next_debit_date=next_future_debit(observed_at, gap_days),
+        detected_from="candidate_recurring",
+        observed_at=observed_at,
+        observed_interval_days=gap_days,
+    )
+

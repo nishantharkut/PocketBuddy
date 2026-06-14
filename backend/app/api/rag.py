@@ -23,11 +23,11 @@ class RagReq(BaseModel):
 @router.post("/food-rag")
 async def get_food_recommendation(req: RagReq, user_id: str = Depends(get_current_user)):
     db = get_db()
-    cursor = db.campus_food.find({})
+    cursor = db.campus_food.find({"status": {"$nin": ["pending_verification", "rejected"]}})
     campus_foods = await cursor.to_list(length=1000)
     if not campus_foods:
         campus_foods = load_campus_food()
-        
+
     fallback = build_local_recommendation(req, campus_foods)
 
     if not settings.BEDROCK_ENABLED:
@@ -109,7 +109,7 @@ async def get_campus_intel(user_id: str = Depends(get_current_user)):
     # Try Bedrock
     if settings.BEDROCK_ENABLED:
         try:
-            cursor_food = db.campus_food.find({})
+            cursor_food = db.campus_food.find({"status": {"$nin": ["pending_verification", "rejected"]}})
             campus_foods = await cursor_food.to_list(length=20)
             if not campus_foods:
                 campus_foods = load_campus_food()[:5]

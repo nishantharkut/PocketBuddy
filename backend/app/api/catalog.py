@@ -6,10 +6,15 @@ Supports four catalog types:
 
 Defaults are lazy-seeded on first GET if no items exist for that type.
 Users can POST custom items; they appear alongside defaults in GET.
+
+Hierarchical Category Mapping:
+  For transaction-categories, custom user labels are auto-mapped to a
+  parent_category for clean analytics. E.g., "maggi" → parent: "food".
 """
 
 import uuid
 import datetime
+import re
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -49,11 +54,11 @@ _DEFAULT_SEEDS: dict[str, list[dict]] = {
         {"value": "cred", "label": "CRED", "sort_order": 4, "metadata": {}},
     ],
     "transaction-categories": [
-        {"value": "food", "label": "Food", "sort_order": 0, "metadata": {}},
-        {"value": "stationery", "label": "Stationery", "sort_order": 1, "metadata": {}},
-        {"value": "travel", "label": "Travel", "sort_order": 2, "metadata": {}},
-        {"value": "subscription", "label": "Subscription", "sort_order": 3, "metadata": {}},
-        {"value": "other", "label": "Other", "sort_order": 4, "metadata": {}},
+        {"value": "food", "label": "Food", "sort_order": 0, "metadata": {"is_parent": True}},
+        {"value": "stationery", "label": "Stationery", "sort_order": 1, "metadata": {"is_parent": True}},
+        {"value": "travel", "label": "Travel", "sort_order": 2, "metadata": {"is_parent": True}},
+        {"value": "subscription", "label": "Subscription", "sort_order": 3, "metadata": {"is_parent": True}},
+        {"value": "other", "label": "Other", "sort_order": 4, "metadata": {"is_parent": True}},
     ],
     "cart-platforms": [
         {"value": "zepto", "label": "Zepto", "sort_order": 0, "metadata": {"default_min_cart": 19900, "default_delivery_fee": 2500}},
@@ -63,6 +68,47 @@ _DEFAULT_SEEDS: dict[str, list[dict]] = {
         {"value": "jiomart", "label": "JioMart", "sort_order": 4, "metadata": {"default_min_cart": 19900, "default_delivery_fee": 2900}},
     ],
 }
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical Category Mapping – semantic keyword → parent category
+# ---------------------------------------------------------------------------
+
+_CATEGORY_KEYWORD_MAP: dict[str, list[str]] = {
+    "food": [
+        "food", "maggi", "noodle", "canteen", "mess", "chai", "tea", "coffee",
+        "snack", "lunch", "dinner", "breakfast", "biryani", "pizza", "burger",
+        "samosa", "dosa", "idli", "thali", "juice", "shake", "momos",
+        "sandwich", "paratha", "roti", "rice", "dal", "swiggy", "zomato",
+        "drink", "beverage", "water", "coke", "pepsi", "lassi", "milk",
+        "fruit", "chocolate", "ice cream", "dessert", "cake", "biscuit",
+    ],
+    "stationery": [
+        "stationery", "pen", "pencil", "notebook", "book", "paper", "xerox",
+        "photocopy", "print", "marker", "eraser", "ruler", "glue", "tape",
+        "folder", "file", "stapler", "highlighter", "lab manual", "register",
+    ],
+    "travel": [
+        "travel", "auto", "cab", "uber", "ola", "rapido", "metro", "bus",
+        "train", "flight", "ticket", "fare", "petrol", "diesel", "fuel",
+        "parking", "toll", "rickshaw", "tempo", "bike", "taxi",
+    ],
+    "subscription": [
+        "subscription", "netflix", "spotify", "prime", "hotstar", "youtube",
+        "premium", "recharge", "plan", "monthly", "annual", "renewal",
+        "membership", "gym", "vpn", "cloud", "storage", "wifi", "internet",
+    ],
+}
+
+
+def _resolve_parent_category(label: str) -> str:
+    """Map a custom label to its nearest parent category via keyword matching."""
+    slug = re.sub(r"[^a-z0-9 ]+", "", label.lower()).strip()
+    for parent, keywords in _CATEGORY_KEYWORD_MAP.items():
+        for kw in keywords:
+            if kw in slug:
+                return parent
+    return "other"
 
 
 async def _ensure_seeded(db, catalog_type: str) -> None:
@@ -159,6 +205,14 @@ async def add_catalog_item(
         # Return the existing item instead of erroring – idempotent behavior
         return map_doc(existing)
 
+    # --- Hierarchical Category Mapping ---
+    # For transaction-categories, auto-map custom labels to a parent category
+    metadata = req.metadata or {}
+    if ct == "transaction-categories":
+        parent_category = _resolve_parent_category(label)
+        metadata["parent_category"] = parent_category
+        metadata["is_custom_label"] = True
+
     now = datetime.datetime.utcnow()
     new_item = {
         "_id": str(uuid.uuid4()),
@@ -168,9 +222,10 @@ async def add_catalog_item(
         "source": "user",
         "created_by": user_id,
         "sort_order": 99,
-        "metadata": req.metadata or {},
+        "metadata": metadata,
         "created_at": now,
     }
 
     await db.catalog_items.insert_one(new_item)
     return map_doc(new_item)
+

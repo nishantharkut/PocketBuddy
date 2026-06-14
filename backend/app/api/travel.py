@@ -142,18 +142,18 @@ class SavingsLogReq(BaseModel):
 @router.get("/routes")
 async def get_routes(college: Optional[str] = Query(None), user_id: str = Depends(get_current_user)):
     db = get_db()
-    
+
     if not college:
         # Get user profile to determine college
         profile = await db.profiles.find_one({"_id": user_id})
         college = profile.get("college_name") if profile else "ABV-IIITM Gwalior"
-        
+
     if not college:
         college = "ABV-IIITM Gwalior"
-        
+
     cursor = db.travel_routes.find({"college": college})
     routes = await cursor.to_list(length=100)
-    
+
     if not routes:
         if "gwalior" in college.lower() or "iiitm" in college.lower():
             # Seed Gwalior defaults
@@ -172,13 +172,13 @@ async def get_routes(college: Optional[str] = Query(None), user_id: str = Depend
                 "bus_name": "Local Bus Stand",
                 "airport_name": "Local Airport"
             }
-            
+
             for key, val in CAMPUS_DISTANCES.items():
                 if key in college.lower():
                     distances = val
                     names = val
                     break
-            
+
             new_routes = [
                 {
                     "id": f"{uuid.uuid4().hex[:8]}_station",
@@ -202,7 +202,7 @@ async def get_routes(college: Optional[str] = Query(None), user_id: str = Depend
                     "campus_landmark": "Main Gate"
                 }
             ]
-            
+
             for nr in new_routes:
                 d = nr["distance_km"]
                 # Formulate approximate ranges based on standard Indian ride app tariffs:
@@ -227,7 +227,7 @@ async def get_routes(college: Optional[str] = Query(None), user_id: str = Depend
                         "median_fare": int(30 + d * 7)
                     }
                 ]
-                
+
                 r_doc = {
                     "_id": nr["id"],
                     "college": college,
@@ -244,25 +244,25 @@ async def get_routes(college: Optional[str] = Query(None), user_id: str = Depend
                     "distance_km": d
                 }
                 await db.travel_routes.insert_one(r_doc)
-                
+
         cursor = db.travel_routes.find({"college": college})
         routes = await cursor.to_list(length=100)
-        
+
     return [_to_dict(r) for r in routes]
 
 @router.post("/routes")
 async def create_custom_route(req: CustomRouteCreateReq, user_id: str = Depends(get_current_user)):
     db = get_db()
-    
+
     # Determine college
     college = req.college
     if not college:
         profile = await db.profiles.find_one({"_id": user_id})
         college = profile.get("college_name") if profile else "ABV-IIITM Gwalior"
-        
+
     if not college:
         college = "ABV-IIITM Gwalior"
-        
+
     d = req.distance_km
     if d <= 0 or d > 250:
         raise HTTPException(status_code=400, detail="Distance must be positive and less than 250 km")
@@ -287,9 +287,9 @@ async def create_custom_route(req: CustomRouteCreateReq, user_id: str = Depends(
             "median_fare": int(30 + d * 7)
         }
     ]
-    
+
     route_id = f"{uuid.uuid4().hex[:8]}_custom"
-    
+
     r_doc = {
         "_id": route_id,
         "college": college,
@@ -305,7 +305,7 @@ async def create_custom_route(req: CustomRouteCreateReq, user_id: str = Depends(
         "source": "user_added",
         "distance_km": d
     }
-    
+
     await db.travel_routes.insert_one(r_doc)
     return _to_dict(r_doc)
 
@@ -314,7 +314,7 @@ async def get_reports(route_id: str = Query(...), user_id: str = Depends(get_cur
     db = get_db()
     cursor = db.travel_reports.find({"route_id": route_id}).sort("created_at", -1)
     reports = await cursor.to_list(length=200)
-    
+
     mapped_reports = []
     for r in reports:
         report_dict = _to_dict(r)
@@ -322,18 +322,18 @@ async def get_reports(route_id: str = Query(...), user_id: str = Depends(get_cur
         user_doc = await db.users.find_one({"_id": poster_id})
         report_dict["user_name"] = user_doc.get("full_name", "Anonymous Student") if user_doc else "Anonymous Student"
         mapped_reports.append(report_dict)
-        
+
     return mapped_reports
 
 @router.post("/reports")
 async def create_report(req: ReportSubmitReq, user_id: str = Depends(get_current_user)):
     db = get_db()
-    
+
     # Fetch route to validate route and get baseline fare
     route_doc = await db.travel_routes.find_one({"_id": req.route_id})
     if not route_doc:
         raise HTTPException(status_code=404, detail="Route not found")
-        
+
     # Find base median fare for mode
     base_median_fare = 150  # default fallback
     modes = route_doc.get("modes", [])
@@ -343,7 +343,7 @@ async def create_report(req: ReportSubmitReq, user_id: str = Depends(get_current
             if req.mode.lower() in m["mode"].lower() or m["mode"].lower() in req.mode.lower():
                 base_median_fare = m.get("median_fare", base_median_fare)
                 break
-                
+
     # Validate input amounts
     if req.amount_paid <= 0 or req.amount_paid > base_median_fare * 3:
         raise HTTPException(status_code=400, detail=f"Amount paid must be positive and not exceed 3x the baseline fare (₹{base_median_fare * 3})")
@@ -353,7 +353,7 @@ async def create_report(req: ReportSubmitReq, user_id: str = Depends(get_current
         raise HTTPException(status_code=400, detail=f"Driver quote must be positive and within reasonable limits (maximum ₹{base_median_fare * 5})")
 
     report_id = str(uuid.uuid4())
-    
+
     # Insert report
     await db.travel_reports.insert_one({
         "_id": report_id,
@@ -367,19 +367,19 @@ async def create_report(req: ReportSubmitReq, user_id: str = Depends(get_current
         "final_amount": req.final_amount,
         "created_at": datetime.datetime.utcnow()
     })
-    
+
     # Dynamically update the fair fare ranges in the route document based on community reports
     cursor = db.travel_reports.find({"route_id": req.route_id, "mode": req.mode})
     mode_reports = await cursor.to_list(length=1000)
-    
+
     if len(mode_reports) >= 2:
         fares = [r["final_amount"] for r in mode_reports]
         fares.sort()
-        
+
         min_fare = int(fares[0])
         max_fare = int(fares[-1])
         median_fare = int(fares[len(fares) // 2])
-        
+
         route_doc = await db.travel_routes.find_one({"_id": req.route_id})
         if route_doc:
             updated_modes = []
@@ -392,7 +392,7 @@ async def create_report(req: ReportSubmitReq, user_id: str = Depends(get_current
                     m["median_fare"] = median_fare
                     mode_found = True
                 updated_modes.append(m)
-                
+
             if not mode_found:
                 updated_modes.append({
                     "mode": req.mode,
@@ -400,20 +400,20 @@ async def create_report(req: ReportSubmitReq, user_id: str = Depends(get_current
                     "max_fare": max_fare,
                     "median_fare": median_fare
                 })
-                
+
             await db.travel_routes.update_one(
                 {"_id": req.route_id},
                 {"$set": {"modes": updated_modes}}
             )
-            
+
     # Add to wing feed activity
     profile = await db.profiles.find_one({"_id": user_id})
     wing = profile.get("wing_label", "unknown wing") if profile else "unknown wing"
-    
+
     route_doc = await db.travel_routes.find_one({"_id": req.route_id})
     route_name = route_doc.get("name", "campus route") if route_doc else "campus route"
     route_short = route_name.split("→")[0].strip() if "→" in route_name else route_name
-    
+
     await db.checkin_logs.insert_one({
         "_id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -424,7 +424,7 @@ async def create_report(req: ReportSubmitReq, user_id: str = Depends(get_current
         "stress_note": f"A student reported paying ₹{req.final_amount:.0f} (saved ₹{max(0.0, req.driver_quote - req.final_amount):.0f} from ₹{req.driver_quote:.0f} quote)",
         "created_at": datetime.datetime.utcnow()
     })
-    
+
     return {"status": "ok", "id": report_id}
 
 @router.get("/savings")
@@ -439,7 +439,7 @@ async def get_savings(user_id: str = Depends(get_current_user)):
 async def log_savings(req: SavingsLogReq, user_id: str = Depends(get_current_user)):
     db = get_db()
     savings_id = str(uuid.uuid4())
-    
+
     await db.travel_savings.insert_one({
         "_id": savings_id,
         "user_id": user_id,
@@ -447,7 +447,7 @@ async def log_savings(req: SavingsLogReq, user_id: str = Depends(get_current_use
         "amount_saved": req.amount_saved,
         "created_at": datetime.datetime.utcnow()
     })
-    
+
     await db.checkin_logs.insert_one({
         "_id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -458,7 +458,7 @@ async def log_savings(req: SavingsLogReq, user_id: str = Depends(get_current_use
         "stress_note": f"Saved ₹{req.amount_saved:.0f} using Travel negotiation helper!",
         "created_at": datetime.datetime.utcnow()
     })
-    
+
     return {"status": "ok", "id": savings_id, "amount_saved": req.amount_saved}
 
 
@@ -467,23 +467,24 @@ class AiCoachReq(BaseModel):
     mode: str
     user_situation: Optional[str] = ""
     college: Optional[str] = None
+    app_quote: Optional[float] = None  # What the booking app is showing right now
 
 @router.post("/ai-coach")
 async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_current_user)):
     db = get_db()
-    
+
     # Fetch route info
     route = await db.travel_routes.find_one({"_id": req.route_id})
-    
+
     # Determine college name
     college = req.college or (route.get("college") if route else None)
     if not college:
         profile = await db.profiles.find_one({"_id": user_id})
         college = profile.get("college_name") if profile else "ABV-IIITM Gwalior"
-        
+
     route_name = route.get("name", "Campus Route") if route else "Campus Route"
     distance_km = route.get("distance_km", 10.0) if route else 10.0
-    
+
     # Determine target fare ranges
     min_fare, max_fare, median_fare = 150, 200, 175
     if route:
@@ -493,7 +494,36 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
                 max_fare = m.get("max_fare", max_fare)
                 median_fare = m.get("median_fare", median_fare)
                 break
-                
+
+    # --- Surge Coefficient Model ---
+    # Compare the live app quote against historical median from community reports
+    surge_factor = 1.0
+    community_median = median_fare  # fallback to route median
+    report_count = 0
+    if route:
+        now_hour = datetime.datetime.utcnow().hour
+        # Fetch recent reports for this route+mode to build community median
+        report_cursor = db.travel_reports.find({
+            "route_id": req.route_id,
+            "mode": {"$regex": req.mode, "$options": "i"},
+        }).sort("created_at", -1)
+        recent_reports = await report_cursor.to_list(length=200)
+        if recent_reports:
+            report_count = len(recent_reports)
+            report_fares = sorted([r["final_amount"] for r in recent_reports])
+            community_median = report_fares[len(report_fares) // 2]
+
+    if req.app_quote and req.app_quote > 0 and community_median > 0:
+        surge_factor = round(req.app_quote / community_median, 2)
+
+    surge_context = ""
+    if surge_factor > 1.5:
+        surge_context = f"SURGE ALERT: Current app price (₹{req.app_quote:.0f}) is {surge_factor}x the community median (₹{community_median:.0f}). Advise the student to consider alternative transport combos or wait 15-30 min for prices to drop."
+    elif surge_factor > 1.15:
+        surge_context = f"MILD SURGE: Current app price (₹{req.app_quote:.0f}) is {surge_factor}x the community median (₹{community_median:.0f}). The student should negotiate harder than usual; target ₹{community_median:.0f} as the anchor."
+    elif req.app_quote and req.app_quote > 0:
+        surge_context = f"NO SURGE: Current app price (₹{req.app_quote:.0f}) is close to community median (₹{community_median:.0f}). Fair pricing window."
+
     # Dialect and regional mapping based on college
     col_lower = college.lower()
     if "gwalior" in col_lower or "iiitm" in col_lower:
@@ -520,9 +550,11 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
 
     # Build local rule-based fallback response
     fallback_script = route.get("negotiation_helper", "Bhaiya, sahi price lagao. Chalo na.") if route else "Bhaiya, sahi price lagao."
+    if req.app_quote and surge_factor > 1.15:
+        fallback_script += f" App par ₹{req.app_quote:.0f} dikha raha hai, par normal rate ₹{community_median:.0f} hota hai."
     if req.user_situation:
         fallback_script += f" (Note: {req.user_situation})"
-        
+
     fallback_response = {
         "script": fallback_script,
         "tactics": [
@@ -531,6 +563,9 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
             f"Refer to standard rates: Bhaiya, regular campus rate is between ₹{min_fare}-₹{max_fare}."
         ],
         "safety": route.get("safety_score_night", "Avoid shared/unknown routes late at night; prefer app-booked rides.") if route else "Always prefer pre-booked app rides late at night.",
+        "surge_factor": surge_factor,
+        "community_median": community_median,
+        "report_count": report_count,
         "source": "local_fallback"
     }
 
@@ -539,16 +574,18 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
 
     try:
         prompt = f"""
-        You are an expert Indian auto/cab fare negotiator and transit helper. 
+        You are an expert Indian auto/cab fare negotiator and transit helper.
         The student is at {college} in {region}.
         They are travelling on the route: {route_name} ({distance_km} km) via {req.mode}.
         Target fair range: Rs. {min_fare} to Rs. {max_fare} (median: Rs. {median_fare}).
+        Community median from {report_count} student reports: Rs. {community_median}.
+        {surge_context}
         Student's current situation/problems: {req.user_situation or 'None'}
 
         Task:
         Generate a JSON object containing three fields:
-        1. "script": A localized, high-impact, realistic negotiation script in local Indian student dialect (using {dialect}) to say to the driver. Keep it short, natural, and street-smart (e.g., 'Bhaiya, app par Rs. 150 dikha raha hai...'). Incorporate their situation (e.g. rain, luggage, night) if provided.
-        2. "tactics": Array of 3 bullet points of specific tactical advice for negotiating this route/mode/situation.
+        1. "script": A localized, high-impact, realistic negotiation script in local Indian student dialect (using {dialect}) to say to the driver. Keep it short, natural, and street-smart (e.g., 'Bhaiya, app par Rs. 150 dikha raha hai...'). If there is a surge, factor the surge into your advice (suggest alternatives if surge > 1.5x, set a harder anchor if mild surge). Incorporate their situation (e.g. rain, luggage, night) if provided.
+        2. "tactics": Array of 3 bullet points of specific tactical advice for negotiating this route/mode/situation. If surge data is available, include surge-specific tactics.
         3. "safety": A 1-sentence quick safety advice for this specific situation.
 
         Output ONLY valid JSON matching this schema, without markdown formatting or trailing text. Do not wrap in ```json.
@@ -556,8 +593,11 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
 
         result = generate_json(prompt, max_tokens=500, temperature=0.25)
         result["source"] = "bedrock"
+        result["surge_factor"] = surge_factor
+        result["community_median"] = community_median
+        result["report_count"] = report_count
         return result
-        
+
     except Exception as exc:
         logger.warning("Bedrock AI coach failed: %s", exc)
         return {**fallback_response, "bedrock_error": str(exc)}

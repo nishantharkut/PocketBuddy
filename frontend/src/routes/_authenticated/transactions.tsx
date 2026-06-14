@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { rupees } from "@/lib/format";
-import { getStats, getProfile, updateTransaction, getCatalog, addCatalogItem } from "@/lib/api/db.functions";
+import { getStats, getProfile, updateTransaction, getCatalog, addCatalogItem, submitParserCorrection } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   ssr: false,
@@ -398,6 +398,14 @@ function DailyView({
                       <span className="text-[10px] text-muted-foreground">
                         {isCompanion ? "Companion" : "Manual"}
                       </span>
+                      {t.needs_verification && (
+                        <>
+                          <span className="text-[10px] text-zinc-600 font-bold">•</span>
+                          <span className="text-[9px] font-black text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            Verify Parser
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="text-right shrink-0 flex items-center gap-2">
@@ -697,22 +705,31 @@ function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: 
       let finalCategory = cat;
       if (cat === "other" && customCat.trim()) {
         finalCategory = customCat.trim().toLowerCase();
-        // Also add to the catalog for reuse
         try {
           await addCatalogItem("transaction-categories", { label: customCat.trim() });
-        } catch {
-          // Idempotent — ignore if it already exists
-        }
+        } catch {}
       }
-      await updateTransaction({
-        id: txn.id,
-        data: {
-          mapped_merchant_name: name.trim(),
-          category: finalCategory,
-          direction: direction,
-        },
-      });
-      toast.success("Transaction updated.");
+
+      if (txn.source !== "manual" || txn.needs_verification) {
+        await submitParserCorrection({
+          data: {
+            transaction_id: txn.id,
+            corrected_merchant: name.trim(),
+            corrected_category: finalCategory,
+          }
+        });
+        toast.success("Correction logged & transaction updated.");
+      } else {
+        await updateTransaction({
+          id: txn.id,
+          data: {
+            mapped_merchant_name: name.trim(),
+            category: finalCategory,
+            direction: direction,
+          },
+        });
+        toast.success("Transaction updated.");
+      }
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Failed to update transaction");

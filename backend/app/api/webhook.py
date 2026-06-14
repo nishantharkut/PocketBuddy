@@ -5,15 +5,18 @@ import datetime
 import jwt
 import re
 import uuid
+import logging
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.services.subscriptions import (
     subscription_name_for_merchant,
     upsert_subscription_for_transaction,
 )
 
 router = APIRouter()
+logger = logging.getLogger("app.api.webhook")
 
 
 class WebhookReq(BaseModel):
@@ -175,14 +178,14 @@ async def try_auto_verify_pool_payment(db, user_id: str, text: str, amount_from_
     text_lower = text.lower()
     credit_keywords = ["received", "credited", "deposit", "added", "plus", "credited to a/c"]
     is_credit = any(kw in text_lower for kw in credit_keywords) or (amount_from_req is not None and "credit" in text_lower)
-    
+
     if not is_credit:
         return False
-        
+
     utr = utr_from_req or parse_transaction_id(text)
     if not utr:
         return False
-        
+
     # Find completed pool hosted by this user with a pending payment matching this UTR
     pool = await db.cart_pools.find_one({
         "host_id": user_id,
@@ -194,7 +197,7 @@ async def try_auto_verify_pool_payment(db, user_id: str, text: str, amount_from_
             }
         }
     })
-    
+
     if pool:
         # Mark roommate status to verified
         res = await db.cart_pools.update_one(
@@ -203,7 +206,7 @@ async def try_auto_verify_pool_payment(db, user_id: str, text: str, amount_from_
         )
         if res.modified_count > 0:
             return True
-            
+
     return False
 
 
@@ -329,6 +332,25 @@ async def ingest_notification(
     if direction == "credit" and not category:
         category = "income"
 
+    # --- Parser Feedback Loop: Confidence Scoring ---
+    # If amount/merchant came from the Android app's pre-parsed data, confidence is high.
+    # If we had to regex-parse from raw text, confidence is lower.
+    parsing_confidence = "high"
+    needs_verification = False
+    if req.amount is not None and req.merchant:
+        parsing_confidence = "high"  # Pre-parsed by Android app
+    elif amount_paise and merchant:
+        parsing_confidence = "medium"  # Regex-parsed successfully
+    else:
+        parsing_confidence = "low"
+        needs_verification = True
+
+    # If merchant is unmapped and not a known subscription, flag for verification
+    if not merchant_doc and not sub_name and direction == "debit":
+        needs_verification = True
+        if parsing_confidence == "high":
+            parsing_confidence = "medium"
+
     source = "companion_sms" if "sms" in notification_source.lower() else "companion_notification"
     txn_id = str(uuid.uuid4())
     new_txn = {
@@ -349,6 +371,8 @@ async def ingest_notification(
         "source_app": req.sourceApp,
         "capture_source": notification_source,
         "detected_at_device": millis_to_utc_datetime(req.detectedAtDeviceMillis or req.timestamp),
+        "parsing_confidence": parsing_confidence,
+        "needs_verification": needs_verification,
         "created_at": now,
     }
 
@@ -367,4 +391,120 @@ async def ingest_notification(
             detected_from="auto_detected",
         )
 
-    return {"status": "ok", "transaction_id": txn_id}
+    return {"status": "ok", "transaction_id": txn_id, "parsing_confidence": parsing_confidence, "needs_verification": needs_verification}
+
+
+# ---------------------------------------------------------------------------
+# Strategy 5: Parser Feedback Loop – Correction Logging
+# ---------------------------------------------------------------------------
+
+class CorrectionReq(BaseModel):
+    transaction_id: str
+    corrected_amount: Optional[int] = None     # in paise
+    corrected_merchant: Optional[str] = None
+    corrected_category: Optional[str] = None
+
+
+@router.post("/correction")
+async def log_parser_correction(
+    req: CorrectionReq,
+    authorization: Optional[str] = Header(None),
+    x_pocketbuddy_user_id: Optional[str] = Header(None, alias="X-PocketBuddy-User-Id"),
+):
+    """
+    When a user manually corrects a parsed transaction (amount, merchant, or category),
+    log the correction pair (original vs corrected) into parser_corrections.
+
+    This telemetry collection is the input for future parser heuristic improvements.
+    The raw notification text is stored in masked form only (privacy-safe).
+    """
+    db = get_db()
+    user_id = user_id_from_authorization(authorization) or x_pocketbuddy_user_id
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing user binding")
+
+    txn = await db.transactions.find_one({"_id": req.transaction_id, "user_id": user_id})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    now = datetime.datetime.utcnow()
+    correction_doc = {
+        "_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "transaction_id": req.transaction_id,
+        "original_amount": txn.get("amount"),
+        "original_merchant": txn.get("raw_merchant_string"),
+        "original_category": txn.get("category"),
+        "corrected_amount": req.corrected_amount,
+        "corrected_merchant": req.corrected_merchant,
+        "corrected_category": req.corrected_category,
+        # Store masked notification preview only (privacy-safe, no raw SMS)
+        "notification_preview": txn.get("notification_preview", ""),
+        "source_app": txn.get("source_app"),
+        "package_name": txn.get("package_name"),
+        "parsing_confidence": txn.get("parsing_confidence"),
+        "created_at": now,
+    }
+
+    await db.parser_corrections.insert_one(correction_doc)
+
+    # Apply the correction to the transaction itself
+    update_fields = {"needs_verification": False, "user_corrected": True}
+    if req.corrected_amount is not None:
+        update_fields["amount"] = req.corrected_amount
+    if req.corrected_merchant is not None:
+        update_fields["mapped_merchant_name"] = req.corrected_merchant
+        update_fields["is_mapped"] = True
+    if req.corrected_category is not None:
+        update_fields["category"] = req.corrected_category
+
+    await db.transactions.update_one(
+        {"_id": req.transaction_id, "user_id": user_id},
+        {"$set": update_fields},
+    )
+
+    logger.info(
+        "Parser correction logged for txn %s by user %s (confidence was: %s)",
+        req.transaction_id, user_id, txn.get("parsing_confidence"),
+    )
+
+    return {"status": "ok", "correction_id": correction_doc["_id"]}
+
+
+@router.get("/parser-stats")
+async def get_parser_stats(
+    authorization: Optional[str] = Header(None),
+    x_pocketbuddy_user_id: Optional[str] = Header(None, alias="X-PocketBuddy-User-Id"),
+):
+    """
+    Parser health telemetry: how many transactions needed verification,
+    how many were corrected, and the distribution of parsing confidence levels.
+    Useful for monitoring parser drift as SMS formats change.
+    """
+    db = get_db()
+    user_id = user_id_from_authorization(authorization) or x_pocketbuddy_user_id
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing user binding")
+
+    total_txns = await db.transactions.count_documents({"user_id": user_id})
+    needs_verification = await db.transactions.count_documents(
+        {"user_id": user_id, "needs_verification": True}
+    )
+    total_corrections = await db.parser_corrections.count_documents({"user_id": user_id})
+
+    # Confidence distribution
+    high = await db.transactions.count_documents({"user_id": user_id, "parsing_confidence": "high"})
+    medium = await db.transactions.count_documents({"user_id": user_id, "parsing_confidence": "medium"})
+    low = await db.transactions.count_documents({"user_id": user_id, "parsing_confidence": "low"})
+
+    return {
+        "total_transactions": total_txns,
+        "needs_verification": needs_verification,
+        "total_corrections": total_corrections,
+        "confidence_distribution": {
+            "high": high,
+            "medium": medium,
+            "low": low,
+        },
+    }
+

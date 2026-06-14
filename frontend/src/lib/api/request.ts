@@ -6,10 +6,10 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("pb_session_token") : null;
 
-  const headers = {
-    "Content-Type": "application/json",
+  const headers: Record<string, string> = {
+    ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {}),
+    ...(options.headers as Record<string, string> || {}),
   };
 
   const response = await fetch(`${BASE_URL}${path}`, {

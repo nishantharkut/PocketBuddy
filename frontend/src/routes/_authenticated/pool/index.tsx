@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
+import { PlatformIcon } from "@/components/PlatformIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -130,7 +131,7 @@ function PoolList() {
           <SheetContent side="bottom" className="max-h-[85vh] overflow-auto" id="sheet-create-pool">
             <CreatePoolForm
               userId={user?.id}
-              userName={profile?.full_name ?? "You"}
+              userName={user?.fullName || "Host"}
               wing={profile?.wing_label ?? ""}
               onDone={() => {
                 setOpen(false);
@@ -198,13 +199,16 @@ function PoolCard({ pool }: { pool: Pool }) {
         <div className="flex flex-col justify-between h-full">
           <div>
             <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                <span className="text-sm font-black uppercase tracking-wider text-foreground truncate max-w-[150px] sm:max-w-none">
-                  {theme.name} Pool
-                </span>
-                <Badge variant="outline" className="text-xs font-bold border-border bg-white/5 text-muted-foreground">
-                  {pool.wing_label}
-                </Badge>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <PlatformIcon platform={pool.platform} name={theme.name} className="h-6 w-6" />
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                  <span className="text-sm font-black uppercase tracking-wider text-foreground truncate max-w-[150px] sm:max-w-none">
+                    {theme.name} Pool
+                  </span>
+                  <Badge variant="outline" className="text-xs font-bold border-border bg-white/5 text-muted-foreground">
+                    {pool.wing_label}
+                  </Badge>
+                </div>
               </div>
               {active && (
                 <span className="inline-flex items-center gap-1.5 bg-white/5 border border-border px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider text-foreground shrink-0">
@@ -330,7 +334,7 @@ function CreatePoolForm({
       const selectedLabel = platformOptions.find((p: any) => p.v === platform)?.l || customPlatform || platform;
       const data = await insertCartPool({
         data: {
-          created_by_name: userName || "You",
+          created_by_name: userName || "Host",
           wing_label: wing || "Default Wing",
           platform,
           platform_display_label: selectedLabel,
@@ -370,9 +374,10 @@ function CreatePoolForm({
               <button
                 key={p.v}
                 onClick={() => selectPlatform(p.v)}
-                className={`rounded-md border px-3 py-2.5 text-center text-sm transition-all cursor-pointer ${platform === p.v ? "border-primary bg-primary/10 font-semibold" : "border-border bg-surface hover:bg-surface-raised"}`}
+                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm transition-all cursor-pointer ${platform === p.v ? "border-primary bg-primary/10 font-bold text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-surface-raised hover:text-foreground"}`}
               >
-                {p.l}
+                <PlatformIcon platform={p.v} name={p.l} className="h-5 w-5" />
+                <span>{p.l}</span>
               </button>
             ))}
             {!showCustomInput ? (

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "@/components/AppShell";
+import { PlatformIcon } from "@/components/PlatformIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -198,7 +199,7 @@ function PoolDetail() {
       const isHostUser = 
         p.trim().toLowerCase() === (pool.created_by_name ?? "").trim().toLowerCase() ||
         p.trim().toLowerCase() === "host" ||
-        (user && pool.host_id === user.id && p.trim().toLowerCase() === (profile?.full_name ?? "").trim().toLowerCase());
+        (user && pool.host_id === user.id && p.trim().toLowerCase() === (user.fullName ?? "").trim().toLowerCase());
 
       splitBreakdown[p] = {
         name: p,
@@ -223,7 +224,7 @@ function PoolDetail() {
       const isHostUser = 
         p.trim().toLowerCase() === (pool.created_by_name ?? "").trim().toLowerCase() ||
         p.trim().toLowerCase() === "host" ||
-        (user && pool.host_id === user.id && p.trim().toLowerCase() === (profile?.full_name ?? "").trim().toLowerCase());
+        (user && pool.host_id === user.id && p.trim().toLowerCase() === (user.fullName ?? "").trim().toLowerCase());
 
       splitBreakdown[p] = {
         name: p,
@@ -513,9 +514,12 @@ function PoolDetail() {
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">Cart Pooling</p>
-          <h2 className="text-2xl font-black mt-2 uppercase tracking-tight text-foreground">
-            {theme.name} Pool
-          </h2>
+          <div className="flex items-center gap-3 mt-2">
+            <PlatformIcon platform={pool.platform} name={theme.name} className="h-9 w-9 text-base" />
+            <h2 className="text-2xl font-black uppercase tracking-tight text-foreground">
+              {theme.name} Pool
+            </h2>
+          </div>
           <p className="text-xs text-muted-foreground mt-1 font-medium">
             Created by <span className="text-foreground capitalize font-bold">{pool.created_by_name}</span> • {pool.wing_label?.toLowerCase().startsWith("wing") ? pool.wing_label : `Wing ${pool.wing_label}`}
           </p>

@@ -184,6 +184,15 @@ async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user
     db = get_db()
     pool_id = str(uuid.uuid4())
 
+    user = await db.users.find_one({"_id": user_id})
+    host_name = user.get("full_name") if user else None
+    
+    req_name = (req.created_by_name or "").strip()
+    if not host_name or host_name.strip().lower() == "you":
+        host_name = req_name if req_name.lower() != "you" else "Host"
+        
+    created_by_name = clean_text(host_name, "Host name")
+
     profile = await db.profiles.find_one({"_id": user_id})
     host_upi = validate_upi_id(profile.get("upi_id")) if profile else None
     wing_label = clean_text((profile or {}).get("wing_label") or req.wing_label, "Wing label", max_chars=60)
@@ -191,7 +200,7 @@ async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user
     new_pool = {
         "_id": pool_id,
         "host_id": user_id,
-        "created_by_name": clean_text(req.created_by_name, "Host name"),
+        "created_by_name": created_by_name,
         "wing_label": wing_label,
         "platform": validate_platform(req.platform),
         "platform_display_label": clean_text(req.platform_display_label, "Platform display label", max_chars=120) if req.platform_display_label else None,

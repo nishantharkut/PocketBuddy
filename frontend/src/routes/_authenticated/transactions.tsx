@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
-import { Smartphone, Edit3 } from "lucide-react";
+import { Smartphone, Edit3, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -17,17 +17,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { rupees, relativeTime, absoluteDate, getCycleStart } from "@/lib/format";
-import { getProfile, getTransactions, updateTransaction, getCatalog, addCatalogItem } from "@/lib/api/db.functions";
+import { rupees } from "@/lib/format";
+import { getStats, getProfile, updateTransaction, getCatalog, addCatalogItem } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   ssr: false,
   component: TxnsPage,
 });
-
-type Txn = any;
-type Source = "all" | "companion" | "manual";
-type Range = "cycle" | "7" | "30" | "all";
 
 // Fallback categories used only if catalog API fails
 const FALLBACK_CATEGORIES = [
@@ -38,15 +34,30 @@ const FALLBACK_CATEGORIES = [
   { v: "other", l: "Other" },
 ];
 
+const CATEGORY_ICONS: Record<string, string> = {
+  food: "🍜", stationery: "📝", travel: "🚌", transport: "🚌",
+  subscription: "📱", education: "📚", salary: "💰", other: "📦",
+};
+
+function getCatIcon(cat: string): string {
+  const lower = cat.toLowerCase();
+  for (const [key, icon] of Object.entries(CATEGORY_ICONS)) {
+    if (lower.includes(key)) return icon;
+  }
+  return "📦";
+}
+
+type ViewTab = "daily" | "calendar" | "monthly" | "total";
+
 function TxnsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [cat, setCat] = useState("all");
-  const [src, setSrc] = useState<Source>("all");
-  const [range, setRange] = useState<Range>("cycle");
-  const [limit, setLimit] = useState(20);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [viewTab, setViewTab] = useState<ViewTab>("daily");
   const [editingTxn, setEditingTxn] = useState<any | null>(null);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -54,10 +65,11 @@ function TxnsPage() {
     queryFn: () => getProfile(),
   });
 
-  const { data: txns, isLoading } = useQuery({
-    queryKey: ["txns", user?.id],
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["stats", user?.id, month, year],
     enabled: !!user,
-    queryFn: () => getTransactions(),
+    queryFn: () => getStats(month, year),
+    staleTime: 30_000,
   });
 
   // Catalog-driven categories
@@ -75,40 +87,51 @@ function TxnsPage() {
     return FALLBACK_CATEGORIES;
   }, [catalogCategories]);
 
-  // Build filter list: "All" + catalog categories + "Unmapped"
-  const catFilters = useMemo(() => {
-    return [
-      { v: "all", l: "All" },
-      ...categories,
-      { v: "unmapped", l: "Unmapped" },
-    ];
-  }, [categories]);
+  const monthName = new Date(year, month - 1).toLocaleString("en-IN", { month: "long" });
 
-  const filtered = useMemo(() => {
-    if (!txns) return [];
-    let out = txns;
-    const now = new Date();
-    if (range === "cycle" && profile?.cycle_start_day) {
-      const start = getCycleStart(profile.cycle_start_day);
-      out = out.filter((t) => new Date(t.created_at) >= start);
-    } else if (range === "7") {
-      const c = new Date(now);
-      c.setDate(c.getDate() - 7);
-      out = out.filter((t) => new Date(t.created_at) >= c);
-    } else if (range === "30") {
-      const c = new Date(now);
-      c.setDate(c.getDate() - 30);
-      out = out.filter((t) => new Date(t.created_at) >= c);
+  function prevMonth() {
+    if (month === 1) { setMonth(12); setYear(y => y - 1); }
+    else setMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (month === 12) { setMonth(1); setYear(y => y + 1); }
+    else setMonth(m => m + 1);
+  }
+
+  // CSV export
+  function exportCSV() {
+    if (!stats?.daily_groups) return;
+    const rows: string[] = ["Date,Description,Category,Amount (paise),Source,Type"];
+    for (const day of stats.daily_groups) {
+      for (const t of day.transactions) {
+        const desc = (t.mapped_merchant_name || t.raw_merchant_string || "").replace(/,/g, ";");
+        rows.push(`${day.date},"${desc}",${t.category || "other"},${t.amount},${t.source},${t.is_income ? "income" : "expense"}`);
+      }
     }
-    if (cat === "unmapped") out = out.filter((t) => !t.is_mapped);
-    else if (cat !== "all") out = out.filter((t) => t.category === cat);
-    if (src === "companion") out = out.filter((t) => t.source.startsWith("companion"));
-    else if (src === "manual") out = out.filter((t) => t.source === "manual");
-    return out;
-  }, [txns, cat, src, range, profile]);
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pocketbuddy_${monthName}_${year}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
-  const visible = filtered.slice(0, limit);
-  const total = filtered.reduce((s, t) => s + t.amount, 0);
+  const tabs: { key: ViewTab; label: string }[] = [
+    { key: "daily", label: "Daily" },
+    { key: "calendar", label: "Calendar" },
+    { key: "monthly", label: "Monthly" },
+    { key: "total", label: "Total" },
+  ];
+
+  // Filter daily groups if a specific day is selected (from calendar click)
+  const filteredDailyGroups = useMemo(() => {
+    if (!stats?.daily_groups) return [];
+    if (selectedDay !== null) {
+      return stats.daily_groups.filter((g: any) => g.day === selectedDay);
+    }
+    return stats.daily_groups;
+  }, [stats?.daily_groups, selectedDay]);
 
   return (
     <AppShell>
@@ -120,140 +143,117 @@ function TxnsPage() {
         </div>
       </div>
 
-      <div className="py-4 pb-32 space-y-6">
-        {/* Filter controls */}
-        <div className="space-y-3.5 border-b border-border/50 pb-4">
-          <div className="flex gap-1.5 overflow-x-auto pb-2 no-scrollbar">
-            {catFilters.map((c) => (
-              <button
-                key={c.v}
-                id={`filter-txn-${c.v}`}
-                onClick={() => setCat(c.v)}
-                className={`whitespace-nowrap rounded-full px-3.5 py-1 text-xs uppercase tracking-wider font-bold transition-all border cursor-pointer ${cat === c.v ? "bg-primary border-primary text-primary-foreground" : "bg-surface-raised border-border text-muted-foreground hover:text-foreground hover:bg-surface-interactive"}`}
-              >
-                {c.l}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">Source</span>
-              <div className="bg-surface-raised border border-border/80 p-0.5 rounded-full flex items-center shadow-inner">
-                {(["all", "companion", "manual"] as const).map((s) => (
-                  <button
-                    key={s}
-                    id={`filter-source-${s}`}
-                    onClick={() => setSrc(s)}
-                    className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${src === s ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                  >
-                    {s === "companion" ? "Companion" : s === "manual" ? "Manual" : "All"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1 sm:hidden">Range</span>
-              <Select value={range} onValueChange={(v) => setRange(v as Range)}>
-                <SelectTrigger id="select-txn-range" className="h-8 flex-1 sm:w-40 text-xs font-bold uppercase tracking-wider bg-surface border-border">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background border border-border text-foreground">
-                  <SelectItem value="cycle">This Cycle</SelectItem>
-                  <SelectItem value="7">Last 7 Days</SelectItem>
-                  <SelectItem value="30">Last 30 Days</SelectItem>
-                  <SelectItem value="all">All Time</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
+      <div className="py-4 pb-32 space-y-5 animate-[fadeIn_0.3s_ease-out]">
 
-        <div className="space-y-1.5">
-        {isLoading && <Skeleton className="h-40 w-full bg-white/5 border-none" />}
-        {!isLoading && visible.length === 0 && (
-          <p className="py-12 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">
-            No transactions found.
-          </p>
-        )}
-
-        {!isLoading && visible.length > 0 && (
-          <div className="border border-border bg-surface rounded-2xl overflow-hidden divide-y divide-border">
-            {visible.map((t) => {
-              const isCompanion = t.source.startsWith("companion");
-              const notificationPreview = t.notification_preview;
-              return (
-                <div key={t.id} className="p-4 transition-colors hover:bg-surface-raised/60">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={`text-xs font-bold truncate ${t.is_mapped ? "text-foreground" : "italic text-warning/90"}`}
-                      >
-                        <span className="inline-flex items-center mr-2 align-middle text-zinc-500">
-                          {isCompanion ? <Smartphone className="h-3.5 w-3.5" /> : <Edit3 className="h-3.5 w-3.5" />}
-                        </span>
-                        {t.mapped_merchant_name ?? t.raw_merchant_string}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        {t.category && (
-                          <Badge
-                            variant="outline"
-                            className="text-xs font-black tracking-widest text-zinc-500 uppercase py-0 px-2 bg-white/5 border-border"
-                          >
-                            {t.category}
-                          </Badge>
-                        )}
-                        <button
-                          onClick={() => setEditingTxn(t)}
-                          className="rounded-full px-4 py-1.5 text-xs font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
-                        >
-                          Edit
-                        </button>
-                        {isCompanion && notificationPreview && (
-                          <button
-                            onClick={() => setExpanded(expanded === t.id ? null : t.id)}
-                            className="text-xs font-bold text-primary hover:text-primary/85 transition-colors uppercase tracking-wider cursor-pointer"
-                          >
-                            {expanded === t.id ? "Hide preview" : "Show preview"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs font-black text-foreground tnum">{rupees(t.amount)}</p>
-                      <p className="text-xs text-zinc-500 font-semibold mt-0.5">{relativeTime(t.created_at)}</p>
-                      <p className="text-[11px] text-zinc-600 font-bold uppercase tracking-wide mt-0.5">{absoluteDate(t.created_at)}</p>
-                    </div>
-                  </div>
-                  {expanded === t.id && notificationPreview && (
-                    <pre className="mt-3 rounded-lg bg-background border border-border p-3 text-xs font-mono text-muted-foreground whitespace-pre-wrap select-all shadow-inner">
-                      {notificationPreview}
-                    </pre>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {filtered.length > visible.length && (
-          <button
-            onClick={() => setLimit((l) => l + 20)}
-            className="mt-4 w-full rounded-md py-2.5 text-xs font-bold uppercase tracking-wider bg-surface-raised border border-border text-foreground hover:bg-surface-interactive hover:border-white/15 transition-all cursor-pointer"
-          >
-            Load more
+        {/* ── Month Navigation ────────────────────────────────────────── */}
+        <div className="flex items-center justify-between">
+          <button onClick={prevMonth} id="btn-txn-prev-month"
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-surface border border-border hover:bg-surface-raised transition-colors cursor-pointer">
+            <ChevronLeft className="h-4 w-4 text-foreground" />
           </button>
+          <h2 className="text-lg font-black font-display tracking-tight text-foreground">
+            {viewTab === "monthly" ? `${year}` : `${monthName} ${year}`}
+          </h2>
+          <button onClick={nextMonth} id="btn-txn-next-month"
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-surface border border-border hover:bg-surface-raised transition-colors cursor-pointer">
+            <ChevronRight className="h-4 w-4 text-foreground" />
+          </button>
+        </div>
+
+        {/* ── Tab Bar ─────────────────────────────────────────────────── */}
+        <div className="flex border-b border-border">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => { setViewTab(t.key); setSelectedDay(null); }}
+              id={`tab-txn-${t.key}`}
+              className={`flex-1 py-2.5 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
+                viewTab === t.key
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+              {viewTab === t.key && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Summary Bar ─────────────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-2 bg-surface rounded-xl border border-border p-3">
+          <div className="text-center">
+            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Income</p>
+            <p className="text-xs font-black tnum text-[#5DADE2]">{rupees(stats?.summary?.income ?? 0)}</p>
+          </div>
+          <div className="text-center border-x border-border/50">
+            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Expenses</p>
+            <p className="text-xs font-black tnum text-[#FF6B4A]">{rupees(stats?.summary?.expenses ?? 0)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Total</p>
+            <p className="text-xs font-black tnum text-foreground">{rupees(Math.abs(stats?.summary?.net ?? 0))}</p>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-40 w-full bg-white/5 border-none rounded-2xl" />
+            <Skeleton className="h-40 w-full bg-white/5 border-none rounded-2xl" />
+          </div>
+        ) : (
+          <>
+            {/* ═══════════ DAILY TAB ═══════════ */}
+            {viewTab === "daily" && (
+              <DailyView
+                groups={filteredDailyGroups}
+                month={month}
+                year={year}
+                selectedDay={selectedDay}
+                onClearDay={() => setSelectedDay(null)}
+                onEdit={setEditingTxn}
+              />
+            )}
+
+            {/* ═══════════ CALENDAR TAB ═══════════ */}
+            {viewTab === "calendar" && (
+              <CalendarView
+                daily={stats?.daily ?? []}
+                daysInMonth={stats?.days_in_month ?? 30}
+                month={month}
+                year={year}
+                onDayClick={(day: number) => {
+                  setSelectedDay(day);
+                  setViewTab("daily");
+                }}
+              />
+            )}
+
+            {/* ═══════════ MONTHLY TAB ═══════════ */}
+            {viewTab === "monthly" && (
+              <MonthlyView
+                yearlyMonths={stats?.yearly_months ?? []}
+                weeks={stats?.weeks ?? []}
+                currentMonth={month}
+                onMonthClick={(m: number) => { setMonth(m); setViewTab("daily"); }}
+              />
+            )}
+
+            {/* ═══════════ TOTAL TAB ═══════════ */}
+            {viewTab === "total" && (
+              <TotalView
+                stats={stats}
+                monthName={monthName}
+                year={year}
+                onExport={exportCSV}
+              />
+            )}
+          </>
         )}
       </div>
-    </div>
 
-      <div className="fixed bottom-20 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] md:bottom-8 left-0 right-0 z-40 flex justify-center pointer-events-none w-full animate-[fadeIn_0.3s_ease-out]">
-        <div className="bg-surface/85 backdrop-blur-md px-5 py-2.5 rounded-full border border-border shadow-[0_12px_32px_rgba(0,0,0,0.5)] flex items-center justify-between gap-6 whitespace-nowrap text-xs font-bold uppercase tracking-wider text-muted-foreground w-fit pointer-events-auto">
-          <span>Showing: <strong className="text-foreground">{visible.length}</strong> txns</span>
-          <span className="w-[1px] h-3 bg-border" />
-          <span>Total: <strong className="text-foreground">{rupees(total)}</strong></span>
-        </div>
-      </div>
-
+      {/* Edit Transaction Dialog */}
       <Dialog open={!!editingTxn} onOpenChange={(o) => { if (!o) setEditingTxn(null); }}>
         <DialogContent className="sm:max-w-md bg-background border border-border text-foreground" id="dialog-edit-transaction">
           {editingTxn && (
@@ -262,6 +262,7 @@ function TxnsPage() {
               categories={categories}
               onClose={() => {
                 setEditingTxn(null);
+                qc.invalidateQueries({ queryKey: ["stats"] });
                 qc.invalidateQueries({ queryKey: ["txns"] });
                 qc.invalidateQueries({ queryKey: ["insights"] });
                 qc.invalidateQueries({ queryKey: ["wellness-insights"] });
@@ -275,6 +276,323 @@ function TxnsPage() {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   DAILY VIEW — Date-grouped transaction list
+   ═══════════════════════════════════════════════════════════════════════ */
+function DailyView({
+  groups, month, year, selectedDay, onClearDay, onEdit,
+}: {
+  groups: any[]; month: number; year: number;
+  selectedDay: number | null; onClearDay: () => void; onEdit: (t: any) => void;
+}) {
+  if (groups.length === 0) {
+    return (
+      <p className="py-12 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">
+        No transactions found.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {selectedDay !== null && (
+        <button onClick={onClearDay}
+          className="text-xs text-primary font-bold uppercase tracking-wider mb-2 cursor-pointer hover:underline">
+          ← Show all days
+        </button>
+      )}
+
+      {groups.map((group: any) => (
+        <div key={group.date} className="bg-surface rounded-2xl border border-border overflow-hidden">
+          {/* Date Header */}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-surface-raised/50 border-b border-border/50">
+            <div className="flex items-center gap-2.5">
+              <span className="text-lg font-black text-foreground tnum">{group.day}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                {group.weekday}
+              </span>
+              <span className="text-[10px] font-semibold text-muted-foreground tnum">
+                {String(month).padStart(2, "0")}.{year}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-right">
+              <span className="text-[10px] font-bold tnum text-[#5DADE2]">{rupees(group.income)}</span>
+              <span className="text-[10px] font-bold tnum text-[#FF6B4A]">{rupees(group.expenses)}</span>
+            </div>
+          </div>
+
+          {/* Transactions */}
+          <div className="divide-y divide-border/30">
+            {group.transactions.map((t: any) => {
+              const isCompanion = (t.source || "").startsWith("companion");
+              return (
+                <div key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-raised/40 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm">{getCatIcon(t.category || "other")}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground capitalize">
+                        {t.category || "other"}
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-foreground truncate">
+                      {t.mapped_merchant_name ?? t.raw_merchant_string}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] text-muted-foreground">
+                        {isCompanion ? "Companion" : "Manual"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 flex items-center gap-2">
+                    <span className={`text-xs font-black tnum ${t.is_income ? "text-[#5DADE2]" : "text-[#FF6B4A]"}`}>
+                      {t.is_income ? "+" : ""}{rupees(t.amount)}
+                    </span>
+                    <button
+                      onClick={() => onEdit(t)}
+                      className="rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-raised transition-all cursor-pointer"
+                    >
+                      <Edit3 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CALENDAR VIEW — Monthly grid
+   ═══════════════════════════════════════════════════════════════════════ */
+function CalendarView({
+  daily, daysInMonth, month, year, onDayClick,
+}: {
+  daily: any[]; daysInMonth: number; month: number; year: number;
+  onDayClick: (day: number) => void;
+}) {
+  const firstDayOfWeek = new Date(year, month - 1, 1).getDay(); // 0=Sun
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dailyMap: Record<number, any> = {};
+  for (const d of daily) { dailyMap[d.day] = d; }
+
+  // Build grid cells
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <div className="bg-surface rounded-2xl border border-border overflow-hidden">
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 border-b border-border">
+        {weekdays.map((wd, i) => (
+          <div key={wd} className={`py-2 text-center text-[10px] font-bold uppercase tracking-wider ${
+            i === 0 ? "text-[#FF6B4A]" : i === 6 ? "text-[#5DADE2]" : "text-muted-foreground"
+          }`}>
+            {wd}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7">
+        {cells.map((day, idx) => {
+          if (day === null) {
+            return <div key={`empty-${idx}`} className="border-b border-r border-border/30 min-h-[4.5rem]" />;
+          }
+          const d = dailyMap[day];
+          const hasData = d && (d.income > 0 || d.expenses > 0);
+          const dayOfWeek = (firstDayOfWeek + day - 1) % 7;
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          return (
+            <button
+              key={day}
+              onClick={() => hasData && onDayClick(day)}
+              className={`border-b border-r border-border/30 min-h-[4.5rem] p-1 text-left transition-colors ${
+                hasData ? "cursor-pointer hover:bg-surface-raised/60" : "cursor-default"
+              }`}
+            >
+              <span className={`text-[10px] font-bold ${
+                isWeekend ? (dayOfWeek === 0 ? "text-[#FF6B4A]" : "text-[#5DADE2]") : "text-muted-foreground"
+              }`}>
+                {day}
+              </span>
+              {d && d.income > 0 && (
+                <p className="text-[8px] sm:text-[9px] font-bold tnum text-[#5DADE2] truncate mt-0.5">
+                  {rupees(d.income)}
+                </p>
+              )}
+              {d && d.expenses > 0 && (
+                <p className="text-[8px] sm:text-[9px] font-bold tnum text-[#FF6B4A] truncate">
+                  {rupees(d.expenses)}
+                </p>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MONTHLY VIEW — Yearly with weekly breakdown
+   ═══════════════════════════════════════════════════════════════════════ */
+function MonthlyView({
+  yearlyMonths, weeks, currentMonth, onMonthClick,
+}: {
+  yearlyMonths: any[]; weeks: any[];
+  currentMonth: number; onMonthClick: (m: number) => void;
+}) {
+  const [expanded, setExpanded] = useState<number | null>(currentMonth);
+
+  return (
+    <div className="bg-surface rounded-2xl border border-border overflow-hidden divide-y divide-border/50">
+      {yearlyMonths.map((m: any) => {
+        const hasData = m.income > 0 || m.expenses > 0;
+        const isExpanded = expanded === m.month;
+        const isCurrent = m.month === currentMonth;
+
+        return (
+          <div key={m.month}>
+            <button
+              onClick={() => {
+                if (isCurrent) {
+                  setExpanded(isExpanded ? null : m.month);
+                } else {
+                  onMonthClick(m.month);
+                }
+              }}
+              className={`w-full flex items-center justify-between px-4 py-3.5 transition-colors cursor-pointer hover:bg-surface-raised/60 ${
+                isCurrent ? "bg-surface-raised/30" : ""
+              }`}
+            >
+              <div>
+                <span className={`text-sm font-bold ${isCurrent ? "text-primary" : "text-foreground"}`}>
+                  {m.month_name}
+                </span>
+                {isCurrent && hasData && (
+                  <p className="text-[9px] text-muted-foreground mt-0.5 tnum">
+                    {m.month}.1 ~ {m.month}.{new Date(2026, m.month, 0).getDate()}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-right">
+                <div>
+                  <p className="text-xs tnum font-bold text-[#5DADE2]">{hasData ? rupees(m.income) : "₹0"}</p>
+                </div>
+                <div>
+                  <p className="text-xs tnum font-bold text-[#FF6B4A]">{hasData ? rupees(m.expenses) : "₹0"}</p>
+                  <p className={`text-[9px] tnum font-black ${m.net >= 0 ? "text-foreground" : "text-[#FF6B4A]"}`}>
+                    {hasData ? (m.net >= 0 ? "+" : "") + rupees(Math.abs(m.net)) : "₹0"}
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            {/* Weekly sub-rows for the current expanded month */}
+            {isExpanded && isCurrent && weeks.length > 0 && (
+              <div className="border-t border-border/30 bg-surface-raised/20">
+                {weeks.map((w: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between px-6 py-2.5 border-b border-border/20 last:border-b-0">
+                    <span className="text-[10px] font-semibold text-muted-foreground tnum">{w.label}</span>
+                    <div className="flex items-center gap-4 text-right">
+                      <span className="text-[10px] tnum font-bold text-[#5DADE2]">{rupees(w.income)}</span>
+                      <div>
+                        <span className="text-[10px] tnum font-bold text-[#FF6B4A]">{rupees(w.expenses)}</span>
+                        <p className={`text-[8px] tnum font-black ${w.net >= 0 ? "text-foreground" : "text-[#FF6B4A]"}`}>
+                          {w.net >= 0 ? "+" : ""}{rupees(Math.abs(w.net))}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TOTAL VIEW — Budget, accounts summary, export
+   ═══════════════════════════════════════════════════════════════════════ */
+function TotalView({
+  stats, monthName, year, onExport,
+}: {
+  stats: any; monthName: string; year: number; onExport: () => void;
+}) {
+  const comparedPct = stats?.compared_expenses_pct ?? 0;
+  const companion = stats?.source_breakdown?.companion ?? 0;
+  const manual = stats?.source_breakdown?.manual ?? 0;
+  const totalExpenses = stats?.summary?.expenses ?? 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Accounts Summary */}
+      <div className="bg-surface rounded-2xl border border-border p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display flex items-center gap-2">
+            <span>💳</span> Accounts
+          </h3>
+          <span className="text-[10px] font-semibold text-muted-foreground tnum">
+            {month(monthName)}.1.{String(year).slice(2)} ~ {month(monthName)}.{stats?.days_in_month ?? 30}.{String(year).slice(2)}
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {comparedPct > 0 && (
+            <div className="flex items-center justify-between py-2 border-b border-border/30">
+              <span className="text-xs text-muted-foreground">Compared Expenses (Last month)</span>
+              <span className="text-xs font-black tnum text-foreground">{comparedPct}%</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between py-2 border-b border-border/30">
+            <span className="text-xs text-muted-foreground">Expenses (Companion)</span>
+            <span className="text-xs font-black tnum text-foreground">{rupees(companion)}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-border/30">
+            <span className="text-xs text-muted-foreground">Expenses (Manual)</span>
+            <span className="text-xs font-black tnum text-foreground">{rupees(manual)}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-xs font-bold text-foreground">Total Expenses</span>
+            <span className="text-xs font-black tnum text-[#FF6B4A]">{rupees(totalExpenses)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Export Button */}
+      <button
+        onClick={onExport}
+        id="btn-export-txn-csv"
+        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-surface border border-border text-xs font-bold uppercase tracking-wider text-foreground hover:bg-surface-raised transition-all cursor-pointer"
+      >
+        <Download className="h-4 w-4" />
+        Export Data to CSV
+      </button>
+    </div>
+  );
+}
+
+// Fix month helper that returns month number from name
+function month(name: string): string {
+  const months: Record<string, string> = {
+    January: "1", February: "2", March: "3", April: "4",
+    May: "5", June: "6", July: "7", August: "8",
+    September: "9", October: "10", November: "11", December: "12",
+  };
+  return months[name] || "1";
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EDIT TRANSACTION FORM
+   ═══════════════════════════════════════════════════════════════════════ */
 function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: string; l: string }[]; onClose: () => void }) {
   const [name, setName] = useState(txn.mapped_merchant_name ?? txn.raw_merchant_string);
   const knownValues = categories.map((c) => c.v);

@@ -92,6 +92,7 @@ function TravelPage() {
   // Form State for new route creation
   const [newRouteName, setNewRouteName] = useState<string>("");
   const [newRouteDesc, setNewRouteDesc] = useState<string>("");
+  const [newRouteDistance, setNewRouteDistance] = useState<string>("");
   const [newRouteLandmark, setNewRouteLandmark] = useState<string>("Main Gate");
 
   // AI Coach state

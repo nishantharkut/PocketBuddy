@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Copy, RefreshCw, Save } from "lucide-react";
+import { ChevronLeft, ChevronDown, Copy, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { relativeTime } from "@/lib/format";
 
@@ -42,6 +42,7 @@ function CompanionPage() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const [pairing, setPairing] = useState<string>("");
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const { data: profile, refetch: refetchProfile } = useQuery<Profile>({
     queryKey: ["profile", user?.id],
@@ -209,25 +210,38 @@ function CompanionPage() {
                     No sync activity yet.
                   </p>
                 )}
-                {syncLogs.map((l) => (
-                  <div
-                    key={l.id}
-                    className="flex items-start justify-between gap-3 rounded-md bg-surface p-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px]">{l.notification_source}</p>
-                      <p className="truncate text-[12px] text-muted-foreground">
-                        {l.notification_preview ?? "Structured event received"}
-                      </p>
+                {syncLogs.map((l) => {
+                  const isOpen = expandedLogId === l.id;
+                  return (
+                    <div key={l.id} className="rounded-md bg-surface">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedLogId(isOpen ? null : l.id)}
+                        className="flex w-full items-start justify-between gap-3 p-2.5 text-left cursor-pointer"
+                        aria-expanded={isOpen}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px]">{l.notification_source}</p>
+                          <p className="truncate text-[12px] text-muted-foreground">
+                            {l.notification_preview ?? "Structured event received"}
+                          </p>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <div className="text-right">
+                            <StatusBadge status={l.processing_status} />
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              {relativeTime(l.created_at)}
+                            </p>
+                          </div>
+                          <ChevronDown
+                            className={`mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                          />
+                        </div>
+                      </button>
+                      {isOpen && <SyncLogDetails log={l} />}
                     </div>
-                    <div className="text-right">
-                      <StatusBadge status={l.processing_status} />
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {relativeTime(l.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -310,8 +324,47 @@ function CompanionPage() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === "parsed")
+function SyncLogDetails({ log }: { log: SyncLog }) {
+  const formatAmount = (v: any) =>
+    typeof v === "number" ? `₹${v.toLocaleString("en-IN")}` : null;
+
+  const rows: { label: string; value: string | null | undefined }[] = [
+    { label: "Status", value: log.processing_status },
+    { label: "Source", value: log.notification_source },
+    { label: "Parsed amount", value: formatAmount(log.parsed_amount) },
+    { label: "Parsed merchant", value: log.parsed_merchant },
+    { label: "Transaction ref", value: log.transaction_reference },
+    { label: "Device", value: log.device_name },
+    { label: "App package", value: log.source_app ?? log.package_name },
+    {
+      label: "Received",
+      value: log.created_at ? new Date(log.created_at).toLocaleString() : null,
+    },
+  ].filter((r) => r.value !== null && r.value !== undefined && r.value !== "");
+
+  return (
+    <div className="border-t border-border px-2.5 py-3">
+      <dl className="grid grid-cols-1 gap-y-1.5 sm:grid-cols-2 sm:gap-x-4">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-baseline justify-between gap-3 sm:block">
+            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{r.label}</dt>
+            <dd className="text-[12px] font-medium text-foreground break-words text-right sm:text-left">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {log.notification_preview && (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Notification preview</p>
+          <p className="mt-1 rounded-md bg-surface-raised p-2 text-[12px] leading-5 text-muted-foreground break-words">
+            {log.notification_preview}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {  if (status === "parsed")
     return (
       <Badge className="bg-success/20 text-success text-xs">
         Tracked

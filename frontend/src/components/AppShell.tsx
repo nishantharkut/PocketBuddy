@@ -13,7 +13,8 @@ import {
   Sun,
   Moon,
   LogOut,
-  Compass
+  Compass,
+  BarChart3
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { BottomNav } from "./BottomNav";
@@ -31,6 +32,7 @@ const SidebarCtx = createContext<Ctx | null>(null);
 const tabs = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
   { to: "/transactions", label: "History", icon: List, id: "nav-transactions" },
+  { to: "/stats", label: "Stats", icon: BarChart3, id: "nav-stats" },
   { to: "/pool", label: "Pool", icon: ShoppingCart, id: "nav-pool" },
   { to: "/travel", label: "Travel", icon: Compass, id: "nav-travel" },
   { to: "/settings", label: "Settings", icon: Settings, id: "nav-settings" },

@@ -1,11 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, List, ShoppingCart, Settings, Compass } from "lucide-react";
+import { LayoutDashboard, List, ShoppingCart, Settings, BarChart3 } from "lucide-react";
 
 const tabs = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
   { to: "/transactions", label: "History", icon: List, id: "nav-transactions" },
+  { to: "/stats", label: "Stats", icon: BarChart3, id: "nav-stats" },
   { to: "/pool", label: "Pool", icon: ShoppingCart, id: "nav-pool" },
-  { to: "/travel", label: "Travel", icon: Compass, id: "nav-travel" },
   { to: "/settings", label: "Settings", icon: Settings, id: "nav-settings" },
 ] as const;
 

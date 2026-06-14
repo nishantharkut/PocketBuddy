@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from app.core.database import get_db
 from app.core.security import get_current_user
 import datetime
+import calendar
 
 router = APIRouter()
 
@@ -512,3 +513,324 @@ async def get_wellness_insights(user_id: str = Depends(get_current_user)):
     }
 
 
+# ── Income category inference helper ──────────────────────────────────────
+INCOME_KEYWORDS = {"salary", "income", "allowance", "refund", "cashback", "balance", "credit", "stipend", "scholarship", "reimbursement"}
+
+def _is_income(txn: dict) -> bool:
+    """Determine if a transaction is income based on category or merchant name keywords."""
+    cat = (txn.get("category") or "").lower()
+    merchant = (txn.get("mapped_merchant_name") or txn.get("raw_merchant_string") or "").lower()
+    return any(kw in cat for kw in INCOME_KEYWORDS) or any(kw in merchant for kw in INCOME_KEYWORDS)
+
+
+@router.get("/stats")
+async def get_stats(
+    month: int = Query(default=None, ge=1, le=12),
+    year: int = Query(default=None, ge=2020, le=2100),
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Comprehensive stats endpoint powering the Stats page, Calendar view,
+    Monthly tab, and Total tab.
+    """
+    db = get_db()
+    now = datetime.datetime.utcnow()
+
+    if month is None:
+        month = now.month
+    if year is None:
+        year = now.year
+
+    # ── Fetch transactions for the requested month ────────────────────────
+    _, days_in_month = calendar.monthrange(year, month)
+    month_start = datetime.datetime(year, month, 1, 0, 0, 0)
+    month_end = datetime.datetime(year, month, days_in_month, 23, 59, 59)
+
+    cursor = db.transactions.find({
+        "user_id": user_id,
+        "created_at": {"$gte": month_start, "$lte": month_end}
+    }).sort("created_at", -1)
+    txns = await cursor.to_list(length=5000)
+
+    # ── Previous month for comparison ─────────────────────────────────────
+    if month == 1:
+        prev_month, prev_year = 12, year - 1
+    else:
+        prev_month, prev_year = month - 1, year
+    _, prev_days = calendar.monthrange(prev_year, prev_month)
+    prev_start = datetime.datetime(prev_year, prev_month, 1, 0, 0, 0)
+    prev_end = datetime.datetime(prev_year, prev_month, prev_days, 23, 59, 59)
+
+    prev_cursor = db.transactions.find({
+        "user_id": user_id,
+        "created_at": {"$gte": prev_start, "$lte": prev_end}
+    })
+    prev_txns = await prev_cursor.to_list(length=5000)
+
+    # ── Separate income and expenses ──────────────────────────────────────
+    income_txns = [t for t in txns if _is_income(t)]
+    expense_txns = [t for t in txns if not _is_income(t)]
+
+    total_income = sum(t.get("amount", 0) for t in income_txns)
+    total_expenses = sum(t.get("amount", 0) for t in expense_txns)
+    total_net = total_income - total_expenses
+
+    # ── Daily breakdown (for Calendar view) ───────────────────────────────
+    daily = {}
+    for day in range(1, days_in_month + 1):
+        daily[day] = {"day": day, "income": 0, "expenses": 0, "txn_count": 0}
+
+    for t in txns:
+        d = t.get("created_at")
+        if not d:
+            continue
+        day_num = d.day
+        amt = t.get("amount", 0)
+        if _is_income(t):
+            daily[day_num]["income"] += amt
+        else:
+            daily[day_num]["expenses"] += amt
+        daily[day_num]["txn_count"] += 1
+
+    daily_list = list(daily.values())
+
+    # ── Weekly breakdown ──────────────────────────────────────────────────
+    import math
+    weeks = []
+    first_weekday, _ = calendar.monthrange(year, month)
+    week_start = 1
+    while week_start <= days_in_month:
+        week_end = min(week_start + 6, days_in_month)
+        w_income = 0
+        w_expenses = 0
+        for d in range(week_start, week_end + 1):
+            w_income += daily[d]["income"]
+            w_expenses += daily[d]["expenses"]
+        weeks.append({
+            "start_day": week_start,
+            "end_day": week_end,
+            "label": f"{month:02d}.{week_start:02d} ~ {month:02d}.{week_end:02d}",
+            "income": w_income,
+            "expenses": w_expenses,
+            "net": w_income - w_expenses,
+        })
+        week_start = week_end + 1
+
+    # ── Category breakdown for income ─────────────────────────────────────
+    income_cats: dict[str, int] = {}
+    for t in income_txns:
+        cat = t.get("category") or t.get("mapped_merchant_name") or "other"
+        income_cats[cat] = income_cats.get(cat, 0) + t.get("amount", 0)
+    income_total_for_pct = total_income or 1
+    income_breakdown = [
+        {
+            "category": k,
+            "amount": v,
+            "pct": round(v / income_total_for_pct * 100, 1),
+        }
+        for k, v in sorted(income_cats.items(), key=lambda x: -x[1])
+    ]
+
+    # ── Category breakdown for expenses ───────────────────────────────────
+    expense_cats: dict[str, int] = {}
+    for t in expense_txns:
+        cat = t.get("category") or "other"
+        expense_cats[cat] = expense_cats.get(cat, 0) + t.get("amount", 0)
+    expense_total_for_pct = total_expenses or 1
+    expense_breakdown = [
+        {
+            "category": k,
+            "amount": v,
+            "pct": round(v / expense_total_for_pct * 100, 1),
+        }
+        for k, v in sorted(expense_cats.items(), key=lambda x: -x[1])
+    ]
+
+    # ── Compared expenses vs last month ───────────────────────────────────
+    prev_expenses = sum(t.get("amount", 0) for t in prev_txns if not _is_income(t))
+    compared_expenses_pct = 0
+    if prev_expenses > 0:
+        compared_expenses_pct = round(total_expenses / prev_expenses * 100)
+
+    # ── Yearly monthly summaries ──────────────────────────────────────────
+    year_start = datetime.datetime(year, 1, 1, 0, 0, 0)
+    year_end = datetime.datetime(year, 12, 31, 23, 59, 59)
+    year_cursor = db.transactions.find({
+        "user_id": user_id,
+        "created_at": {"$gte": year_start, "$lte": year_end}
+    })
+    year_txns = await year_cursor.to_list(length=10000)
+
+    yearly_months = []
+    for m in range(1, 13):
+        m_income = 0
+        m_expenses = 0
+        for t in year_txns:
+            d = t.get("created_at")
+            if d and d.month == m:
+                if _is_income(t):
+                    m_income += t.get("amount", 0)
+                else:
+                    m_expenses += t.get("amount", 0)
+        yearly_months.append({
+            "month": m,
+            "month_name": calendar.month_abbr[m],
+            "income": m_income,
+            "expenses": m_expenses,
+            "net": m_income - m_expenses,
+        })
+
+    # ── Transaction list with daily grouping ──────────────────────────────
+    transactions_by_day = {}
+    for t in txns:
+        d = t.get("created_at")
+        if not d:
+            continue
+        day_key = d.strftime("%Y-%m-%d")
+        if day_key not in transactions_by_day:
+            transactions_by_day[day_key] = {
+                "date": day_key,
+                "day": d.day,
+                "weekday": calendar.day_abbr[d.weekday()],
+                "income": 0,
+                "expenses": 0,
+                "transactions": [],
+            }
+        td = dict(t)
+        if "_id" in td:
+            td["id"] = str(td.pop("_id"))
+        for k, v in td.items():
+            if isinstance(v, datetime.datetime):
+                td[k] = v.isoformat()
+        is_inc = _is_income(t)
+        amt = t.get("amount", 0)
+        if is_inc:
+            transactions_by_day[day_key]["income"] += amt
+        else:
+            transactions_by_day[day_key]["expenses"] += amt
+        td["is_income"] = is_inc
+        transactions_by_day[day_key]["transactions"].append(td)
+
+    # Sort days descending
+    daily_groups = sorted(transactions_by_day.values(), key=lambda x: x["date"], reverse=True)
+
+    # ── Source breakdown ──────────────────────────────────────────────────
+    companion_total = sum(t.get("amount", 0) for t in expense_txns if t.get("source", "").startswith("companion"))
+    manual_total = sum(t.get("amount", 0) for t in expense_txns if t.get("source") == "manual")
+
+    # ── Top merchants (by total expense amount) ───────────────────────────
+    merchant_totals: dict[str, int] = {}
+    merchant_counts: dict[str, int] = {}
+    for t in expense_txns:
+        name = t.get("mapped_merchant_name") or t.get("raw_merchant_string") or "Unknown"
+        merchant_totals[name] = merchant_totals.get(name, 0) + t.get("amount", 0)
+        merchant_counts[name] = merchant_counts.get(name, 0) + 1
+    top_merchants = [
+        {"name": k, "amount": v, "count": merchant_counts.get(k, 0)}
+        for k, v in sorted(merchant_totals.items(), key=lambda x: -x[1])
+    ][:10]
+
+    # ── Hourly spending heatmap (0-23 hours) ──────────────────────────────
+    hourly = [0] * 24
+    for t in expense_txns:
+        d = t.get("created_at")
+        if d:
+            hourly[d.hour] += t.get("amount", 0)
+    hourly_data = [{"hour": h, "amount": hourly[h]} for h in range(24)]
+
+    # ── Day-of-week spending distribution ─────────────────────────────────
+    dow_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    dow_totals = [0] * 7
+    dow_counts = [0] * 7
+    for t in expense_txns:
+        d = t.get("created_at")
+        if d:
+            dow_totals[d.weekday()] += t.get("amount", 0)
+            dow_counts[d.weekday()] += 1
+    day_of_week_data = [
+        {"day": dow_names[i], "amount": dow_totals[i], "count": dow_counts[i]}
+        for i in range(7)
+    ]
+
+    # ── Average daily spend ───────────────────────────────────────────────
+    active_days = sum(1 for d in daily.values() if d["expenses"] > 0)
+    avg_daily_expense = round(total_expenses / active_days) if active_days > 0 else 0
+
+    # ── Biggest single expense transaction ────────────────────────────────
+    biggest_txn = None
+    if expense_txns:
+        bt = max(expense_txns, key=lambda t: t.get("amount", 0))
+        biggest_txn = {
+            "amount": bt.get("amount", 0),
+            "merchant": bt.get("mapped_merchant_name") or bt.get("raw_merchant_string", "Unknown"),
+            "category": bt.get("category", "other"),
+            "date": bt.get("created_at").isoformat() if bt.get("created_at") else None,
+        }
+
+    # ── Transaction counts ────────────────────────────────────────────────
+    txn_count = len(txns)
+    expense_count = len(expense_txns)
+    income_count = len(income_txns)
+
+    # ── Spending streak (consecutive days with expenses) ──────────────────
+    current_streak = 0
+    max_streak = 0
+    streak = 0
+    for day_num in range(1, days_in_month + 1):
+        if daily[day_num]["expenses"] > 0:
+            streak += 1
+            max_streak = max(max_streak, streak)
+        else:
+            streak = 0
+    # Current streak from today backwards
+    today_day = now.day if now.month == month and now.year == year else days_in_month
+    cs = 0
+    for d in range(today_day, 0, -1):
+        if daily[d]["expenses"] > 0:
+            cs += 1
+        else:
+            break
+    current_streak = cs
+
+    # ── Daily expense bar chart data (amounts for each day of month) ──────
+    daily_expense_bars = [
+        {"day": d, "amount": daily[d]["expenses"], "label": f"{d}"}
+        for d in range(1, days_in_month + 1)
+    ]
+
+    return {
+        "month": month,
+        "year": year,
+        "days_in_month": days_in_month,
+        "summary": {
+            "income": total_income,
+            "expenses": total_expenses,
+            "net": total_net,
+        },
+        "daily": daily_list,
+        "weeks": weeks,
+        "income_breakdown": income_breakdown,
+        "expense_breakdown": expense_breakdown,
+        "compared_expenses_pct": compared_expenses_pct,
+        "yearly_months": yearly_months,
+        "daily_groups": daily_groups,
+        "source_breakdown": {
+            "companion": companion_total,
+            "manual": manual_total,
+        },
+        "top_merchants": top_merchants,
+        "hourly_data": hourly_data,
+        "day_of_week_data": day_of_week_data,
+        "avg_daily_expense": avg_daily_expense,
+        "biggest_txn": biggest_txn,
+        "txn_counts": {
+            "total": txn_count,
+            "expenses": expense_count,
+            "income": income_count,
+        },
+        "streaks": {
+            "current": current_streak,
+            "max": max_streak,
+        },
+        "daily_expense_bars": daily_expense_bars,
+    }

@@ -219,6 +219,7 @@ export async function getAiTravelCoach({ data }: { data: { route_id: string; mod
   });
 }
 
-
-
+export async function getStats(month: number, year: number) {
+  return apiRequest(`/api/insights/stats?month=${month}&year=${year}`);
+}
 

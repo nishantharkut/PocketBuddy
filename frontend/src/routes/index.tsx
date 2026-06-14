@@ -1,6 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, User, ShoppingBag, Link as LinkIcon, ChevronRight, Sun, Moon, Menu, X } from "lucide-react";
+import {
+  Sparkles, User, ShoppingBag, Link as LinkIcon, ChevronRight, Sun, Moon, Menu, X,
+  Smartphone, Map, Zap, ShoppingCart, CalendarCheck, Bell,
+  Banknote, Utensils, Lock, Brain, Handshake, GraduationCap, WifiOff,
+  Globe, Server, Database, HardDrive, Network, Layers, Leaf,
+  Check, Star, ArrowRight,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   ssr: false,
@@ -160,14 +167,14 @@ function DashboardMockup() {
           </div>
           {/* AI Alert */}
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5 mb-2">
-            <div className="text-[7px] text-[#C27D56] tracking-wider font-mono mb-1">⚡ AI GUARD · BEDROCK</div>
+            <div className="flex items-center gap-1 text-[7px] text-[#C27D56] tracking-wider font-mono mb-1"><Zap className="h-2 w-2" /> AI GUARD · BEDROCK</div>
             <div className="text-[9px] text-foreground leading-relaxed">BH-2 Night Canteen: Egg Paratha <span className="text-[#C27D56] font-bold">₹45</span> · Open till 2AM</div>
           </div>
           {/* Pool */}
           <div className="bg-card border border-border border-l-2 border-l-[#F7EC13] rounded-lg p-2.5">
             <div className="flex justify-between">
               <div>
-                <div className="text-[8px] text-pb-amber font-mono tracking-wider">🛒 BLINKIT POOL</div>
+                <div className="flex items-center gap-1 text-[8px] text-pb-amber font-mono tracking-wider"><ShoppingCart className="h-2 w-2" /> BLINKIT POOL</div>
                 <div className="text-[9px] text-muted-foreground mt-0.5">₹165/₹199 min · 4 members</div>
               </div>
               <div className="text-[8px] text-muted-foreground font-mono">06:14</div>
@@ -180,12 +187,12 @@ function DashboardMockup() {
 }
 
 // ── Feature card ───────────────────────────────────────────────────────────
-function FeatureCard({ icon, title, description, accent, delay }: { icon: string; title: string; description: string; accent: string; delay: number }) {
+function FeatureCard({ icon: Icon, title, description, accent, delay }: { icon: LucideIcon; title: string; description: string; accent: string; delay: number }) {
   const { ref, inView } = useInView();
   return (
     <div ref={ref} className="relative bg-card border border-border rounded-xl p-5 md:p-6 overflow-hidden transition-all duration-300" style={{ borderTop: `2px solid ${accent}`, opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(28px)", transition: `opacity 0.7s ease ${delay}ms, transform 0.7s ease ${delay}ms` }}>
       <div className="absolute top-0 left-0 right-0 h-24 pointer-events-none" style={{ background: `radial-gradient(ellipse at 50% -20%, ${accent}15, transparent 70%)` }} />
-      <div className="text-2xl mb-3">{icon}</div>
+      <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: `${accent}1a`, color: accent }}><Icon className="h-5 w-5" /></div>
       <h3 className="text-sm font-bold text-foreground mb-2 tracking-tight">{title}</h3>
       <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
     </div>
@@ -214,6 +221,24 @@ function SectionLabel({ text }: { text: string }) {
 // ── Section heading ────────────────────────────────────────────────────────
 function SectionHeading({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <h2 className={`text-2xl sm:text-3xl md:text-4xl font-black leading-tight text-foreground uppercase tracking-tight ${className}`}>{children}</h2>;
+}
+
+// ── Architecture flow path ───────────────────────────────────────────────────
+function FlowPath({ label, nodes, accent }: { label: string; nodes: string[]; accent: string }) {
+  const { ref, inView } = useInView();
+  return (
+    <div ref={ref} className="bg-card border border-border rounded-2xl p-5 sm:p-6 shadow-sm overflow-hidden transition-all duration-700" style={{ borderTop: `2px solid ${accent}`, opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(18px)" }}>
+      <p className="text-[9px] tracking-widest font-mono mb-4 uppercase" style={{ color: accent }}>{label}</p>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        {nodes.map((node, i) => (
+          <span key={i} className="flex items-center gap-2">
+            <span className="rounded-md border border-border bg-surface-raised px-2.5 py-1 text-[10px] sm:text-[11px] font-bold text-foreground whitespace-nowrap">{node}</span>
+            {i < nodes.length - 1 && <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground/50" />}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── Main landing page ──────────────────────────────────────────────────────
@@ -250,12 +275,12 @@ function LandingPage() {
   }, []);
 
   const features = [
-    { icon: "📲", title: "Headless UPI Ingestion", description: "A background Android connector silently intercepts UPI push notifications from GPay, PhonePe & Paytm ── zero manual entry, ever.", accent: "#8C7853", delay: 0 },
-    { icon: "🗺️", title: "Crowdsourced Merchant Mapping", description: "Raw strings like SHREE_BALAJI_ENT resolve into 'Hostel 1 Night Canteen' via 1-tap crowd classification, shared globally across campus.", accent: "#C27D56", delay: 100 },
-    { icon: "⚡", title: "Geofenced AI Guard", description: "Amazon Bedrock analyzes your runway against a live campus food database to surface hyper-local, cost-effective meal alternatives.", accent: "#D9A05B", delay: 200 },
-    { icon: "🛒", title: "Wing Cart Pooler", description: "Open a Blinkit/Zepto pool, share it on WhatsApp, let roommates add items ── delivery fees split automatically. No install needed.", accent: "#F7EC13", delay: 0 },
-    { icon: "📅", title: "Exam-Week Check-In", description: "If no food transaction is detected for 16+ hours during exam week, PocketBuddy pings you and suggests the nearest open campus canteen.", accent: "#5E17EB", delay: 100 },
-    { icon: "🔔", title: "Subscription Collision Guard", description: "Auto-detects recurring Spotify, YouTube & gaming debits, then flags exact days when they'll slice your food runway to dangerous levels.", accent: "#FC8019", delay: 200 },
+    { icon: Smartphone, title: "Headless UPI Ingestion", description: "A background Android connector silently intercepts UPI push notifications from GPay, PhonePe & Paytm ── zero manual entry, ever.", accent: "#8C7853", delay: 0 },
+    { icon: Map, title: "Crowdsourced Merchant Mapping", description: "Raw strings like SHREE_BALAJI_ENT resolve into 'Hostel 1 Night Canteen' via 1-tap crowd classification, shared globally across campus.", accent: "#C27D56", delay: 100 },
+    { icon: Zap, title: "Geofenced AI Guard", description: "Amazon Bedrock analyzes your runway against a live campus food database to surface hyper-local, cost-effective meal alternatives.", accent: "#D9A05B", delay: 200 },
+    { icon: ShoppingCart, title: "Wing Cart Pooler", description: "Open a Blinkit/Zepto pool, share it on WhatsApp, let roommates add items ── delivery fees split automatically. No install needed.", accent: "#F7EC13", delay: 0 },
+    { icon: CalendarCheck, title: "Exam-Week Check-In", description: "If no food transaction is detected for 16+ hours during exam week, PocketBuddy pings you and suggests the nearest open campus canteen.", accent: "#5E17EB", delay: 100 },
+    { icon: Bell, title: "Subscription Collision Guard", description: "Auto-detects recurring Spotify, YouTube & gaming debits, then flags exact days when they'll slice your food runway to dangerous levels.", accent: "#FC8019", delay: 200 },
   ];
 
   const faqs = [
@@ -279,10 +304,10 @@ function LandingPage() {
   ];
 
   const problems = [
-    { icon: "💸", stat: "₹800", sub: "avg wasted monthly on delivery surge fees by hostel students", color: "#FC8019" },
-    { icon: "🍽️", stat: "3 in 5", sub: "students skip a meal during exam week due to financial anxiety", color: "#ef4444" },
-    { icon: "📱", stat: "94%", sub: "of students abandon manual finance apps within 2 weeks", color: "#f59e0b" },
-    { icon: "🌙", stat: "₹450", sub: "spent late-night per month on impulse delivery orders", color: "#5E17EB" },
+    { icon: Banknote, stat: "₹800", sub: "avg wasted monthly on delivery surge fees by hostel students", color: "#FC8019" },
+    { icon: Utensils, stat: "3 in 5", sub: "students skip a meal during exam week due to financial anxiety", color: "#ef4444" },
+    { icon: Smartphone, stat: "94%", sub: "of students abandon manual finance apps within 2 weeks", color: "#f59e0b" },
+    { icon: Moon, stat: "₹450", sub: "spent late-night per month on impulse delivery orders", color: "#5E17EB" },
   ];
 
   const testimonials = [
@@ -430,11 +455,11 @@ function LandingPage() {
             <SectionHeading>Indian hostel students are financially<br /><span className="text-muted-foreground/60">flying blind, every single month.</span></SectionHeading>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {problems.map(({ icon, stat, sub, color }) => {
+            {problems.map(({ icon: Icon, stat, sub, color }) => {
               const { ref, inView } = useInView();
               return (
                 <div key={stat} ref={ref} className="bg-card border border-border rounded-2xl p-6 text-center transition-all duration-700" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(24px)" }}>
-                  <div className="text-3xl mb-3">{icon}</div>
+                  <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: `${color}1a`, color }}><Icon className="h-5 w-5" /></div>
                   <div className="text-3xl font-extrabold tracking-tight mb-2 leading-none" style={{ color }}>{stat}</div>
                   <p className="text-xs text-muted-foreground leading-relaxed">{sub}</p>
                 </div>
@@ -503,7 +528,7 @@ function LandingPage() {
                 <th className="p-4 sm:p-5 text-muted-foreground font-bold uppercase tracking-wider bg-card">Feature</th>
                 {["PocketBuddy", "Fi Money", "Mint / Walnut", "Splitwise"].map((app, i) => (
                   <th key={app} className="p-4 sm:p-5 text-center font-black border-l border-border bg-card" style={{ color: i === 0 ? "var(--primary)" : "var(--muted-foreground)" }}>
-                    {i === 0 && <span className="block text-[8px] text-pb-green tracking-widest mb-0.5">★ THIS</span>}
+                    {i === 0 && <span className="flex items-center justify-center gap-1 text-[8px] text-pb-green tracking-widest mb-0.5"><Star className="h-2.5 w-2.5 fill-current" /> THIS</span>}
                     {app}
                   </th>
                 ))}
@@ -517,7 +542,7 @@ function LandingPage() {
                     <td className="p-4 sm:p-5 font-semibold text-foreground" style={{ background: idx % 2 === 0 ? "var(--background)" : "transparent" }}>{feature}</td>
                     {vals.map((v, ci) => (
                       <td key={ci} className="p-4 sm:p-5 text-center border-l border-border font-bold text-xs" style={{ background: ci === 0 ? (idx % 2 === 0 ? "rgba(255,107,0,0.05)" : "rgba(255,107,0,0.02)") : (idx % 2 === 0 ? "var(--background)" : "transparent") }}>
-                        {v ? <span className="text-pb-green text-sm">✓</span> : <span className="text-border text-xs">—</span>}
+                        {v ? <Check className="mx-auto h-4 w-4 text-pb-green" /> : <span className="text-border text-xs">—</span>}
                       </td>
                     ))}
                   </tr>
@@ -530,15 +555,15 @@ function LandingPage() {
         {/* 3 differentiators */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-12">
           {[
-            { icon: "🔒", title: "No Bank Access Ever", body: "PocketBuddy never asks for your bank login, MPIN, or OTP. It works entirely from UPI push notification strings ── publicly visible text on your own device.", accent: "#16a34a" },
-            { icon: "🧠", title: "Campus-Native Intelligence", body: "Unlike generic finance apps, PocketBuddy's AI context is scoped to real campus prices, mess schedules, and hostel geography ── not internet averages.", accent: "#C27D56" },
-            { icon: "🤝", title: "Network Effects by Design", body: "Every merchant classification, every pool created, every check-in improves the experience for every other student on campus. It compounds.", accent: "#5E17EB" },
-          ].map(({ icon, title, body, accent }) => {
+            { icon: Lock, title: "No Bank Access Ever", body: "PocketBuddy never asks for your bank login, MPIN, or OTP. It works entirely from UPI push notification strings ── publicly visible text on your own device.", accent: "#16a34a" },
+            { icon: Brain, title: "Campus-Native Intelligence", body: "Unlike generic finance apps, PocketBuddy's AI context is scoped to real campus prices, mess schedules, and hostel geography ── not internet averages.", accent: "#C27D56" },
+            { icon: Handshake, title: "Network Effects by Design", body: "Every merchant classification, every pool created, every check-in improves the experience for every other student on campus. It compounds.", accent: "#5E17EB" },
+          ].map(({ icon: Icon, title, body, accent }) => {
             const { ref, inView } = useInView();
             return (
               <div key={title} ref={ref} className="relative bg-card border border-border rounded-2xl p-6 overflow-hidden transition-all duration-750" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(24px)" }}>
                 <div className="absolute top-0 right-0 w-20 h-20 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${accent}15, transparent 70%)` }} />
-                <div className="text-2xl mb-3">{icon}</div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: `${accent}1a`, color: accent }}><Icon className="h-5 w-5" /></div>
                 <h4 className="text-sm font-bold text-foreground mb-2">{title}</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">{body}</p>
               </div>
@@ -605,25 +630,30 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* ── TECH STACK ───────────────────────────────────────────────────── */}
+      {/* ── ARCHITECTURE ─────────────────────────────────────────────────── */}
       <section className="py-20 px-4 sm:px-6 max-w-[1100px] mx-auto">
         <div className="text-center mb-14">
           <SectionLabel text="Architecture" />
-          <SectionHeading>Built for speed.<br /><span className="text-muted-foreground/60">Built to scale.</span></SectionHeading>
+          <SectionHeading>Built on AWS.<br /><span className="text-muted-foreground/60">Built to scale.</span></SectionHeading>
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-[540px] mx-auto mt-4 leading-relaxed">A hybrid cloud stack: CloudFront fronts a static React app on S3, the existing FastAPI backend on EC2, and a burst-safe serverless pipeline for mobile payment ingestion.</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+
+        {/* Service grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {[
-            { layer: "AI Engine", tech: "Amazon Bedrock", color: "#FF9900" },
-            { layer: "Frontend", tech: "React + TanStack", color: "#61DAFB" },
-            { layer: "Backend", tech: "FastAPI (Python)", color: "#009688" },
-            { layer: "Database", tech: "Supabase + MongoDB", color: "#3ECF8E" },
-            { layer: "Native Hook", tech: "Android (Kotlin)", color: "#7B52FF" },
-            { layer: "Tunneling", tech: "ngrok (Sandbox)", color: "#1F5FFF" },
-          ].map(({ layer, tech, color }) => {
+            { layer: "CDN + Edge", tech: "CloudFront", icon: Globe, color: "#FF9900" },
+            { layer: "Static Frontend", tech: "S3 + React/Vite", icon: HardDrive, color: "#3ECF8E" },
+            { layer: "Mobile Ingest API", tech: "API Gateway", icon: Network, color: "#CC2264" },
+            { layer: "Serverless Compute", tech: "Lambda (Ingest + Processor)", icon: Zap, color: "#ED7100" },
+            { layer: "Event Buffer", tech: "SQS Queue", icon: Layers, color: "#CC2264" },
+            { layer: "Ingest Ledger", tech: "DynamoDB", icon: Database, color: "#4053D6" },
+            { layer: "App Backend", tech: "EC2 + FastAPI", icon: Server, color: "#FF9900" },
+            { layer: "Main Database", tech: "MongoDB Atlas", icon: Leaf, color: "#00ED64" },
+          ].map(({ layer, tech, icon: Icon, color }) => {
             const { ref, inView } = useInView();
             return (
               <div key={tech} ref={ref} className="bg-card border border-border rounded-xl p-4 transition-all duration-600" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(18px)" }}>
-                <div className="w-2 h-2 rounded-full mb-3" style={{ background: color, boxShadow: `0 0 10px ${color}66` }} />
+                <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: `${color}1a`, color }}><Icon className="h-4 w-4" /></div>
                 <div className="text-[9px] text-muted-foreground tracking-wider font-mono uppercase mb-1">{layer}</div>
                 <div className="text-xs sm:text-sm font-bold text-foreground">{tech}</div>
               </div>
@@ -631,14 +661,25 @@ function LandingPage() {
           })}
         </div>
 
-        {/* Architecture flow wrapper */}
-        <div className="mt-8 bg-card border border-border rounded-2xl p-5 sm:p-6 shadow-sm overflow-hidden">
-          <p className="text-[9px] text-[#C27D56] tracking-widest font-mono mb-4 uppercase">DATA FLOW PATH</p>
-          <div className="flex flex-wrap items-center gap-2 text-[10px] sm:text-xs text-muted-foreground font-semibold">
-            {["Android Companion", "→", "UPI Push String", "→", "FastAPI Webhook", "→", "Bedrock Extraction", "→", "MongoDB", "→", "React Dashboard"].map((item, i) => (
-              <span key={i} style={{ color: item === "→" ? "var(--border)" : i === 0 ? "#16a34a" : i === 10 ? "var(--primary)" : "var(--muted-foreground)" }}>{item}</span>
-            ))}
-          </div>
+        {/* Flow paths */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-8">
+          <FlowPath
+            label="Browser App Path"
+            accent="#FF9900"
+            nodes={["Browser", "CloudFront", "S3 / EC2 FastAPI", "MongoDB Atlas"]}
+          />
+          <FlowPath
+            label="Mobile Ingest Path"
+            accent="#00C16A"
+            nodes={["Android", "CloudFront", "API Gateway", "Lambda", "SQS", "Lambda", "DynamoDB", "EC2 / Mongo"]}
+          />
+        </div>
+
+        {/* Region note */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
+          <span className="flex items-center gap-1.5"><Globe className="h-3 w-3 text-[#C27D56]" /> Region: ap-south-1 · Mumbai</span>
+          <span className="flex items-center gap-1.5"><Lock className="h-3 w-3 text-[#C27D56]" /> Private S3 via CloudFront OAC</span>
+          <span className="flex items-center gap-1.5"><Layers className="h-3 w-3 text-[#C27D56]" /> Idempotent SQS dedupe</span>
         </div>
       </section>
 
@@ -677,8 +718,15 @@ function LandingPage() {
           </Link>
           {/* Trust badges */}
           <div className="flex justify-center gap-4 sm:gap-6 mt-8 flex-wrap">
-            {["🔒 No bank access", "📱 Works offline", "🎓 Built for India", "⚡ Setup in 60s"].map((b) => (
-              <span key={b} className="text-[10px] sm:text-xs text-muted-foreground font-semibold font-mono">{b}</span>
+            {[
+              { icon: Lock, label: "No bank access" },
+              { icon: WifiOff, label: "Works offline" },
+              { icon: GraduationCap, label: "Built for India" },
+              { icon: Zap, label: "Setup in 60s" },
+            ].map(({ icon: Icon, label }) => (
+              <span key={label} className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted-foreground font-semibold font-mono">
+                <Icon className="h-3.5 w-3.5 text-[#C27D56]" />{label}
+              </span>
             ))}
           </div>
         </div>

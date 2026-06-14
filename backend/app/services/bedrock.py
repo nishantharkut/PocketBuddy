@@ -9,15 +9,22 @@ from app.core.config import settings
 def _bedrock_client():
     import boto3
 
-    return boto3.client(
-        "bedrock-runtime",
-        region_name=settings.AWS_REGION,
-        config=Config(
+    client_kwargs: dict[str, Any] = {
+        "region_name": settings.BEDROCK_REGION or settings.AWS_REGION,
+        "config": Config(
             connect_timeout=30,
             read_timeout=3600,
             retries={"max_attempts": 1},
         ),
-    )
+    }
+
+    if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+        client_kwargs["aws_access_key_id"] = settings.AWS_ACCESS_KEY_ID
+        client_kwargs["aws_secret_access_key"] = settings.AWS_SECRET_ACCESS_KEY
+        if settings.AWS_SESSION_TOKEN:
+            client_kwargs["aws_session_token"] = settings.AWS_SESSION_TOKEN
+
+    return boto3.client("bedrock-runtime", **client_kwargs)
 
 
 def _extract_text(response: dict[str, Any]) -> str:

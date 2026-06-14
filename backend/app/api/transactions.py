@@ -30,6 +30,14 @@ class UpdateTxnReq(BaseModel):
     mapped_merchant_name: Optional[str] = None
     category: Optional[str] = None
 
+def clean_transaction_label(value: str, field_name: str, max_length: int) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail=f"{field_name} cannot be empty")
+    if len(cleaned) > max_length:
+        raise HTTPException(status_code=400, detail=f"{field_name} is too long")
+    return cleaned
+
 @router.get("")
 async def get_transactions(user_id: str = Depends(get_current_user)):
     db = get_db()
@@ -94,13 +102,15 @@ async def identify_merchant(txn_id: str, req: IdentifyReq, user_id: str = Depend
         raise HTTPException(status_code=404, detail="Transaction not found")
         
     raw_string = txn["raw_merchant_string"]
+    display_name = clean_transaction_label(req.display_name, "Display name", 80)
+    category = clean_transaction_label(req.category, "Category", 40)
     
     # Update directory
     await db.merchant_directory.update_one(
         {"raw_string": raw_string},
         {"$set": {
-            "display_name": req.display_name,
-            "category": req.category,
+            "display_name": display_name,
+            "category": category,
             "verified": True,
             "updated_at": datetime.datetime.utcnow()
         }},
@@ -112,8 +122,8 @@ async def identify_merchant(txn_id: str, req: IdentifyReq, user_id: str = Depend
         {"user_id": user_id, "raw_merchant_string": raw_string},
         {"$set": {
             "is_mapped": True,
-            "mapped_merchant_name": req.display_name,
-            "category": req.category
+            "mapped_merchant_name": display_name,
+            "category": category
         }}
     )
     
@@ -128,10 +138,14 @@ async def update_transaction(txn_id: str, req: UpdateTxnReq, user_id: str = Depe
         
     update_data = {}
     if req.mapped_merchant_name is not None:
-        update_data["mapped_merchant_name"] = req.mapped_merchant_name
+        update_data["mapped_merchant_name"] = clean_transaction_label(
+            req.mapped_merchant_name,
+            "Display name",
+            80,
+        )
         update_data["is_mapped"] = True
     if req.category is not None:
-        update_data["category"] = req.category
+        update_data["category"] = clean_transaction_label(req.category, "Category", 40)
         
     if update_data:
         await db.transactions.update_one(

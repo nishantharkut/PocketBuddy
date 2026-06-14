@@ -136,6 +136,7 @@ function PoolDetail() {
 
   // Track toasting status to avoid spamming on 3-second polls
   const [hasToastedStatus, setHasToastedStatus] = useState<string | null>(null);
+  const [hasPrefilledName, setHasPrefilledName] = useState(false);
   useEffect(() => {
     if (pool && hasToastedStatus !== pool.status) {
       setHasToastedStatus(pool.status);
@@ -156,6 +157,30 @@ function PoolDetail() {
       setHostUpi(pool.upi_id ?? profile?.upi_id ?? "");
     }
   }, [pool, profile]);
+
+  // Pre-fill roommate name input automatically
+  useEffect(() => {
+    if (pool && user && !hasPrefilledName) {
+      const isHostUser = pool.host_id === user.id;
+      const cachedName = localStorage.getItem("pocketbuddy_pool_name");
+      const initialName = isHostUser
+        ? (cachedName || pool.created_by_name || "")
+        : (cachedName || user.fullName || "");
+
+      setName(initialName);
+      setHasPrefilledName(true);
+
+      // Self-heal: If host has a different name than pool.created_by_name, sync it to database
+      if (isHostUser && initialName && pool.created_by_name !== initialName) {
+        updateCartPool({
+          id,
+          data: { created_by_name: initialName }
+        }).then(() => {
+          qc.invalidateQueries({ queryKey: ["pool", id] });
+        }).catch(() => {});
+      }
+    }
+  }, [pool, user, hasPrefilledName, id, qc]);
 
   if (!pool)
     return (
@@ -220,7 +245,11 @@ function PoolDetail() {
         pName === "host" || 
         pName === hName || 
         (hName && pName && (hName.includes(pName) || pName.includes(hName))) ||
-        (user && pool.host_id === user.id && (pName === uName || (uName && pName && (uName.includes(pName) || pName.includes(uName)))));
+        (user && pool.host_id === user.id && (
+          pName === uName || 
+          (uName && pName && (uName.includes(pName) || pName.includes(uName))) ||
+          (name && pName === name.trim().toLowerCase())
+        ));
 
       splitBreakdown[p] = {
         name: p,
@@ -249,7 +278,11 @@ function PoolDetail() {
         pName === "host" || 
         pName === hName || 
         (hName && pName && (hName.includes(pName) || pName.includes(hName))) ||
-        (user && pool.host_id === user.id && (pName === uName || (uName && pName && (uName.includes(pName) || pName.includes(uName)))));
+        (user && pool.host_id === user.id && (
+          pName === uName || 
+          (uName && pName && (uName.includes(pName) || pName.includes(uName))) ||
+          (name && pName === name.trim().toLowerCase())
+        ));
 
       splitBreakdown[p] = {
         name: p,
@@ -283,6 +316,14 @@ function PoolDetail() {
     localStorage.setItem("pocketbuddy_pool_name", name.trim());
     setBusy(true);
     try {
+      if (isHost && name.trim() !== pool.created_by_name) {
+        await updateCartPool({
+          id,
+          data: { created_by_name: name.trim() }
+        });
+        qc.invalidateQueries({ queryKey: ["pool", id] });
+      }
+
       await insertCartPoolItem({
         data: {
           pool_id: id,

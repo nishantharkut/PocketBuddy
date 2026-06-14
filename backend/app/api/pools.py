@@ -33,6 +33,7 @@ class PoolUpdateReq(BaseModel):
     final_discount: Optional[int] = None
     cancellation_reason: Optional[str] = None
     checkout_notes: Optional[str] = None
+    created_by_name: Optional[str] = None
 
 class PaymentConfirmReq(BaseModel):
     roommate_name: str
@@ -186,12 +187,14 @@ async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user
     db = get_db()
     pool_id = str(uuid.uuid4())
 
-    user = await db.users.find_one({"_id": user_id})
-    host_name = user.get("full_name") if user else None
-    
     req_name = (req.created_by_name or "").strip()
-    if not host_name or host_name.strip().lower() == "you":
-        host_name = req_name if req_name.lower() != "you" else "Host"
+    if req_name and req_name.lower() != "you" and req_name.lower() != "host":
+        host_name = req_name
+    else:
+        user = await db.users.find_one({"_id": user_id})
+        host_name = user.get("full_name") if user else None
+        if not host_name or host_name.strip().lower() == "you":
+            host_name = "Host"
         
     created_by_name = clean_text(host_name, "Host name")
 
@@ -260,6 +263,8 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
         updates["final_discount"] = validate_paise_amount(
             updates["final_discount"], "Final discount", MAX_FEE_PAISE, allow_zero=True
         )
+    if "created_by_name" in updates:
+        updates["created_by_name"] = clean_text(updates["created_by_name"], "Host name")
 
     # Check if transitioning to 'completed' to auto-log host split transaction
     if updates.get("status") == "completed" and pool.get("status") != "completed":

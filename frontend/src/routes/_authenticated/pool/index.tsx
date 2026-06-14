@@ -141,7 +141,11 @@ function PoolList() {
           <SheetContent side="bottom" className="max-h-[85vh] overflow-auto" id="sheet-create-pool">
             <CreatePoolForm
               userId={user?.id}
-              userName={user?.fullName || "Host"}
+              userName={
+                (typeof window !== "undefined" && localStorage.getItem("pocketbuddy_pool_name")) ||
+                user?.fullName ||
+                "Host"
+              }
               wing={profile?.wing_label ?? ""}
               onDone={() => {
                 setOpen(false);

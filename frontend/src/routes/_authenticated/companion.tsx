@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, Copy, RefreshCw, Save } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Copy, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
-import { relativeTime } from "@/lib/format";
+import { absoluteDate, relativeTime } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/companion")({
   ssr: false,
@@ -42,6 +42,7 @@ function CompanionPage() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const [pairing, setPairing] = useState<string>("");
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const { data: profile, refetch: refetchProfile } = useQuery<Profile>({
     queryKey: ["profile", user?.id],
@@ -62,11 +63,18 @@ function CompanionPage() {
   const hasRealSync = Boolean(profile?.companion_last_sync || syncLogs.length > 0);
   const isConnected = Boolean(profile?.companion_paired || hasRealSync);
   const companionWebhookUrl = getCompanionWebhookUrl();
-  const connectorConfig = [
+  const pairingForDisplay = profile?.pairing_code || pairing;
+  const isPairingSaved = Boolean(profile?.pairing_code && profile.pairing_code === pairingForDisplay);
+
+  function makeConnectorConfig(pairingCode: string) {
+    return [
     `POCKETBUDDY_WEBHOOK_URL=${companionWebhookUrl}`,
-    `POCKETBUDDY_WEBHOOK_TOKEN=${pairing || ""}`,
+      `POCKETBUDDY_WEBHOOK_TOKEN=${pairingCode}`,
     `POCKETBUDDY_USER_ID=${user?.id ?? ""}`,
-  ].join("\n");
+    ].join("\n");
+  }
+
+  const connectorConfig = makeConnectorConfig(pairingForDisplay);
 
   useEffect(() => {
     if (profile?.pairing_code) setPairing(profile.pairing_code);
@@ -110,18 +118,26 @@ function CompanionPage() {
     }
   }
 
-  async function savePairingCode() {
-    if (!user) return;
+  async function savePairingCode(code = pairingForDisplay, showToast = true): Promise<string | null> {
+    if (!user) return null;
+    const nextCode = (code || randomPairingCode()).trim();
+    if (!nextCode) return null;
+
+    if (profile?.pairing_code === nextCode) return nextCode;
+
     try {
       await updateProfile({
         data: {
-          pairing_code: pairing,
+          pairing_code: nextCode,
         },
       });
+      setPairing(nextCode);
       qc.invalidateQueries({ queryKey: ["profile"] });
-      toast.success("Pairing code saved.");
+      if (showToast) toast.success("Pairing token saved.");
+      return nextCode;
     } catch (err: any) {
-      toast.error(err.message || "Failed to save pairing code");
+      toast.error(err.message || "Failed to save pairing token");
+      return null;
     }
   }
 
@@ -145,19 +161,23 @@ function CompanionPage() {
   }
 
   async function copyConnectorConfig() {
+    const savedPairing = await savePairingCode(pairingForDisplay, false);
+    if (!savedPairing) return;
+
+    const configToCopy = makeConnectorConfig(savedPairing);
     let copied = false;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try {
-        await navigator.clipboard.writeText(connectorConfig);
+        await navigator.clipboard.writeText(configToCopy);
         copied = true;
       } catch (err) {}
     }
     if (!copied) {
-      copied = await fallbackCopyText(connectorConfig);
+      copied = await fallbackCopyText(configToCopy);
     }
 
     if (copied) {
-      toast.success("Android config copied.");
+      toast.success("Pairing token saved and Android config copied.");
     } else {
       toast.error("Failed to copy config. Please copy manually.");
     }
@@ -197,6 +217,9 @@ function CompanionPage() {
               <p className="text-[12px] text-muted-foreground">
                 UPI apps: {profile.upi_apps_used?.length ? profile.upi_apps_used.join(", ") : "-"}
               </p>
+              <p className="mt-2 rounded-md bg-surface px-2.5 py-2 text-[12px] text-muted-foreground">
+                Pairing token is active. Android sends this token with each webhook; the backend rejects mismatched tokens.
+              </p>
             </Card>
 
             <div>
@@ -209,25 +232,40 @@ function CompanionPage() {
                     No sync activity yet.
                   </p>
                 )}
-                {syncLogs.map((l) => (
-                  <div
-                    key={l.id}
-                    className="flex items-start justify-between gap-3 rounded-md bg-surface p-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px]">{l.notification_source}</p>
-                      <p className="truncate text-[12px] text-muted-foreground">
-                        {l.notification_preview ?? "Structured event received"}
-                      </p>
+                {syncLogs.map((l) => {
+                  const isOpen = expandedLogId === l.id;
+                  return (
+                    <div key={l.id} className="rounded-md bg-surface p-2.5">
+                      <button
+                        type="button"
+                        className="flex w-full items-start justify-between gap-3 text-left"
+                        onClick={() => setExpandedLogId(isOpen ? null : l.id)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            {isOpen ? (
+                              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            )}
+                            <p className="truncate text-[13px]">{l.notification_source || "notification"}</p>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">
+                            {l.notification_preview ?? "Structured event received"}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <StatusBadge status={l.processing_status} />
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {relativeTime(l.created_at)}
+                          </p>
+                        </div>
+                      </button>
+
+                      {isOpen && <SyncLogDetails log={l} />}
                     </div>
-                    <div className="text-right">
-                      <StatusBadge status={l.processing_status} />
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {relativeTime(l.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -268,10 +306,17 @@ function CompanionPage() {
             </Card>
 
             <div className="text-center">
-              <p className="text-[12px] text-muted-foreground">Your pairing code:</p>
+              <p className="text-[12px] text-muted-foreground">Webhook pairing token:</p>
               <div className="mt-2 inline-block rounded-md bg-surface-raised px-5 py-3 text-[24px] font-bold tracking-[4px] text-primary font-mono">
-                {pairing}
+                {pairingForDisplay}
               </div>
+              <p className="mx-auto mt-2 max-w-sm text-[12px] leading-relaxed text-muted-foreground">
+                This is not display-only. It is saved to your profile and copied into
+                <span className="font-mono"> POCKETBUDDY_WEBHOOK_TOKEN</span>; backend ingest rejects any Android request with a different token.
+              </p>
+              <Badge variant={isPairingSaved ? "outline" : "secondary"} className="mt-2 text-[10px]">
+                {isPairingSaved ? "Saved on backend" : "Will save before copy"}
+              </Badge>
             </div>
 
             <Card className="bg-surface-raised p-4">
@@ -292,9 +337,9 @@ function CompanionPage() {
               </pre>
             </Card>
 
-            <Button variant="outline" className="w-full" onClick={savePairingCode}>
+            <Button variant="outline" className="w-full" onClick={() => savePairingCode()}>
               <Save />
-              Save Pairing Code
+              Save Pairing Token
             </Button>
             <Button
               className="w-full bg-success text-white hover:bg-success/90"
@@ -310,7 +355,63 @@ function CompanionPage() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function SyncLogDetails({ log }: { log: SyncLog }) {
+  const details = [
+    ["Status", humanStatus(log.processing_status)],
+    ["Received", log.created_at ? absoluteDate(log.created_at) : "-"],
+    ["Parsed amount", formatParsedAmount(log.parsed_amount)],
+    ["Parsed merchant", log.parsed_merchant || "-"],
+    ["Transaction reference", log.transaction_reference || log.transaction_id || "-"],
+    ["Device", log.device_name || log.source_app || log.package_name || "-"],
+    ["Package", log.package_name || "-"],
+  ];
+
+  return (
+    <div className="mt-3 rounded-md border border-border bg-background/70 p-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {details.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {label}
+            </p>
+            <p className="mt-0.5 break-words text-[12px] text-foreground">
+              {value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 border-t border-border pt-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Masked notification preview
+        </p>
+        <p className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-muted-foreground">
+          {log.notification_preview || "No notification preview stored."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function formatParsedAmount(value: unknown) {
+  if (value === null || value === undefined || value === "") return "-";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return String(value);
+  return `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(amount)}`;
+}
+
+function humanStatus(status?: string) {
+  if (status === "parsed") return "Tracked";
+  if (status === "pending") return "Processing";
+  if (status === "auto_verified") return "Pool verified";
+  if (status === "received") return "Received credit";
+  if (status === "incomplete") return "Needs review";
+  if (status === "duplicate") return "Duplicate";
+  if (status === "failed") return "Failed";
+  return "Ignored";
+}
+
+function StatusBadge({ status }: { status?: string }) {
   if (status === "parsed")
     return (
       <Badge className="bg-success/20 text-success text-xs">

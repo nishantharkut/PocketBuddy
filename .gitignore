@@ -102,3 +102,9 @@ android/tools/ingest_test_backend/data/
 !.env.example
 
 data/db/
+
+# Local verification/scratch artifacts
+scratch/
+bug_sheet.md
+walkthrough.md
+android/gradle/gradle-daemon-jvm.properties

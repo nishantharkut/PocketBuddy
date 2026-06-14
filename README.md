@@ -122,6 +122,10 @@ The deployed demo uses AWS in two layers:
 1. **Web application path** for the student-facing platform.
 2. **Serverless ingest path** for mobile payment events.
 
+<p align="center">
+  <img src="./docs/assets/pocketbuddy-aws-architecture.png" alt="PocketBuddy AWS architecture" width="920">
+</p>
+
 ```text
 Browser
   -> CloudFront

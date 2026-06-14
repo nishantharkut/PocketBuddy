@@ -568,11 +568,11 @@ function PoolDetail() {
         {isHost && (
           <Card className="p-5 border border-border bg-surface-raised/40 space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase flex items-center gap-1.5">
+              <h3 className="text-xs font-bold text-zinc-400 tracking-[0.2em] uppercase flex items-center gap-1.5 min-w-0">
                 <Shield className="h-3.5 w-3.5" />
                 <span>Host Control Deck</span>
               </h3>
-              <Badge variant="outline" className="text-xs border-primary/35 text-primary font-bold uppercase tracking-wider px-2 py-0.5">
+              <Badge variant="outline" className="text-xs border-primary/35 text-primary font-bold uppercase tracking-wider px-2 py-0.5 whitespace-nowrap shrink-0">
                 Host Mode
               </Badge>
             </div>

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -73,14 +74,14 @@ function Onboarding() {
   const [showCustomUpi, setShowCustomUpi] = useState(false);
 
   // Catalog queries
-  const { data: catalogColleges } = useQuery({
+  const { data: catalogColleges, isLoading: catalogCollegesLoading } = useQuery({
     queryKey: ["catalog", "campuses"],
     enabled: !!user,
     queryFn: () => getCatalog("campuses"),
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: catalogUpi } = useQuery({
+  const { data: catalogUpi, isLoading: catalogUpiLoading } = useQuery({
     queryKey: ["catalog", "payment-providers"],
     enabled: !!user,
     queryFn: () => getCatalog("payment-providers"),
@@ -326,6 +327,12 @@ function Onboarding() {
                 )}
                 {collegeDropdownOpen && (
                   <div className="absolute z-50 mt-1 w-full max-h-48 overflow-auto rounded-md border border-border bg-surface shadow-xl shadow-black/40 py-1">
+                    {catalogCollegesLoading && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full border border-primary/20 border-t-primary animate-spin" />
+                        <span>Loading colleges...</span>
+                      </div>
+                    )}
                     {filteredColleges.map((c: string) => (
                       <button
                         key={c}
@@ -478,18 +485,26 @@ function Onboarding() {
 
             <Field label="UPI Apps You Use">
               <div id="pills-ob-upi" className="flex flex-wrap gap-2">
-                {upiOptions.map((app: string) => {
-                  const on = upiApps.includes(app);
-                  return (
-                    <button
-                      key={app}
-                      onClick={() => toggleUpi(app)}
-                      className={`rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${on ? "bg-primary border-primary text-primary-foreground" : "bg-surface-raised border-border text-muted-foreground hover:text-foreground"}`}
-                    >
-                      {app}
-                    </button>
-                  );
-                })}
+                {catalogUpiLoading ? (
+                  <>
+                    <Skeleton className="h-7 w-16 bg-white/5 rounded-full animate-pulse" />
+                    <Skeleton className="h-7 w-20 bg-white/5 rounded-full animate-pulse" />
+                    <Skeleton className="h-7 w-14 bg-white/5 rounded-full animate-pulse" />
+                  </>
+                ) : (
+                  upiOptions.map((app: string) => {
+                    const on = upiApps.includes(app);
+                    return (
+                      <button
+                        key={app}
+                        onClick={() => toggleUpi(app)}
+                        className={`rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${on ? "bg-primary border-primary text-primary-foreground" : "bg-surface-raised border-border text-muted-foreground hover:text-foreground"}`}
+                      >
+                        {app}
+                      </button>
+                    );
+                  })
+                )}
                 {!showCustomUpi ? (
                   <button
                     onClick={() => setShowCustomUpi(true)}

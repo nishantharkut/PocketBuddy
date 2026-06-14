@@ -95,7 +95,7 @@ function PoolDetail() {
     queryFn: () => getCartPool({ data: { id } }),
   });
 
-  const { data: items } = useQuery({
+  const { data: items, isLoading: itemsLoading } = useQuery({
     queryKey: ["pool-items", id],
     refetchInterval: 3000, // MongoDB polling for real-time reactivity
     queryFn: () => getCartPoolItems({ data: { pool_id: id } }),
@@ -1051,13 +1051,18 @@ function PoolDetail() {
             <ShoppingBag className="h-3.5 w-3.5" />
             <span>Roommate Carts</span>
           </h3>
-          {participants.length === 0 && (
+          {itemsLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full bg-white/5 border-none rounded-xl animate-pulse" />
+              <Skeleton className="h-24 w-full bg-white/5 border-none rounded-xl animate-pulse" />
+            </div>
+          ) : participants.length === 0 ? (
             <p className="text-center py-8 text-xs text-zinc-500 font-semibold uppercase tracking-wider">
               No items in this cart pool yet.
             </p>
-          )}
+          ) : null}
 
-          {Object.entries(grouped).map(([who, its]) => {
+          {!itemsLoading && Object.entries(grouped).map(([who, its]) => {
             const whoActiveItems = its.filter(it => it.is_purchased !== false);
             const whoTotal = whoActiveItems.reduce((s, it) => s + it.estimated_price, 0);
 

@@ -207,19 +207,31 @@ function StatsPage() {
 
         {/* ── Summary Cards ───────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-surface rounded-xl border border-border p-3 text-center">
+          <div className="bg-surface rounded-xl border border-border p-3 text-center flex flex-col justify-center items-center">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Income</p>
-            <p className="text-sm font-black tnum text-[#5DADE2]">{rupees(stats?.summary?.income ?? 0)}</p>
+            {isLoading ? (
+              <Skeleton className="h-4 w-16 bg-white/5 animate-pulse mt-1" />
+            ) : (
+              <p className="text-sm font-black tnum text-[#5DADE2]">{rupees(stats?.summary?.income ?? 0)}</p>
+            )}
           </div>
-          <div className="bg-surface rounded-xl border border-border p-3 text-center">
+          <div className="bg-surface rounded-xl border border-border p-3 text-center flex flex-col justify-center items-center">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Expenses</p>
-            <p className="text-sm font-black tnum text-[#FF6B4A]">{rupees(stats?.summary?.expenses ?? 0)}</p>
+            {isLoading ? (
+              <Skeleton className="h-4 w-16 bg-white/5 animate-pulse mt-1" />
+            ) : (
+              <p className="text-sm font-black tnum text-[#FF6B4A]">{rupees(stats?.summary?.expenses ?? 0)}</p>
+            )}
           </div>
-          <div className="bg-surface rounded-xl border border-border p-3 text-center">
+          <div className="bg-surface rounded-xl border border-border p-3 text-center flex flex-col justify-center items-center">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Net</p>
-            <p className={`text-sm font-black tnum ${netAmount >= 0 ? "text-foreground" : "text-[#FF6B4A]"}`}>
-              {netAmount >= 0 ? "+" : ""}{rupees(Math.abs(netAmount))}
-            </p>
+            {isLoading ? (
+              <Skeleton className="h-4 w-16 bg-white/5 animate-pulse mt-1" />
+            ) : (
+              <p className={`text-sm font-black tnum ${netAmount >= 0 ? "text-foreground" : "text-[#FF6B4A]"}`}>
+                {netAmount >= 0 ? "+" : ""}{rupees(Math.abs(netAmount))}
+              </p>
+            )}
           </div>
         </div>
 

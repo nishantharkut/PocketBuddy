@@ -66,7 +66,7 @@ function SettingsPage() {
     queryFn: () => getProfile(),
   });
 
-  const { data: subs } = useQuery({
+  const { data: subs, isLoading: subsLoading } = useQuery({
     queryKey: ["all-subs", user?.id],
     enabled: !!user,
     queryFn: () => getSubscriptions(),
@@ -613,7 +613,12 @@ function SettingsPage() {
             marginBottom: "24px",
           }}
         >
-          {(subs ?? []).length === 0 ? (
+          {subsLoading ? (
+            <div style={{ padding: "20px 18px" }} className="space-y-3">
+              <Skeleton className="h-10 w-full bg-white/5 rounded-lg animate-pulse" />
+              <Skeleton className="h-10 w-full bg-white/5 rounded-lg animate-pulse" />
+            </div>
+          ) : (subs ?? []).length === 0 ? (
             <div
               style={{
                 padding: "32px 18px",

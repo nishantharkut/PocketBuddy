@@ -159,7 +159,7 @@ function TravelPage() {
     queryFn: () => getTravelReports(selectedRouteId),
   });
 
-  const { data: savings } = useQuery({
+  const { data: savings, isLoading: savingsLoading } = useQuery({
     queryKey: ["travel-savings", user?.id],
     enabled: !!user,
     queryFn: () => getTravelSavings(),
@@ -380,12 +380,14 @@ function TravelPage() {
           >
             How it works
           </button>
-          {savings && (
+          {savingsLoading ? (
+            <Skeleton className="h-7 w-24 bg-white/5 animate-pulse border-none rounded-full" />
+          ) : savings ? (
             <Badge variant="outline" className="flex max-w-[132px] items-center gap-1 border-success/20 bg-success/5 px-2.5 py-1 font-mono text-xs font-bold text-success">
               <TrendingDown className="h-3 w-3" />
               <span className="truncate">Saved ₹{savings.total_saved}</span>
             </Badge>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -660,7 +662,7 @@ function TravelPage() {
                             onClick={handleLogSavings}
                             className="bg-success text-white hover:bg-success/90 text-[10px] font-bold uppercase tracking-wider h-9"
                           >
-                            Log Savings
+                            {logSavingsMutation.isPending ? "Logging..." : "Log Savings"}
                           </Button>
                         </div>
                       </div>

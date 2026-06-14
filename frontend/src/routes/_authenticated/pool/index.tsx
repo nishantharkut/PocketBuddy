@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -98,7 +99,7 @@ function PoolList() {
     queryFn: () => getProfile(),
   });
 
-  const { data: pools } = useQuery({
+  const { data: pools, isLoading: poolsLoading } = useQuery({
     queryKey: ["all-pools", profile?.wing_label],
     enabled: !!profile?.wing_label,
     queryFn: () => getCartPools(),
@@ -180,42 +181,51 @@ function PoolList() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-[fadeIn_0.2s_ease-out]">
-            {tab === "active" && (
+            {poolsLoading ? (
               <>
-                {activePools.length === 0 && (
-                  <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools.</p>
-                  </div>
-                )}
-                {activePools.map((p) => (
-                  <PoolCard key={p.id} pool={p} />
-                ))}
+                <Skeleton className="h-36 w-full bg-white/5 border-none rounded-xl animate-pulse" />
+                <Skeleton className="h-36 w-full bg-white/5 border-none rounded-xl animate-pulse" />
               </>
-            )}
-
-            {tab === "completed" && (
+            ) : (
               <>
-                {completedPools.length === 0 && (
-                  <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No completed pools.</p>
-                  </div>
+                {tab === "active" && (
+                  <>
+                    {activePools.length === 0 && (
+                      <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
+                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools.</p>
+                      </div>
+                    )}
+                    {activePools.map((p) => (
+                      <PoolCard key={p.id} pool={p} />
+                    ))}
+                  </>
                 )}
-                {completedPools.map((p) => (
-                  <PoolCard key={p.id} pool={p} />
-                ))}
-              </>
-            )}
 
-            {tab === "cancelled" && (
-              <>
-                {cancelledPools.length === 0 && (
-                  <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No cancelled or closed pools.</p>
-                  </div>
+                {tab === "completed" && (
+                  <>
+                    {completedPools.length === 0 && (
+                      <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
+                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No completed pools.</p>
+                      </div>
+                    )}
+                    {completedPools.map((p) => (
+                      <PoolCard key={p.id} pool={p} />
+                    ))}
+                  </>
                 )}
-                {cancelledPools.map((p) => (
-                  <PoolCard key={p.id} pool={p} />
-                ))}
+
+                {tab === "cancelled" && (
+                  <>
+                    {cancelledPools.length === 0 && (
+                      <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
+                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No cancelled or closed pools.</p>
+                      </div>
+                    )}
+                    {cancelledPools.map((p) => (
+                      <PoolCard key={p.id} pool={p} />
+                    ))}
+                  </>
+                )}
               </>
             )}
           </div>
@@ -356,7 +366,7 @@ function CreatePoolForm({
   const [showCustomInput, setShowCustomInput] = useState(false);
 
   // Fetch platforms from catalog
-  const { data: catalogPlatforms } = useQuery({
+  const { data: catalogPlatforms, isLoading: platformsLoading } = useQuery({
     queryKey: ["catalog", "cart-platforms"],
     queryFn: () => getCatalog("cart-platforms"),
     staleTime: 5 * 60 * 1000,
@@ -449,16 +459,24 @@ function CreatePoolForm({
         <div>
           <label className="text-sm text-muted-foreground mb-2 block">Platform / Store</label>
           <div className="flex flex-wrap gap-2">
-            {platformOptions.map((p: any) => (
-              <button
-                key={p.v}
-                onClick={() => selectPlatform(p.v)}
-                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm transition-all cursor-pointer ${platform === p.v ? "border-primary bg-primary/10 font-bold text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-surface-raised hover:text-foreground"}`}
-              >
-                <PlatformIcon platform={p.v} name={p.l} className="h-5 w-5" />
-                <span>{p.l}</span>
-              </button>
-            ))}
+            {platformsLoading ? (
+              <>
+                <Skeleton className="h-9 w-24 bg-white/5 rounded-lg animate-pulse" />
+                <Skeleton className="h-9 w-28 bg-white/5 rounded-lg animate-pulse" />
+                <Skeleton className="h-9 w-20 bg-white/5 rounded-lg animate-pulse" />
+              </>
+            ) : (
+              platformOptions.map((p: any) => (
+                <button
+                  key={p.v}
+                  onClick={() => selectPlatform(p.v)}
+                  className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm transition-all cursor-pointer ${platform === p.v ? "border-primary bg-primary/10 font-bold text-foreground" : "border-border bg-surface text-muted-foreground hover:bg-surface-raised hover:text-foreground"}`}
+                >
+                  <PlatformIcon platform={p.v} name={p.l} className="h-5 w-5" />
+                  <span>{p.l}</span>
+                </button>
+              ))
+            )}
             {!showCustomInput ? (
               <button
                 onClick={() => { setShowCustomInput(true); setPlatform(""); }}

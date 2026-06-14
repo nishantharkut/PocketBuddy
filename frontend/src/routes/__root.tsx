@@ -3,6 +3,7 @@ import {
   Outlet,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 
@@ -65,9 +66,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const isLoading = useRouterState({ select: (s) => s.status === "pending" });
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        {isLoading && (
+          <div className="fixed top-0 left-0 right-0 z-[9999] h-1 bg-gradient-to-r from-primary to-pb-amber animate-pulse" />
+        )}
         <Outlet />
         <Toaster position="top-center" />
       </AuthProvider>

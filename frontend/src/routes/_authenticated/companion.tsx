@@ -57,14 +57,14 @@ function CompanionPage() {
   const [pairing, setPairing] = useState<string>("");
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
-  const { data: profile, refetch: refetchProfile } = useQuery<Profile>({
+  const { data: profile, refetch: refetchProfile, isLoading: profileLoading } = useQuery<Profile>({
     queryKey: ["profile", user?.id],
     enabled: !!user,
     queryFn: () => getProfile(),
     refetchInterval: 5000,
   });
 
-  const { data: logs, refetch: refetchLogs } = useQuery<SyncLog[] | { logs?: SyncLog[] }>({
+  const { data: logs, refetch: refetchLogs, isLoading: logsLoading } = useQuery<SyncLog[] | { logs?: SyncLog[] }>({
     queryKey: ["sync-log", user?.id],
     enabled: !!user,
     queryFn: () => getCompanionSyncLogs(),
@@ -209,8 +209,8 @@ function CompanionPage() {
       </div>
 
       <div className="space-y-4 px-4 py-4">
-        {!profile ? (
-          <Skeleton className="h-32 w-full" />
+        {!profile || profileLoading ? (
+          <Skeleton className="h-32 w-full bg-white/5 border-none rounded-xl" />
         ) : isConnected ? (
           <>
             <Card
@@ -242,12 +242,17 @@ function CompanionPage() {
                 RECENT SYNC ACTIVITY
               </h3>
               <div id="list-sync-log" className="mt-2 space-y-1.5">
-                {syncLogs.length === 0 && (
+                {logsLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full bg-white/5 border-none rounded-md animate-pulse" />
+                    <Skeleton className="h-10 w-full bg-white/5 border-none rounded-md animate-pulse" />
+                  </div>
+                ) : syncLogs.length === 0 ? (
                   <p className="text-[12px] text-muted-foreground py-4 text-center">
                     No sync activity yet.
                   </p>
-                )}
-                {syncLogs.map((l) => {
+                ) : null}
+                {!logsLoading && syncLogs.map((l) => {
                   const isOpen = expandedLogId === l.id;
                   return (
                     <div key={l.id} className="rounded-md bg-surface p-2.5">

@@ -284,21 +284,21 @@ function Dashboard() {
   const qc = useQueryClient();
   const nav = useNavigate();
 
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["profile", user?.id],
     enabled: !!user,
     staleTime: 30_000,
     queryFn: () => getProfile(),
   });
 
-  const { data: txns } = useQuery({
+  const { data: txns, isLoading: txnsLoading } = useQuery({
     queryKey: ["txns", user?.id],
     enabled: !!user,
     staleTime: 30_000,
     queryFn: () => getTransactions(),
   });
 
-  const { data: insights } = useQuery({
+  const { data: insights, isLoading: insightsLoading } = useQuery({
     queryKey: ["insights", user?.id],
     enabled: !!user,
     staleTime: 60_000,
@@ -312,7 +312,7 @@ function Dashboard() {
     queryFn: () => getWellnessInsights(),
   });
 
-  const { data: campusIntel } = useQuery({
+  const { data: campusIntel, isLoading: campusIntelLoading } = useQuery({
     queryKey: ["campus-intel", user?.id],
     enabled: !!user,
     staleTime: 120_000,
@@ -320,7 +320,7 @@ function Dashboard() {
     queryFn: () => getCampusIntel(),
   });
 
-  const { data: wingFeed } = useQuery({
+  const { data: wingFeed, isLoading: wingFeedLoading } = useQuery({
     queryKey: ["wing-feed", user?.id],
     enabled: !!user,
     staleTime: 30_000,
@@ -328,7 +328,7 @@ function Dashboard() {
     retry: false,
     queryFn: () => getWingFeed(),
   });
-  const { data: travelSavings } = useQuery({
+  const { data: travelSavings, isLoading: travelSavingsLoading } = useQuery({
     queryKey: ["travel-savings", user?.id],
     enabled: !!user,
     queryFn: () => getTravelSavings(),
@@ -383,14 +383,14 @@ function Dashboard() {
     return Date.now() + msUntilBroke;
   }, [calc, insights]);
 
-  const { data: subs } = useQuery({
+  const { data: subs, isLoading: subsLoading } = useQuery({
     queryKey: ["subs", user?.id],
     enabled: !!user,
     staleTime: 30_000,
     queryFn: () => getSubscriptions(),
   });
 
-  const { data: pools } = useQuery({
+  const { data: pools, isLoading: poolsLoading } = useQuery({
     queryKey: ["pools", profile?.wing_label],
     enabled: !!profile?.wing_label,
     staleTime: 15_000,
@@ -401,7 +401,7 @@ function Dashboard() {
     },
   });
 
-  const { data: foods } = useQuery({
+  const { data: foods, isLoading: foodsLoading } = useQuery({
     queryKey: ["foods"],
     staleTime: 30_000,
     queryFn: () => getCampusFood(),
@@ -1089,7 +1089,16 @@ function Dashboard() {
               {/* 7-day spend bar chart */}
               <div className="bg-surface border border-border rounded-2xl p-5">
                 <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase mb-4">7-Day Spend</p>
-                {insights?.daily_spend_7d ? (
+                {insightsLoading ? (
+                  <div className="flex items-end gap-1.5 h-16 animate-pulse">
+                    {[1, 2, 3, 4, 5, 6, 7].map((_, i) => (
+                      <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                        <Skeleton className="w-full bg-white/5 rounded-sm" style={{ height: `${20 + (i * 10) % 60}%`, minHeight: "8px" }} />
+                        <Skeleton className="h-3.5 w-4 bg-white/5 rounded mt-1" />
+                      </div>
+                    ))}
+                  </div>
+                ) : insights?.daily_spend_7d ? (
                   <>
                     <SpendBar days={insights.daily_spend_7d} />
                     {(insights.velocity?.pct_change ?? 0) !== 0 && (
@@ -1102,7 +1111,7 @@ function Dashboard() {
                   <div className="flex items-end gap-1.5 h-16">
                     {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
                       <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                        <div className="w-full rounded-sm bg-white/10" style={{ height: `${20 + Math.random() * 60}%`, minHeight: "8px" }} />
+                        <div className="w-full rounded-sm bg-white/10" style={{ height: "8px" }} />
                         <span className="text-[10px] text-zinc-600 font-bold">{d}</span>
                       </div>
                     ))}
@@ -1113,11 +1122,19 @@ function Dashboard() {
               {/* Category breakdown donut */}
               <div className="bg-surface border border-border rounded-2xl p-5">
                 <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase mb-4">Spend by Category</p>
-                {insights?.category_breakdown?.length ? (
+                {insightsLoading ? (
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="w-16 h-16 rounded-full bg-white/5 animate-pulse" />
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-3 w-24 bg-white/5" />
+                      <Skeleton className="h-3 w-16 bg-white/5" />
+                    </div>
+                  </div>
+                ) : insights?.category_breakdown?.length ? (
                   <CategoryDonut breakdown={insights.category_breakdown} />
                 ) : (
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full border-4 border-white/10 border-t-primary animate-spin" />
+                    <div className="w-16 h-16 rounded-full border-2 border-dashed border-border flex items-center justify-center text-[10px] text-zinc-600 font-bold">0%</div>
                     <p className="text-xs text-zinc-500">No data yet — start logging transactions</p>
                   </div>
                 )}
@@ -1131,7 +1148,9 @@ function Dashboard() {
                 {/* Food gap */}
                 <div className="flex flex-col gap-1">
                   <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Last meal</p>
-                  {insights ? (
+                  {insightsLoading ? (
+                    <Skeleton className="h-5 w-16 bg-white/5 mt-1" />
+                  ) : insights ? (
                     <p className={`text-[16px] font-black tnum ${insights.food.gap_hours > 12 ? "text-destructive" : insights.food.gap_hours > 6 ? "text-warning" : "text-success"}`}>
                       {insights.food.gap_hours > 0 ? `${Math.round(insights.food.gap_hours)}h ago` : "—"}
                     </p>
@@ -1144,33 +1163,65 @@ function Dashboard() {
                 {/* Delivery vs mess */}
                 <div className="flex flex-col gap-1">
                   <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Delivery</p>
-                  <p className="text-[16px] font-black text-foreground">
-                    {insights?.food?.delivery_count_30d ?? "—"}×
-                  </p>
-                  <p className="text-xs text-zinc-600">vs {insights?.food?.mess_count_30d ?? "—"} mess visits</p>
+                  {insightsLoading ? (
+                    <div className="space-y-1 mt-1">
+                      <Skeleton className="h-5 w-12 bg-white/5" />
+                      <Skeleton className="h-3 w-16 bg-white/5" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[16px] font-black text-foreground">
+                        {insights?.food?.delivery_count_30d ?? "—"}×
+                      </p>
+                      <p className="text-xs text-zinc-600">vs {insights?.food?.mess_count_30d ?? "—"} mess visits</p>
+                    </>
+                  )}
                 </div>
 
                 {/* Late night */}
                 <div className="flex flex-col gap-1">
                   <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Late Night</p>
-                  <p className="text-[16px] font-black text-foreground tnum">
-                    {insights ? rupees(insights.late_night.total_paise) : "—"}
-                  </p>
-                  <p className="text-xs text-zinc-600">{insights?.late_night?.txn_count ?? 0} txns after 11PM</p>
+                  {insightsLoading ? (
+                    <div className="space-y-1 mt-1">
+                      <Skeleton className="h-5 w-16 bg-white/5" />
+                      <Skeleton className="h-3 w-20 bg-white/5" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[16px] font-black text-foreground tnum">
+                        {insights ? rupees(insights.late_night.total_paise) : "—"}
+                      </p>
+                      <p className="text-xs text-zinc-600">{insights?.late_night?.txn_count ?? 0} txns after 11PM</p>
+                    </>
+                  )}
                 </div>
 
                 {/* Sub bleed */}
                 <div className="flex flex-col gap-1">
                   <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Sub Bleed</p>
-                  <p className="text-[16px] font-black text-foreground tnum">
-                    {insights ? rupees(insights.subscriptions.monthly_bleed_paise) : "—"}
-                  </p>
-                  <p className="text-xs text-zinc-600">/month in {insights?.subscriptions?.count ?? 0} subs</p>
+                  {insightsLoading ? (
+                    <div className="space-y-1 mt-1">
+                      <Skeleton className="h-5 w-16 bg-white/5" />
+                      <Skeleton className="h-3 w-20 bg-white/5" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[16px] font-black text-foreground tnum">
+                        {insights ? rupees(insights.subscriptions.monthly_bleed_paise) : "—"}
+                      </p>
+                      <p className="text-xs text-zinc-600">/month in {insights?.subscriptions?.count ?? 0} subs</p>
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Mess vs delivery bar */}
-              {insights?.food && (insights.food.delivery_count_30d + insights.food.mess_count_30d) > 0 && (
+              {insightsLoading ? (
+                <div className="mt-5 pt-4 border-t border-border space-y-2">
+                  <Skeleton className="h-3 w-40 bg-white/5" />
+                  <Skeleton className="h-2 w-full bg-white/5" />
+                </div>
+              ) : insights?.food && (insights.food.delivery_count_30d + insights.food.mess_count_30d) > 0 ? (
                 <div className="mt-5 pt-4 border-t border-border">
                   <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-2">Mess vs Delivery ratio (30d)</p>
                   <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
@@ -1188,7 +1239,7 @@ function Dashboard() {
                     <span className="text-[10px] text-warning font-bold">Delivery {insights.food.delivery_count_30d}</span>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Active Pools */}
@@ -1205,52 +1256,61 @@ function Dashboard() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {(pools ?? []).filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now()).length === 0 && (
-                  <div className="col-span-full py-10 text-center border border-dashed border-border rounded-2xl bg-surface-raised/40">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools in your wing.</p>
-                    <p className="text-xs text-zinc-500 mt-1">Start one now to split delivery fees with your wing.</p>
-                  </div>
-                )}
-                {(pools ?? [])
-                  .filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now())
-                  .map((p) => {
-                    const total = (p.items ?? []).reduce((s: number, i: any) => s + i.estimated_price, 0);
-                    const minsLeft = Math.max(0, Math.round((new Date(p.expires_at).getTime() - Date.now()) / 60000));
-                    const perPerson = (p.items ?? []).length
-                      ? Math.round(p.delivery_fee / new Set((p.items ?? []).map((i: any) => i.added_by_name)).size)
-                      : 0;
-                    return (
-                      <Link key={p.id} to="/pool/$id" params={{ id: p.id }} className="group">
-                        <Card className="bg-surface relative overflow-hidden border border-border p-5 transition-all duration-300 hover:border-white/15 hover:bg-surface-raised h-full flex flex-col justify-between hover:shadow-lg hover:shadow-black/40">
-                          <div>
-                            <div className="flex items-start justify-between gap-2 mb-3">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <PlatformIcon platform={p.platform} name={p.platform_display_label || p.platform.replace("_", " ")} className="h-5 w-5" />
-                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                                  <span className="text-xs font-black uppercase tracking-wider text-foreground truncate max-w-[120px] sm:max-w-none">{p.platform_display_label || p.platform.replace("_", " ")}</span>
-                                  <Badge variant="outline" className="text-muted-foreground bg-white/5 border-border text-[10px] font-bold">{p.wing_label}</Badge>
+                {poolsLoading ? (
+                  <>
+                    <Skeleton className="h-32 w-full bg-white/5 border-none rounded-2xl animate-pulse" />
+                    <Skeleton className="h-32 w-full bg-white/5 border-none rounded-2xl animate-pulse" />
+                  </>
+                ) : (
+                  <>
+                    {(pools ?? []).filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now()).length === 0 && (
+                      <div className="col-span-full py-10 text-center border border-dashed border-border rounded-2xl bg-surface-raised/40">
+                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools in your wing.</p>
+                        <p className="text-xs text-zinc-500 mt-1">Start one now to split delivery fees with your wing.</p>
+                      </div>
+                    )}
+                    {(pools ?? [])
+                      .filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now())
+                      .map((p) => {
+                        const total = (p.items ?? []).reduce((s: number, i: any) => s + i.estimated_price, 0);
+                        const minsLeft = Math.max(0, Math.round((new Date(p.expires_at).getTime() - Date.now()) / 60000));
+                        const perPerson = (p.items ?? []).length
+                          ? Math.round(p.delivery_fee / new Set((p.items ?? []).map((i: any) => i.added_by_name)).size)
+                          : 0;
+                        return (
+                          <Link key={p.id} to="/pool/$id" params={{ id: p.id }} className="group">
+                            <Card className="bg-surface relative overflow-hidden border border-border p-5 transition-all duration-300 hover:border-white/15 hover:bg-surface-raised h-full flex flex-col justify-between hover:shadow-lg hover:shadow-black/40">
+                              <div>
+                                <div className="flex items-start justify-between gap-2 mb-3">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <PlatformIcon platform={p.platform} name={p.platform_display_label || p.platform.replace("_", " ")} className="h-5 w-5" />
+                                    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                      <span className="text-xs font-black uppercase tracking-wider text-foreground truncate max-w-[120px] sm:max-w-none">{p.platform_display_label || p.platform.replace("_", " ")}</span>
+                                      <Badge variant="outline" className="text-muted-foreground bg-white/5 border-border text-[10px] font-bold">{p.wing_label}</Badge>
+                                    </div>
+                                  </div>
+                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border border-border bg-background tnum shrink-0 ${minsLeft < 5 ? "text-destructive animate-pulse border-destructive/20 bg-destructive/5" : "text-foreground"}`}>
+                                    {minsLeft}m left
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">Host: <span className="font-semibold text-foreground capitalize">{p.created_by_name || "—"}</span></p>
+                              </div>
+                              <div className="mt-6 pt-4 border-t border-border flex items-center justify-between">
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Cart</span>
+                                  <span className="text-xs font-black text-foreground">{rupees(total)} <span className="text-zinc-500 font-normal text-[10px]">/ {rupees(p.min_cart_value)} min</span></span>
+                                </div>
+                                <div className="flex flex-col text-right">
+                                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Split Est.</span>
+                                  <span className="text-xs font-black text-success">{rupees(perPerson)} <span className="text-zinc-500 font-normal text-[10px]">/ person</span></span>
                                 </div>
                               </div>
-                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border border-border bg-background tnum shrink-0 ${minsLeft < 5 ? "text-destructive animate-pulse border-destructive/20 bg-destructive/5" : "text-foreground"}`}>
-                                {minsLeft}m left
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground">Host: <span className="font-semibold text-foreground capitalize">{p.created_by_name || "—"}</span></p>
-                          </div>
-                          <div className="mt-6 pt-4 border-t border-border flex items-center justify-between">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Cart</span>
-                              <span className="text-xs font-black text-foreground">{rupees(total)} <span className="text-zinc-500 font-normal text-[10px]">/ {rupees(p.min_cart_value)} min</span></span>
-                            </div>
-                            <div className="flex flex-col text-right">
-                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Split Est.</span>
-                              <span className="text-xs font-black text-success">{rupees(perPerson)} <span className="text-zinc-500 font-normal text-[10px]">/ person</span></span>
-                            </div>
-                          </div>
-                        </Card>
-                      </Link>
-                    );
-                  })}
+                            </Card>
+                          </Link>
+                        );
+                      })}
+                  </>
+                )}
               </div>
             </section>
           </div>
@@ -1291,16 +1351,29 @@ function Dashboard() {
                   <span className="ml-auto text-[10px] font-black text-primary uppercase tracking-wider border border-primary/30 px-1.5 py-0.5 rounded-full">Bedrock</span>
                 )}
               </div>
-              {campusIntel?.summary ? (
+              {campusIntelLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-full bg-white/5 animate-pulse" />
+                  <Skeleton className="h-3 w-4/5 bg-white/5 animate-pulse" />
+                  <Skeleton className="h-3 w-3/5 bg-white/5 animate-pulse" />
+                </div>
+              ) : campusIntel?.summary ? (
                 <p className="text-[13px] text-zinc-300 leading-relaxed">{campusIntel.summary}</p>
               ) : (
-                <div className="space-y-1.5">
-                  <div className="h-2.5 rounded bg-white/5 w-full animate-pulse" />
-                  <div className="h-2.5 rounded bg-white/5 w-4/5 animate-pulse" />
-                  <div className="h-2.5 rounded bg-white/5 w-3/5 animate-pulse" />
-                </div>
+                <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider py-2">Intel unavailable</p>
               )}
-              {campusIntel && (
+              {campusIntelLoading ? (
+                <div className="mt-3 pt-3 border-t border-border flex gap-4">
+                  <div className="space-y-1 flex-1">
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider">This Week</p>
+                    <Skeleton className="h-4 w-12 bg-white/5 animate-pulse" />
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Last Meal</p>
+                    <Skeleton className="h-4 w-12 bg-white/5 animate-pulse" />
+                  </div>
+                </div>
+              ) : campusIntel ? (
                 <div className="mt-3 pt-3 border-t border-border flex gap-4">
                   <div>
                     <p className="text-[10px] text-zinc-600 uppercase tracking-wider">This Week</p>
@@ -1313,7 +1386,7 @@ function Dashboard() {
                     </p>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* ── Campus Fare Guard (Travel Savings) ────────────────── */}
@@ -1324,9 +1397,13 @@ function Dashboard() {
                   <Compass className="h-4.5 w-4.5 text-primary" />
                   <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase font-display">Campus Fare Guard</p>
                 </div>
-                <Badge variant="outline" className="bg-success/5 border-success/20 text-success font-bold text-[10px] font-mono">
-                  Saved ₹{travelSavings?.total_saved ?? 0}
-                </Badge>
+                {travelSavingsLoading ? (
+                  <Skeleton className="h-5 w-16 bg-white/5 animate-pulse rounded" />
+                ) : (
+                  <Badge variant="outline" className="bg-success/5 border-success/20 text-success font-bold text-[10px] font-mono">
+                    Saved ₹{travelSavings?.total_saved ?? 0}
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-zinc-400 leading-relaxed font-medium">
                 Avoid local transport overcharging. Check fares, view cheap transit combos, and negotiate fares with copyable student scripts.
@@ -1346,12 +1423,17 @@ function Dashboard() {
               <div className="flex items-center justify-between mb-4">
                 <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Wing Activity</p>
                 <span className="flex items-center gap-1.5 text-[10px] text-zinc-600 font-bold">
-                  <span className={`w-1.5 h-1.5 rounded-full ${wingEvents.length ? "bg-success animate-pulse" : "bg-zinc-600"}`} />
-                  {wingEvents.length ? "Live" : "No Live Events"}
+                  <span className={`w-1.5 h-1.5 rounded-full ${wingFeedLoading ? "bg-zinc-600" : wingEvents.length ? "bg-success animate-pulse" : "bg-zinc-600"}`} />
+                  {wingFeedLoading ? "Loading..." : wingEvents.length ? "Live" : "No Live Events"}
                 </span>
               </div>
               <div className="space-y-3">
-                {wingEvents.length ? (
+                {wingFeedLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-10 w-full bg-white/5 animate-pulse" />
+                    <Skeleton className="h-10 w-full bg-white/5 animate-pulse" />
+                  </div>
+                ) : wingEvents.length ? (
                   wingEvents.map((ev: any, i: number) => (
                     <div key={i} className="flex items-start gap-3 animate-[fadeIn_0.4s_ease-out]" style={{ animationDelay: `${i * 80}ms` }}>
                       <span className="shrink-0 mt-0.5 text-zinc-500">

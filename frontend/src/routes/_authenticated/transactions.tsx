@@ -204,17 +204,29 @@ function TxnsPage() {
 
         {/* ── Summary Bar ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-2 bg-surface rounded-xl border border-border p-3">
-          <div className="text-center">
+          <div className="text-center flex flex-col justify-center items-center">
             <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Income</p>
-            <p className="text-xs font-black tnum text-[#5DADE2]">{rupees(stats?.summary?.income ?? 0)}</p>
+            {isLoading ? (
+              <Skeleton className="h-3 w-16 bg-white/5 animate-pulse mt-1.5" />
+            ) : (
+              <p className="text-xs font-black tnum text-[#5DADE2] mt-0.5">{rupees(stats?.summary?.income ?? 0)}</p>
+            )}
           </div>
-          <div className="text-center border-x border-border/50">
+          <div className="text-center border-x border-border/50 flex flex-col justify-center items-center">
             <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Expenses</p>
-            <p className="text-xs font-black tnum text-[#FF6B4A]">{rupees(stats?.summary?.expenses ?? 0)}</p>
+            {isLoading ? (
+              <Skeleton className="h-3 w-16 bg-white/5 animate-pulse mt-1.5" />
+            ) : (
+              <p className="text-xs font-black tnum text-[#FF6B4A] mt-0.5">{rupees(stats?.summary?.expenses ?? 0)}</p>
+            )}
           </div>
-          <div className="text-center">
+          <div className="text-center flex flex-col justify-center items-center">
             <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Total</p>
-            <p className="text-xs font-black tnum text-foreground">{rupees(Math.abs(stats?.summary?.net ?? 0))}</p>
+            {isLoading ? (
+              <Skeleton className="h-3 w-16 bg-white/5 animate-pulse mt-1.5" />
+            ) : (
+              <p className="text-xs font-black tnum text-foreground mt-0.5">{rupees(Math.abs(stats?.summary?.net ?? 0))}</p>
+            )}
           </div>
         </div>
 

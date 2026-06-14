@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Sparkles, User, ShoppingBag, Link as LinkIcon, ChevronRight, Sun, Moon, Menu, X,
   Smartphone, Map, Zap, ShoppingCart, CalendarCheck, Bell,
+  LayoutDashboard, List, Compass, Settings, Car, Bus, Footprints, Wallet, Calendar,
   Banknote, Utensils, Lock, Brain, Handshake, GraduationCap, WifiOff,
   Globe, Server, Database, HardDrive, Network, Layers, Leaf,
   Check, Star, ArrowRight,
@@ -135,49 +136,419 @@ function ParticleCanvas() {
 // ── Dashboard mockup (phone) ───────────────────────────────────────────────
 function DashboardMockup() {
   const { ref, inView } = useInView(0.1);
-  return (
-    <div ref={ref} className="relative w-full max-w-[360px] mx-auto px-4" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0) rotateX(0deg)" : "translateY(40px) rotateX(8deg)", transition: "all 1s cubic-bezier(0.16,1,0.3,1)", perspective: "1000px" }}>
-      <div className="absolute top-[-60px] left-1/2 -translate-x-1/2 w-[260px] h-[260px] rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(140,120,83,0.18) 0%, transparent 70%)" }} />
-      <div className="rounded-[32px] border border-border p-1 bg-gradient-to-b from-zinc-800 to-zinc-950 shadow-2xl">
-        <div className="bg-background rounded-[28px] overflow-hidden p-4 sm:p-5 select-none">
-          <div className="flex justify-between mb-4 opacity-35">
-            <span className="text-[10px] text-foreground font-mono">9:41</span>
-            <span className="text-[10px] text-foreground font-mono">●●●</span>
-          </div>
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <div className="text-[8px] tracking-[0.2em] text-muted-foreground font-mono">POCKETBUDDY</div>
-              <div className="text-[11px] font-bold text-foreground mt-0.5">Wing 4B · Room 214</div>
-            </div>
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-pb-amber flex items-center justify-center">
-              <span className="color-[#0A0A0A] font-black text-[11px]">P</span>
-            </div>
-          </div>
-          {/* Runway card */}
-          <div className="bg-card border border-border border-t-2 border-t-[#8C7853] rounded-xl p-3 mb-2.5">
-            <div className="text-[7px] tracking-[0.2em] text-muted-foreground font-mono mb-1.5">RUNWAY STATUS</div>
-            <div className="flex items-baseline gap-1 mb-1">
-              <span className="text-3xl font-black text-pb-green leading-none font-display">16</span>
-              <span className="text-[9px] font-bold text-muted-foreground tracking-widest">DAYS</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-border">
-              <div><div className="text-[7px] text-muted-foreground tracking-wider font-mono">SPENT</div><div className="text-[12px] font-bold text-foreground">₹2,840</div></div>
-              <div><div className="text-[7px] text-muted-foreground tracking-wider font-mono">SAFE/DAY</div><div className="text-[12px] font-bold text-[#C27D56]">₹125</div></div>
-            </div>
-          </div>
-          {/* AI Alert */}
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-2.5 mb-2">
-            <div className="flex items-center gap-1 text-[7px] text-[#C27D56] tracking-wider font-mono mb-1"><Zap className="h-2 w-2" /> AI GUARD · BEDROCK</div>
-            <div className="text-[9px] text-foreground leading-relaxed">BH-2 Night Canteen: Egg Paratha <span className="text-[#C27D56] font-bold">₹45</span> · Open till 2AM</div>
-          </div>
-          {/* Pool */}
-          <div className="bg-card border border-border border-l-2 border-l-[#F7EC13] rounded-lg p-2.5">
-            <div className="flex justify-between">
-              <div>
-                <div className="flex items-center gap-1 text-[8px] text-pb-amber font-mono tracking-wider"><ShoppingCart className="h-2 w-2" /> BLINKIT POOL</div>
-                <div className="text-[9px] text-muted-foreground mt-0.5">₹165/₹199 min · 4 members</div>
+  const theme = useTheme();
+  const isDark = theme === "dark";
+  const [activeTab, setActiveTab] = useState(0);
+  const [tappedCard, setTappedCard] = useState<string | null>(null);
+
+  // Live clock
+  const [time, setTime] = useState("9:41");
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      setTime(`${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`);
+    };
+    update();
+    const id = setInterval(update, 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Animated countdown
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const baseMs = 16 * 86400000 + 7 * 3600000 + 23 * 60000;
+  const remaining = Math.max(0, baseMs - (tick * 1000));
+  const cDays = Math.floor(remaining / 86400000);
+  const cHrs = Math.floor((remaining % 86400000) / 3600000);
+  const cMins = Math.floor((remaining % 3600000) / 60000);
+  const cSecs = Math.floor((remaining % 60000) / 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  const tapCard = (id: string) => {
+    setTappedCard(id);
+    setTimeout(() => setTappedCard(null), 200);
+  };
+
+  const PHONE_W = 240;
+  const PHONE_H = 520;
+  const BEZEL_R = 38;
+  const SCREEN_R = 34;
+
+  const tabs = [
+    { icon: LayoutDashboard, label: "Dashboard" },
+    { icon: List, label: "History" },
+    { icon: ShoppingCart, label: "Pool" },
+    { icon: Compass, label: "Travel" },
+    { icon: Settings, label: "Settings" },
+  ];
+
+  // 7-day spend data
+  const spendDays = [
+    { d: "M", v: 45 }, { d: "T", v: 72 }, { d: "W", v: 30 },
+    { d: "T", v: 88 }, { d: "F", v: 55 }, { d: "S", v: 95 }, { d: "S", v: 40 },
+  ];
+
+  // Category data
+  const categories = [
+    { name: "Food", pct: 48, color: "#C27D56" },
+    { name: "Travel", pct: 22, color: "#2563EB" },
+    { name: "Subs", pct: 18, color: "#F7EC13" },
+    { name: "Other", pct: 12, color: "#6b7280" },
+  ];
+
+  // ── Screen renderers ──────────────────────────────────────────────────
+  const renderDashboard = () => (
+    <div className="flex flex-col gap-2">
+      {/* Wellness Index card */}
+      <div
+        className="rounded-xl p-2.5 border transition-transform duration-150 cursor-pointer"
+        style={{
+          background: "var(--card)", borderColor: "var(--border)",
+          borderTop: "2px solid #22c55e",
+          transform: tappedCard === "wellness" ? "scale(0.97)" : "scale(1)",
+        }}
+        onClick={() => tapCard("wellness")}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[9px] tracking-[0.12em] text-muted-foreground font-mono leading-none">WELLNESS INDEX</span>
+          <span className="text-[8px] px-1 py-[1.5px] rounded-full font-extrabold leading-none" style={{ background: "rgba(22,163,74,0.1)", color: "#22c55e", border: "1px solid rgba(22,163,74,0.2)" }}>STEADY</span>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-xl font-black leading-none font-display" style={{ color: "#22c55e" }}>74</span>
+          <span className="text-[10px] text-muted-foreground font-bold tracking-wider">/ 100</span>
+        </div>
+        <div className="text-[10px] text-muted-foreground mt-1 leading-snug">Healthy spend pattern. Safe food runway.</div>
+        {/* Signal pills */}
+        <div className="flex gap-1.5 mt-2 flex-wrap">
+          {[{ l: "Food Gap", v: "4h", c: "#22c55e" }, { l: "Velocity", v: "+8%", c: "#f59e0b" }].map(s => (
+            <span key={s.l} className="flex items-center gap-1 text-[9px] px-1.5 py-[2px] rounded-full border" style={{ borderColor: "var(--border)", background: "var(--background)" }}>
+              <span className="text-muted-foreground">{s.l}:</span>
+              <span className="font-bold text-foreground">{s.v}</span>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: s.c }} />
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Runway hero */}
+      <div
+        className="rounded-xl p-2.5 border transition-transform duration-150 cursor-pointer"
+        style={{
+          background: "var(--card)", borderColor: "var(--border)",
+          borderTop: "2px solid #8C7853",
+          transform: tappedCard === "runway" ? "scale(0.97)" : "scale(1)",
+        }}
+        onClick={() => tapCard("runway")}
+      >
+        <div className="text-[9px] tracking-[0.12em] text-muted-foreground font-mono mb-1 leading-none">RUNWAY STATUS</div>
+        <div className="flex items-baseline gap-1 mb-0.5">
+          <span className="text-[26px] font-black text-pb-green leading-none font-display">{cDays}</span>
+          <span className="text-[11px] font-bold text-muted-foreground tracking-widest">DAYS</span>
+        </div>
+        {/* Live countdown */}
+        <div className="flex items-baseline gap-[2px] mb-1.5">
+          <span className="text-[12px] font-black text-foreground leading-none font-mono">{pad(cHrs)}</span>
+          <span className="text-[9px] text-muted-foreground font-bold">h</span>
+          <span className="text-[12px] font-black text-foreground leading-none font-mono">{pad(cMins)}</span>
+          <span className="text-[9px] text-muted-foreground font-bold">m</span>
+          <span className="text-[12px] font-black leading-none font-mono" style={{ opacity: cSecs % 2 === 0 ? 1 : 0.4, color: "var(--foreground)", transition: "opacity 0.3s" }}>{pad(cSecs)}</span>
+          <span className="text-[9px] text-muted-foreground font-bold">s</span>
+        </div>
+        {/* Stats row */}
+        <div className="grid grid-cols-3 gap-1 pt-2 border-t border-border">
+          <div><div className="text-[8px] text-muted-foreground font-mono leading-none">BAL</div><div className="text-[11px] font-bold text-foreground mt-0.5 leading-none">₹7,160</div></div>
+          <div className="border-l border-border pl-1"><div className="text-[8px] text-muted-foreground font-mono leading-none">SAFE</div><div className="text-[11px] font-bold text-[#C27D56] mt-0.5 leading-none">₹125</div></div>
+          <div className="border-l border-border pl-1"><div className="text-[8px] text-muted-foreground font-mono leading-none">TODAY</div><div className="text-[11px] font-bold text-foreground mt-0.5 leading-none">₹85</div></div>
+        </div>
+        {/* Progress bar */}
+        <div className="mt-2 h-[3px] rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+          <div className="h-full rounded-full" style={{ width: "28%", background: "linear-gradient(to right, #8C7853, #D9A05B)" }} />
+        </div>
+        <div className="flex justify-between mt-1">
+          <span className="text-[9px] text-muted-foreground flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-pb-green" style={{ animation: "pulse 2s ease-in-out infinite" }} />Tracking active</span>
+          <span className="text-[9px] font-bold text-foreground">28% Spent</span>
+        </div>
+      </div>
+
+      {/* 7-day + Donut row */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Spend bars */}
+        <div className="rounded-xl p-2 border cursor-pointer transition-transform duration-150" style={{ background: "var(--card)", borderColor: "var(--border)", transform: tappedCard === "bars" ? "scale(0.96)" : "scale(1)" }} onClick={() => tapCard("bars")}>
+          <div className="text-[8px] tracking-[0.05em] text-muted-foreground font-mono mb-1.5 leading-none">7-DAY SPEND</div>
+          <div className="flex items-end gap-[3px] h-[34px]">
+            {spendDays.map((d, i) => (
+              <div key={i} className="flex flex-col items-center flex-1 gap-[2px]">
+                <div className="w-full rounded-sm transition-all duration-700" style={{
+                  height: inView ? `${d.v}%` : "0%",
+                  transitionDelay: `${i * 80}ms`,
+                  background: i === 6 ? "linear-gradient(to top, var(--primary), var(--color-pb-amber))" : isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+                  minHeight: 3,
+                }} />
+                <span className={`text-[8px] font-bold ${i === 6 ? "text-primary" : "text-muted-foreground"}`}>{d.d}</span>
               </div>
-              <div className="text-[8px] text-muted-foreground font-mono">06:14</div>
+            ))}
+          </div>
+          <div className="text-[9px] font-bold text-destructive mt-1.5 leading-none">▲ 12% vs last week</div>
+        </div>
+
+        {/* Donut */}
+        <div className="rounded-xl p-2 border cursor-pointer transition-transform duration-150" style={{ background: "var(--card)", borderColor: "var(--border)", transform: tappedCard === "donut" ? "scale(0.96)" : "scale(1)" }} onClick={() => tapCard("donut")}>
+          <div className="text-[8px] tracking-[0.05em] text-muted-foreground font-mono mb-1.5 leading-none">BY CATEGORY</div>
+          <div className="flex items-center gap-1.5">
+            <svg width="40" height="40" viewBox="0 0 44 44" className="shrink-0">
+              <circle cx="22" cy="22" r="16" fill="none" stroke={isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} strokeWidth="5" />
+              {(() => {
+                let offset = 0;
+                const circ = 2 * Math.PI * 16;
+                return categories.map((c) => {
+                  const dash = (c.pct / 100) * circ;
+                  const el = <circle key={c.name} cx="22" cy="22" r="16" fill="none" stroke={c.color} strokeWidth="5" strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={circ - offset} strokeLinecap="round" style={{ transition: "stroke-dasharray 1s ease" }} />;
+                  offset += dash + 1;
+                  return el;
+                });
+              })()}
+            </svg>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              {categories.slice(0, 3).map(c => (
+                <div key={c.name} className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.color }} />
+                  <span className="text-[8px] text-muted-foreground truncate">{c.name}</span>
+                  <span className="text-[8px] font-bold text-foreground ml-auto">{c.pct}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Guard */}
+      <div className="rounded-xl p-2 border cursor-pointer transition-transform duration-150" style={{ background: isDark ? "rgba(255,107,0,0.04)" : "rgba(255,107,0,0.03)", borderColor: isDark ? "rgba(255,107,0,0.15)" : "rgba(255,107,0,0.12)", transform: tappedCard === "ai" ? "scale(0.97)" : "scale(1)" }} onClick={() => tapCard("ai")}>
+        <div className="text-[9px] text-[#C27D56] tracking-wider font-mono mb-1 leading-none flex items-center gap-1">
+          <Zap className="w-2.5 h-2.5 text-[#C27D56]" fill="currentColor" />
+          AI GUARD · BEDROCK
+        </div>
+        <div className="text-[10px] text-foreground leading-snug">BH-2 Night Canteen: Egg Paratha <span className="text-[#C27D56] font-bold">₹45</span> · Open till 2AM</div>
+      </div>
+    </div>
+  );
+
+  const renderHistory = () => (
+    <div className="flex flex-col gap-2">
+      <div className="text-[9px] tracking-[0.12em] text-muted-foreground font-mono leading-none">RECENT TRANSACTIONS</div>
+      {[
+        { m: "Hostel Canteen", amt: "₹45", cat: "food", time: "2h ago", color: "#C27D56", icon: Utensils },
+        { m: "Blinkit Delivery", amt: "₹234", cat: "food", time: "5h ago", color: "#C27D56", icon: Utensils },
+        { m: "Auto Rickshaw", amt: "₹80", cat: "travel", time: "1d ago", color: "#2563EB", icon: Car },
+        { m: "Spotify Premium", amt: "₹119", cat: "subscription", time: "2d ago", color: "#F7EC13", icon: Smartphone },
+      ].map((t, i) => {
+        const TxIcon = t.icon;
+        return (
+          <div key={i} className="flex items-center gap-2 p-2 rounded-xl border cursor-pointer transition-transform duration-150" style={{ background: "var(--card)", borderColor: "var(--border)", transform: tappedCard === `tx${i}` ? "scale(0.97)" : "scale(1)" }} onClick={() => tapCard(`tx${i}`)}>
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${t.color}15`, border: `1px solid ${t.color}30` }}>
+              <TxIcon className="w-3.5 h-3.5" style={{ color: t.color }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-bold text-foreground truncate leading-tight">{t.m}</div>
+              <div className="text-[9px] text-muted-foreground leading-none mt-0.5">{t.cat} · {t.time}</div>
+            </div>
+            <span className="text-[11px] font-bold text-foreground shrink-0">{t.amt}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderPools = () => (
+    <div className="flex flex-col gap-2">
+      <div className="text-[9px] tracking-[0.12em] text-muted-foreground font-mono leading-none">ACTIVE WING POOLS</div>
+      {[
+        { platform: "Blinkit", progress: "₹165/₹199", members: 4, time: "06:14", color: "#F7EC13", items: ["Maggi ×3", "Chips ×2"] },
+        { platform: "Zepto", progress: "₹89/₹149", members: 2, time: "12:30", color: "#7C3AED", items: ["Bread", "Eggs ×2"] },
+      ].map((p, i) => (
+        <div key={i} className="rounded-xl p-2.5 border cursor-pointer transition-transform duration-150" style={{ borderColor: "var(--border)", borderLeft: `3px solid ${p.color}`, background: "var(--card)", transform: tappedCard === `pool${i}` ? "scale(0.97)" : "scale(1)" }} onClick={() => tapCard(`pool${i}`)}>
+          <div className="flex justify-between items-start mb-1">
+            <div>
+              <div className="text-[10px] font-mono tracking-wider leading-none font-bold flex items-center gap-1" style={{ color: p.color }}>
+                <ShoppingCart className="w-3 h-3 text-current" />
+                {p.platform.toUpperCase()}
+              </div>
+              <div className="text-[9px] text-muted-foreground mt-1">{p.progress} min · {p.members} members</div>
+            </div>
+            <span className="text-[9px] text-muted-foreground font-mono">{p.time}</span>
+          </div>
+          {/* Progress bar */}
+          <div className="h-[3px] rounded-full overflow-hidden mt-1.5" style={{ background: "var(--border)" }}>
+            <div className="h-full rounded-full" style={{ width: `${(parseInt(p.progress) / parseInt(p.progress.split("/₹")[1])) * 100}%`, background: p.color, transition: "width 0.5s ease" }} />
+          </div>
+          {/* Items preview */}
+          <div className="flex gap-1.5 mt-2 flex-wrap">
+            {p.items.slice(0, 2).map((item, j) => (
+              <span key={j} className="text-[8px] px-1.5 py-[2px] rounded-full border text-muted-foreground" style={{ borderColor: "var(--border)", background: "var(--background)" }}>{item}</span>
+            ))}
+          </div>
+        </div>
+      ))}
+      {/* Create pool button */}
+      <div className="rounded-xl p-2.5 border border-dashed cursor-pointer flex items-center justify-center gap-1.5 transition-all duration-150 hover:border-primary/40" style={{ borderColor: "var(--border)", background: "transparent" }} onClick={() => tapCard("newpool")}>
+        <span className="text-[11px] font-bold text-primary">+ Create New Pool</span>
+      </div>
+    </div>
+  );
+
+  const renderTravel = () => (
+    <div className="flex flex-col gap-2">
+      <div className="text-[9px] tracking-[0.12em] text-muted-foreground font-mono leading-none">TRAVEL SAVINGS</div>
+      {/* Savings summary */}
+      <div className="rounded-xl p-2.5 border" style={{ background: "var(--card)", borderColor: "var(--border)", borderTop: "2px solid #2563EB" }}>
+        <div className="flex items-baseline gap-1 mb-1">
+          <span className="text-xl font-black leading-none font-display" style={{ color: "#2563EB" }}>₹1,240</span>
+          <span className="text-[9px] text-muted-foreground font-bold tracking-wider">SAVED THIS MONTH</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+          <div><div className="text-[8px] text-muted-foreground font-mono leading-none">TRIPS</div><div className="text-[11px] font-bold text-foreground mt-0.5">14</div></div>
+          <div><div className="text-[8px] text-muted-foreground font-mono leading-none">AVG SAVED</div><div className="text-[11px] font-bold text-pb-green mt-0.5">₹89/trip</div></div>
+        </div>
+      </div>
+      {/* Route cards */}
+      {[
+        { from: "Campus Gate", to: "Metro", mode: "Bus", icon: Bus, cost: "₹10", vs: "₹80 auto", saved: "₹70" },
+        { from: "Hostel", to: "Library", mode: "Walk", icon: Footprints, cost: "Free", vs: "₹30 auto", saved: "₹30" },
+      ].map((r, i) => {
+        const RouteIcon = r.icon;
+        return (
+          <div key={i} className="rounded-xl p-2.5 border cursor-pointer transition-transform duration-150" style={{ background: "var(--card)", borderColor: "var(--border)", transform: tappedCard === `route${i}` ? "scale(0.97)" : "scale(1)" }} onClick={() => tapCard(`route${i}`)}>
+            <div className="flex items-center gap-1.5 mb-1 text-foreground">
+              <RouteIcon className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-[10px] font-bold">{r.from} → {r.to}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-foreground">{r.cost}</span>
+              <span className="text-[9px] text-muted-foreground line-through">{r.vs}</span>
+              <span className="text-[9px] font-bold text-pb-green ml-auto">Save {r.saved}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderSettings = () => (
+    <div className="flex flex-col gap-2">
+      <div className="text-[9px] tracking-[0.12em] text-muted-foreground font-mono leading-none">ACCOUNT</div>
+      {/* Profile card */}
+      <div className="rounded-xl p-2.5 border flex items-center gap-2" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-pb-amber flex items-center justify-center shrink-0">
+          <span style={{ color: "#0A0A0A", fontSize: 11, fontWeight: 900 }}>A</span>
+        </div>
+        <div>
+          <div className="text-[12px] font-bold text-foreground leading-tight">Aryan M.</div>
+          <div className="text-[9px] text-muted-foreground leading-none mt-0.5">Wing 4B · CSE '27</div>
+        </div>
+      </div>
+      {/* Settings items */}
+      {[
+        { icon: Smartphone, label: "Android Companion", sub: "Paired · Synced 2m ago", dot: "#22c55e" },
+        { icon: Wallet, label: "Monthly Allowance", sub: "₹10,000 · Resets 1st" },
+        { icon: Calendar, label: "Exam Period", sub: "Jun 20 – Jul 5, 2025" },
+        { icon: Lock, label: "Privacy & Security", sub: "No bank access, ever" },
+      ].map((s, i) => {
+        const ItemIcon = s.icon;
+        return (
+          <div key={i} className="flex items-center gap-2.5 p-2 rounded-xl border cursor-pointer transition-transform duration-150" style={{ background: "var(--card)", borderColor: "var(--border)", transform: tappedCard === `set${i}` ? "scale(0.97)" : "scale(1)" }} onClick={() => tapCard(`set${i}`)}>
+            <ItemIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-bold text-foreground leading-tight">{s.label}</div>
+              <div className="text-[9px] text-muted-foreground leading-none mt-0.5 flex items-center gap-1">
+                {s.dot && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: s.dot }} />}
+                {s.sub}
+              </div>
+            </div>
+            <span className="text-[12px] text-muted-foreground font-bold font-mono">›</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const screens = [renderDashboard, renderHistory, renderPools, renderTravel, renderSettings];
+
+  return (
+    <div ref={ref} className="relative mx-auto" style={{ width: PHONE_W, opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(50px)", transition: "all 1.2s cubic-bezier(0.16,1,0.3,1)" }}>
+      {/* Ambient glow */}
+      <div className="absolute top-[15%] left-1/2 -translate-x-1/2 w-[280px] h-[340px] rounded-full pointer-events-none" style={{ background: isDark ? "radial-gradient(ellipse, rgba(255,107,0,0.1) 0%, rgba(140,120,83,0.04) 40%, transparent 70%)" : "radial-gradient(ellipse, rgba(255,107,0,0.07) 0%, rgba(217,160,91,0.03) 40%, transparent 70%)" }} />
+
+      <div className="relative" style={{ filter: "drop-shadow(0 24px 60px rgba(0,0,0,0.45)) drop-shadow(0 8px 20px rgba(0,0,0,0.3))" }}>
+        {/* Side buttons */}
+        <div className="absolute -left-[3px] top-[70px] w-[3px] h-[14px] rounded-l-sm" style={{ background: isDark ? "linear-gradient(180deg, #4a4a50, #2a2a2e, #3a3a3e)" : "linear-gradient(180deg, #c0c0c5, #a0a0a5, #b0b0b5)" }} />
+        <div className="absolute -left-[3px] top-[92px] w-[3px] h-[26px] rounded-l-sm" style={{ background: isDark ? "linear-gradient(180deg, #4a4a50, #2a2a2e, #3a3a3e)" : "linear-gradient(180deg, #c0c0c5, #a0a0a5, #b0b0b5)" }} />
+        <div className="absolute -left-[3px] top-[126px] w-[3px] h-[26px] rounded-l-sm" style={{ background: isDark ? "linear-gradient(180deg, #4a4a50, #2a2a2e, #3a3a3e)" : "linear-gradient(180deg, #c0c0c5, #a0a0a5, #b0b0b5)" }} />
+        <div className="absolute -right-[3px] top-[104px] w-[3px] h-[34px] rounded-r-sm" style={{ background: isDark ? "linear-gradient(180deg, #4a4a50, #2a2a2e, #3a3a3e)" : "linear-gradient(180deg, #c0c0c5, #a0a0a5, #b0b0b5)" }} />
+
+        {/* Chassis */}
+        <div className="p-[2px]" style={{ borderRadius: BEZEL_R, background: isDark ? "linear-gradient(145deg, #5a5a62, #2d2d32 25%, #1a1a1e 50%, #2d2d32 75%, #4a4a52)" : "linear-gradient(145deg, #e8e8ed, #c8c8cd 25%, #b8b8bd 50%, #c8c8cd 75%, #dcdce1)", height: PHONE_H }}>
+          <div className="h-full p-[1.5px]" style={{ borderRadius: BEZEL_R - 2, background: isDark ? "linear-gradient(145deg, #333338, #1a1a1e, #252528)" : "linear-gradient(145deg, #d0d0d5, #b8b8bd, #c4c4c9)" }}>
+            {/* Screen */}
+            <div className="h-full overflow-hidden relative flex flex-col" style={{ borderRadius: SCREEN_R, background: "var(--background)" }}>
+
+              {/* Status bar */}
+              <div className="relative flex justify-between items-center px-3.5 pt-2.5 pb-1 select-none shrink-0" style={{ zIndex: 2 }}>
+                <span className="text-[10px] font-bold text-foreground leading-none" style={{ fontFamily: "-apple-system, 'SF Pro Text', system-ui, sans-serif" }}>{time}</span>
+                {/* Scaled Dynamic Island */}
+                <div className="absolute top-[4px] left-1/2 -translate-x-1/2 w-[68px] h-[16px] rounded-full flex items-center justify-center" style={{ background: "#000" }}>
+                  <div className="w-[5px] h-[5px] rounded-full ml-[16px]" style={{ background: "radial-gradient(circle at 35% 35%, #1a2a3a, #0a0f15)" }} />
+                </div>
+                <div className="flex items-center gap-[3px] text-foreground">
+                  <svg width="12" height="9" viewBox="0 0 14 10" fill="none"><rect x="0" y="7" width="2" height="3" rx="0.5" fill="currentColor" opacity="0.85" /><rect x="3.5" y="5" width="2" height="5" rx="0.5" fill="currentColor" opacity="0.85" /><rect x="7" y="3" width="2" height="7" rx="0.5" fill="currentColor" opacity="0.85" /><rect x="10.5" y="0" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" /></svg>
+                  <svg width="11" height="9" viewBox="0 0 13 10" fill="none"><path d="M6.5 9.2a1 1 0 100-2 1 1 0 000 2z" fill="currentColor" opacity="0.85" /><path d="M3.6 6.3a4.1 4.1 0 015.8 0" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.85" /><path d="M1.2 3.9a7.5 7.5 0 0110.6 0" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.85" /></svg>
+                  <div className="flex items-center gap-[0.5px]"><div className="w-[16px] h-[9px] rounded-[2px] border opacity-75 p-[1px]" style={{ borderColor: "var(--foreground)" }}><div className="h-full rounded-[1px] bg-pb-green" style={{ width: "78%" }} /></div><div className="w-[1px] h-[3px] rounded-r-[1px] opacity-35" style={{ background: "var(--foreground)" }} /></div>
+                </div>
+              </div>
+
+              {/* App header bar */}
+              <div className="flex items-center justify-between px-3.5 py-1.5 shrink-0 border-b border-border select-none" style={{ background: isDark ? "rgba(10,10,10,0.85)" : "rgba(248,248,249,0.85)", backdropFilter: "blur(8px)" }}>
+                <span className="text-[10px] font-black tracking-wider text-foreground uppercase">{tabs[activeTab].label}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-pb-green" style={{ animation: "pulse 2s ease-in-out infinite" }} />
+                  <span className="text-[9px] px-1.5 py-[2px] rounded-full border font-bold text-foreground" style={{ borderColor: "var(--border)", background: "var(--background)" }}>4B</span>
+                </div>
+              </div>
+
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto px-3 py-2.5 no-scrollbar" style={{ scrollBehavior: "smooth" }}>
+                {screens[activeTab]()}
+              </div>
+
+              {/* Bottom nav */}
+              <div className="shrink-0 border-t border-border select-none" style={{ background: isDark ? "rgba(15,15,16,0.9)" : "rgba(255,255,255,0.9)", backdropFilter: "blur(8px)" }}>
+                <div className="grid grid-cols-5 h-[44px]">
+                  {tabs.map((t, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveTab(i)}
+                      className="flex flex-col items-center justify-center gap-[2px] transition-colors duration-150 relative cursor-pointer bg-transparent border-none outline-none"
+                      style={{ color: activeTab === i ? "var(--primary)" : "var(--muted-foreground)" }}
+                    >
+                      {activeTab === i && <span className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-7 rounded-full" style={{ background: "var(--primary)" }} />}
+                      {(() => {
+                        const Icon = t.icon;
+                        return <Icon className="w-3.5 h-3.5" />;
+                      })()}
+                      <span className="text-[8px] font-medium leading-none tracking-tight">{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Home indicator */}
+              <div className="flex justify-center pb-2 shrink-0">
+                <div className="w-[100px] h-[4px] rounded-full" style={{ background: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)" }} />
+              </div>
+
+              {/* Glass reflection */}
+              <div className="absolute inset-0 pointer-events-none" style={{ borderRadius: SCREEN_R, background: "linear-gradient(135deg, rgba(255,255,255,0.07) 0%, transparent 35%, transparent 65%, rgba(255,255,255,0.02) 100%)", zIndex: 10 }} />
             </div>
           </div>
         </div>

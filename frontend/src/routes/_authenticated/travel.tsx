@@ -365,25 +365,25 @@ function TravelPage() {
   return (
     <AppShell>
       {/* Page Header */}
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 mb-6 flex min-h-14 flex-col gap-2 border-b border-border bg-background/85 px-6 py-2 backdrop-blur-md md:-mx-10 md:-mt-8 md:h-14 md:flex-row md:items-center md:justify-between md:px-10 md:py-0 lg:-mx-12 lg:-mt-10 lg:px-12">
+        <div className="flex w-full min-w-0 items-center gap-3 md:flex-1">
           <MobileMenuButton />
-          <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate flex items-center gap-2">
+          <h1 className="flex min-w-0 items-center gap-2 text-base font-black uppercase tracking-[0.04em] text-foreground sm:text-lg">
             <Compass className="h-5 w-5 text-primary shrink-0" />
-            <span className="truncate">Campus Fare Guard</span>
+            <span className="truncate sm:whitespace-nowrap">Campus Fare Guard</span>
           </h1>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex w-full items-center justify-end gap-2 md:w-auto md:shrink-0">
           <button
             onClick={() => setNewStudentMode(!newStudentMode)}
-            className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all ${newStudentMode ? "bg-primary/10 border-primary text-primary" : "bg-white/5 border-border text-muted-foreground hover:text-foreground"}`}
+            className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.06em] transition-all ${newStudentMode ? "bg-primary/10 border-primary text-primary" : "bg-white/5 border-border text-muted-foreground hover:text-foreground"}`}
           >
             How it works
           </button>
           {savings && (
-            <Badge variant="outline" className="bg-success/5 border-success/20 text-success font-bold text-xs px-2.5 py-1 flex items-center gap-1 font-mono">
+            <Badge variant="outline" className="flex max-w-[132px] items-center gap-1 border-success/20 bg-success/5 px-2.5 py-1 font-mono text-xs font-bold text-success">
               <TrendingDown className="h-3 w-3" />
-              <span>Saved ₹{savings.total_saved}</span>
+              <span className="truncate">Saved ₹{savings.total_saved}</span>
             </Badge>
           )}
         </div>

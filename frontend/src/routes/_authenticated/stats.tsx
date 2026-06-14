@@ -181,14 +181,24 @@ function StatsPage() {
       <div className="py-4 pb-32 space-y-6 animate-[fadeIn_0.3s_ease-out]">
 
         {/* ── Month Navigation ────────────────────────────────────────── */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <button onClick={prevMonth} id="btn-stats-prev-month"
             className="flex items-center justify-center w-9 h-9 rounded-full bg-surface border border-border hover:bg-surface-raised transition-colors cursor-pointer">
             <ChevronLeft className="h-4 w-4 text-foreground" />
           </button>
-          <h2 className="text-lg font-black font-display tracking-tight text-foreground">
-            {monthName} {year}
-          </h2>
+          <div className="flex min-w-0 flex-col items-center gap-2 sm:flex-row sm:gap-3">
+            <h2 className="text-lg font-black font-display tracking-tight text-foreground">
+              {monthName} {year}
+            </h2>
+            <button
+              onClick={exportCSV}
+              id="btn-export-csv"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-surface px-3 text-[10px] font-black uppercase tracking-[0.08em] text-foreground transition-all hover:bg-surface-raised"
+            >
+              <Download className="h-4 w-4 text-primary" />
+              <span>Export CSV</span>
+            </button>
+          </div>
           <button onClick={nextMonth} id="btn-stats-next-month"
             className="flex items-center justify-center w-9 h-9 rounded-full bg-surface border border-border hover:bg-surface-raised transition-colors cursor-pointer">
             <ChevronRight className="h-4 w-4 text-foreground" />
@@ -641,13 +651,6 @@ function StatsPage() {
                 </div>
               </div>
 
-              {/* ── EXPORT ──────────────────────────────────────────────── */}
-              <button onClick={exportCSV} id="btn-export-csv"
-                className="w-full h-full min-h-[96px] flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-surface border border-border text-xs font-bold uppercase tracking-wider text-foreground hover:bg-surface-raised transition-all cursor-pointer">
-                <Download className="h-5 w-5 text-primary" />
-                <span>Export Data to CSV</span>
-                <p className="text-[10px] text-muted-foreground font-normal lowercase tracking-normal">Download detailed transaction history</p>
-              </button>
             </div>
           </>
         )}

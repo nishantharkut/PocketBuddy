@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PoolIdRouteImport } from './routes/pool.$id'
+import { Route as AuthenticatedTravelRouteImport } from './routes/_authenticated/travel'
 import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
@@ -38,6 +39,11 @@ const PoolIdRoute = PoolIdRouteImport.update({
   id: '/pool/$id',
   path: '/pool/$id',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedTravelRoute = AuthenticatedTravelRouteImport.update({
+  id: '/travel',
+  path: '/travel',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedTransactionsRoute =
   AuthenticatedTransactionsRouteImport.update({
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
+  '/travel': typeof AuthenticatedTravelRoute
   '/pool/$id': typeof PoolIdRoute
   '/pool/': typeof AuthenticatedPoolIndexRoute
 }
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
+  '/travel': typeof AuthenticatedTravelRoute
   '/pool/$id': typeof PoolIdRoute
   '/pool': typeof AuthenticatedPoolIndexRoute
 }
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/transactions': typeof AuthenticatedTransactionsRoute
+  '/_authenticated/travel': typeof AuthenticatedTravelRoute
   '/pool/$id': typeof PoolIdRoute
   '/_authenticated/pool/': typeof AuthenticatedPoolIndexRoute
 }
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/settings'
     | '/transactions'
+    | '/travel'
     | '/pool/$id'
     | '/pool/'
   fileRoutesByTo: FileRoutesByTo
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/settings'
     | '/transactions'
+    | '/travel'
     | '/pool/$id'
     | '/pool'
   id:
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
     | '/_authenticated/transactions'
+    | '/_authenticated/travel'
     | '/pool/$id'
     | '/_authenticated/pool/'
   fileRoutesById: FileRoutesById
@@ -179,6 +191,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/pool/$id'
       preLoaderRoute: typeof PoolIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/travel': {
+      id: '/_authenticated/travel'
+      path: '/travel'
+      fullPath: '/travel'
+      preLoaderRoute: typeof AuthenticatedTravelRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/transactions': {
       id: '/_authenticated/transactions'
@@ -231,6 +250,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTransactionsRoute: typeof AuthenticatedTransactionsRoute
+  AuthenticatedTravelRoute: typeof AuthenticatedTravelRoute
   AuthenticatedPoolIndexRoute: typeof AuthenticatedPoolIndexRoute
 }
 
@@ -240,6 +260,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTransactionsRoute: AuthenticatedTransactionsRoute,
+  AuthenticatedTravelRoute: AuthenticatedTravelRoute,
   AuthenticatedPoolIndexRoute: AuthenticatedPoolIndexRoute,
 }
 

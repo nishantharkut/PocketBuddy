@@ -201,13 +201,26 @@ async def get_wing_feed(user_id: str = Depends(get_current_user)):
         created_at = ck.get("created_at", now)
         mins_ago = int((now - created_at).total_seconds() / 60)
         response = ck.get("response", "ate")
-        text = "A student checked in — ate at campus mess" if response == "ate" else "A student reported skipping a meal during exam period"
+        if response == "ate":
+            text = "A student checked in — ate at campus mess"
+            icon = "🍽️"
+        elif response == "travel_fare_report":
+            text = ck.get("stress_note", "New travel fare report submitted")
+            icon = "🗺️"
+        elif response == "travel_savings":
+            text = ck.get("stress_note", "Saved money on travel fare negotiation")
+            icon = "💰"
+        else:
+            text = "A student checked in — reported skipping a meal during exam period"
+            icon = "⚠️"
+            
         events.append({
             "type": "checkin",
-            "icon": "🍽️" if response == "ate" else "⚠️",
+            "icon": icon,
             "text": text,
             "mins_ago": mins_ago,
         })
+
 
     # Sort all events by recency
     events.sort(key=lambda e: e["mins_ago"])

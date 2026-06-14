@@ -118,16 +118,54 @@ function LoginPage() {
 
       <div className="w-full max-w-[360px] relative z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary shadow-[0_0_24px_rgba(255,107,0,0.25)] mb-4">
-            <span className="text-[#0A0A0A] font-black text-xl leading-none tracking-tighter">P</span>
+          <div className="flex justify-center mb-4">
+            <svg viewBox="0 0 100 100" className="h-12 w-12 shrink-0 filter drop-shadow(0_4px_20px_rgba(255,107,0,0.18))" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="pocketTopLogin" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#FF9F43" />
+                  <stop offset="100%" stopColor="#FF6B00" />
+                </linearGradient>
+                <linearGradient id="pocketSidesLogin" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#D97706" />
+                  <stop offset="100%" stopColor="#B45309" />
+                </linearGradient>
+                <linearGradient id="pocketBottomLogin" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FF6B00" />
+                  <stop offset="100%" stopColor="#D97706" />
+                </linearGradient>
+                <linearGradient id="coinGradLogin" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#FFFFFF" />
+                  <stop offset="100%" stopColor="#E2E8F0" />
+                </linearGradient>
+                <filter id="coinShadowLogin" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.25" />
+                </filter>
+              </defs>
+              
+              {/* Origami Pocket Base */}
+              <path d="M20 38 L50 56 L20 72 Z" fill="url(#pocketSidesLogin)" opacity="0.85" />
+              <path d="M80 38 L50 56 L80 72 Z" fill="url(#pocketSidesLogin)" opacity="0.7" />
+              <path d="M50 56 L80 72 L50 85 L20 72 Z" fill="url(#pocketBottomLogin)" />
+              <path d="M50 20 L80 38 H20 Z" fill="url(#pocketTopLogin)" opacity="0.9" />
+
+              {/* Floating coin */}
+              <circle cx="50" cy="52" r="14" fill="url(#coinGradLogin)" stroke="#FF6B00" strokeWidth="1.5" filter="url(#coinShadowLogin)" />
+              
+              {/* Standard Rupee symbol inside coin */}
+              <path d="M44 47H56" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M44 50H53" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M49 47V53" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M49 47A 3 3 0 0 1 49 53" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M49 53L54 59" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
           </div>
           <h1
             id="logo-login"
-            className="text-[22px] font-black tracking-[0.25em] text-foreground uppercase"
+            className="text-[22px] font-extrabold tracking-tight text-foreground flex items-center justify-center gap-0.5"
           >
-            POCKETBUDDY
+            PocketBuddy<span className="text-primary font-black">.</span>
           </h1>
-          <p className="mt-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+          <p className="mt-1 text-[10px] font-bold tracking-widest text-muted-foreground/85 uppercase">
             Campus Financial Guard
           </p>
         </div>

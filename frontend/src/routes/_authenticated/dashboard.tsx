@@ -6,7 +6,7 @@ import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import {
   Plus, ChevronRight, AlertTriangle, Users, Utensils, ShoppingBag,
-  Bus, Receipt, MoreHorizontal, Wallet, Timer, MessageSquare, Phone, Mail, MapPin, ExternalLink
+  Bus, Receipt, MoreHorizontal, Wallet, Timer, MessageSquare, Phone, Mail, MapPin, ExternalLink, Compass, TrendingDown
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,9 @@ import {
   updateTransaction,
   getCatalog,
   addCatalogItem,
+  getTravelSavings,
 } from "@/lib/api/db.functions";
+
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
@@ -312,6 +314,11 @@ function Dashboard() {
     refetchInterval: 30_000,
     retry: false,
     queryFn: () => getWingFeed(),
+  });
+  const { data: travelSavings } = useQuery({
+    queryKey: ["travel-savings", user?.id],
+    enabled: !!user,
+    queryFn: () => getTravelSavings(),
   });
   const wingEvents = wingFeed?.events ?? [];
 
@@ -1225,6 +1232,31 @@ function Dashboard() {
               )}
             </div>
 
+            {/* ── Campus Fare Guard (Travel Savings) ────────────────── */}
+            <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">
+              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(22,163,74,0.05), transparent 60%)" }} />
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Compass className="h-4.5 w-4.5 text-primary" />
+                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase font-display">Campus Fare Guard</p>
+                </div>
+                <Badge variant="outline" className="bg-success/5 border-success/20 text-success font-bold text-[10px] font-mono">
+                  Saved ₹{travelSavings?.total_saved ?? 0}
+                </Badge>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed font-medium">
+                Avoid local transport overcharging. Check fares, view cheap transit combos, and negotiate fares with copyable student scripts.
+              </p>
+              <div className="mt-4 flex gap-2">
+                <Button
+                  onClick={() => nav({ to: "/travel" })}
+                  className="w-full text-xs font-bold uppercase tracking-wider h-8 bg-surface-raised border border-border text-foreground hover:bg-surface-interactive hover:border-white/10 cursor-pointer"
+                >
+                  Open Fare Guard
+                </Button>
+              </div>
+            </div>
+
             {/* ── Wing Activity Feed ────────────────────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
@@ -1245,6 +1277,10 @@ function Dashboard() {
                           <MapPin className="h-4 w-4" />
                         ) : ev.text.includes("skipping") ? (
                           <AlertTriangle className="h-4 w-4 text-destructive" />
+                        ) : ev.text.includes("fare") || ev.text.includes("Fare") ? (
+                          <Compass className="h-4 w-4 text-primary" />
+                        ) : ev.text.includes("Saved") || ev.text.includes("saved") ? (
+                          <TrendingDown className="h-4 w-4 text-success" />
                         ) : (
                           <Utensils className="h-4 w-4 text-success" />
                         )}

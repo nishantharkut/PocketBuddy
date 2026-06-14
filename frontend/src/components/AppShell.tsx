@@ -12,7 +12,8 @@ import {
   Plus,
   Sun,
   Moon,
-  LogOut
+  LogOut,
+  Compass
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { BottomNav } from "./BottomNav";
@@ -31,8 +32,10 @@ const tabs = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
   { to: "/transactions", label: "History", icon: List, id: "nav-transactions" },
   { to: "/pool", label: "Pool", icon: ShoppingCart, id: "nav-pool" },
+  { to: "/travel", label: "Travel", icon: Compass, id: "nav-travel" },
   { to: "/settings", label: "Settings", icon: Settings, id: "nav-settings" },
 ] as const;
+
 
 function SidebarBody({ onNavigate, isMobile = false }: { onNavigate?: () => void; isMobile?: boolean }) {
   const ctx = useContext(SidebarCtx)!;
@@ -46,16 +49,52 @@ function SidebarBody({ onNavigate, isMobile = false }: { onNavigate?: () => void
       <div className="flex-1 overflow-y-auto no-scrollbar">
         {/* Logo */}
         <div className={`flex items-center gap-3 px-5 ${collapsed ? "pt-6 pb-2 justify-center px-3" : "pt-6 pb-2"}`}>
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-sm rotate-45 bg-primary">
-            <div className="h-3 w-3 -rotate-45 rounded-full bg-background" />
-          </div>
+          <svg viewBox="0 0 100 100" className="h-8 w-8 shrink-0 filter drop-shadow(0px 2px 8px rgba(255,107,0,0.15))" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="pocketTopAppShell" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#FF9F43" />
+                <stop offset="100%" stopColor="#FF6B00" />
+              </linearGradient>
+              <linearGradient id="pocketSidesAppShell" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#D97706" />
+                <stop offset="100%" stopColor="#B45309" />
+              </linearGradient>
+              <linearGradient id="pocketBottomAppShell" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FF6B00" />
+                <stop offset="100%" stopColor="#D97706" />
+              </linearGradient>
+              <linearGradient id="coinGradAppShell" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#FFFFFF" />
+                <stop offset="100%" stopColor="#E2E8F0" />
+              </linearGradient>
+              <filter id="coinShadowAppShell" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.25" />
+              </filter>
+            </defs>
+            
+            {/* Origami Pocket Base */}
+            <path d="M20 38 L50 56 L20 72 Z" fill="url(#pocketSidesAppShell)" opacity="0.85" />
+            <path d="M80 38 L50 56 L80 72 Z" fill="url(#pocketSidesAppShell)" opacity="0.7" />
+            <path d="M50 56 L80 72 L50 85 L20 72 Z" fill="url(#pocketBottomAppShell)" />
+            <path d="M50 20 L80 38 H20 Z" fill="url(#pocketTopAppShell)" opacity="0.9" />
+
+            {/* Floating coin */}
+            <circle cx="50" cy="52" r="14" fill="url(#coinGradAppShell)" stroke="#FF6B00" strokeWidth="1.5" filter="url(#coinShadowAppShell)" />
+            
+            {/* Standard Rupee symbol inside coin */}
+            <path d="M44 47H56" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+            <path d="M44 50H53" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+            <path d="M49 47V53" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+            <path d="M49 47A 3 3 0 0 1 49 53" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+            <path d="M49 53L54 59" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
           {!collapsed && (
             <div className="min-w-0">
-              <h1 className="font-display text-[16px] font-bold leading-none tracking-tight text-foreground truncate">
-                POCKETBUDDY
+              <h1 className="font-display text-[17px] font-extrabold leading-none tracking-tight text-foreground flex items-center gap-0.5">
+                PocketBuddy<span className="text-primary font-black">.</span>
               </h1>
-              <span className="mt-1 block text-[10px] font-medium tracking-[0.18em] uppercase text-muted-foreground/70">
-                Campus Financial Guard
+              <span className="mt-1 block text-[9px] font-bold tracking-[0.18em] uppercase text-muted-foreground/70">
+                Campus Guard
               </span>
             </div>
           )}

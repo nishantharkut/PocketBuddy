@@ -640,7 +640,7 @@ function PoolDetail() {
             <div className="flex gap-2.5 items-start">
               <Sparkles className="h-5 w-5 shrink-0 mt-0.5 text-green-500" />
               <div>
-                <p className="font-black uppercase tracking-wider text-green-400 text-sm">🎉 Pool Fully Settled</p>
+                <p className="font-black uppercase tracking-wider text-green-400 text-sm">Pool Fully Settled</p>
                 <p className="text-zinc-300 leading-relaxed mt-1">
                   Congratulations! All roommate splits for this {theme.name} pool have been paid and verified. No outstanding balances remain.
                 </p>
@@ -1399,7 +1399,7 @@ function PoolDetail() {
           </div>
           <DialogHeader className="text-center">
             <DialogTitle className="text-xl font-black uppercase tracking-tight text-foreground text-center">
-              🎉 Settlement Complete!
+              Settlement Complete!
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 text-xs">

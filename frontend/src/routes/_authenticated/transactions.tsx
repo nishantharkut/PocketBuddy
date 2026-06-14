@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { Smartphone, Edit3 } from "lucide-react";
@@ -13,8 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { rupees, relativeTime, absoluteDate, getCycleStart } from "@/lib/format";
-import { getProfile, getTransactions } from "@/lib/api/db.functions";
+import { getProfile, getTransactions, updateTransaction } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   ssr: false,
@@ -36,13 +40,23 @@ const CAT_FILTERS: { v: Cat; l: string }[] = [
   { v: "unmapped", l: "Unmapped" },
 ];
 
+const CATEGORIES = [
+  { v: "food", l: "Food" },
+  { v: "stationery", l: "Stationery" },
+  { v: "travel", l: "Travel" },
+  { v: "subscription", l: "Subscription" },
+  { v: "other", l: "Other" },
+];
+
 function TxnsPage() {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [cat, setCat] = useState<Cat>("all");
   const [src, setSrc] = useState<Source>("all");
   const [range, setRange] = useState<Range>("cycle");
   const [limit, setLimit] = useState(20);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [editingTxn, setEditingTxn] = useState<any | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -163,6 +177,12 @@ function TxnsPage() {
                             {t.category}
                           </Badge>
                         )}
+                        <button
+                          onClick={() => setEditingTxn(t)}
+                          className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
+                        >
+                          Edit
+                        </button>
                         {isCompanion && notificationPreview && (
                           <button
                             onClick={() => setExpanded(expanded === t.id ? null : t.id)}
@@ -205,6 +225,119 @@ function TxnsPage() {
         <span className="w-[1px] h-3 bg-border" />
         <span>Total: <strong className="text-foreground">{rupees(total)}</strong></span>
       </div>
+
+      <Dialog open={!!editingTxn} onOpenChange={(o) => { if (!o) setEditingTxn(null); }}>
+        <DialogContent className="sm:max-w-md bg-background border border-border text-foreground" id="dialog-edit-transaction">
+          {editingTxn && (
+            <EditTxnForm
+              txn={editingTxn}
+              onClose={() => {
+                setEditingTxn(null);
+                qc.invalidateQueries({ queryKey: ["txns"] });
+                qc.invalidateQueries({ queryKey: ["insights"] });
+                qc.invalidateQueries({ queryKey: ["wellness-insights"] });
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </AppShell>
+  );
+}
+
+function EditTxnForm({ txn, onClose }: { txn: any; onClose: () => void }) {
+  const [name, setName] = useState(txn.mapped_merchant_name ?? txn.raw_merchant_string);
+  const isStandardCat = ["food", "stationery", "travel", "subscription"].includes(txn.category ?? "");
+  const [cat, setCat] = useState<string>(isStandardCat ? (txn.category ?? "food") : "other");
+  const [customCat, setCustomCat] = useState(isStandardCat ? "" : (txn.category ?? ""));
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!name.trim()) {
+      toast.error("Enter merchant display name");
+      return;
+    }
+    if (cat === "other" && !customCat.trim()) {
+      toast.error("Enter custom category");
+      return;
+    }
+    setBusy(true);
+    try {
+      const finalCategory = cat === "other" ? customCat.trim().toLowerCase() : cat;
+      await updateTransaction({
+        id: txn.id,
+        data: {
+          mapped_merchant_name: name.trim(),
+          category: finalCategory,
+        },
+      });
+      toast.success("Transaction updated.");
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update transaction");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Edit Transaction</DialogTitle>
+      </DialogHeader>
+      
+      <div className="space-y-4 py-4">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Original Reference</label>
+          <code className="block rounded bg-surface-raised px-3 py-1.5 text-xs select-all border border-border truncate">{txn.raw_merchant_string}</code>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Display Name</label>
+          <Input
+            id="input-edit-txn-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Canteen, Stationery Shop"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Category</label>
+          <div className="grid grid-cols-2 gap-2">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.v}
+                type="button"
+                onClick={() => setCat(c.v)}
+                className={`rounded-md border p-3 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  cat === c.v ? "border-primary bg-primary/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {c.l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {cat === "other" && (
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Custom Category</label>
+            <Input
+              id="input-edit-txn-custom-category"
+              value={customCat}
+              onChange={(e) => setCustomCat(e.target.value)}
+              placeholder="e.g., Laundry, Books, Printing"
+            />
+          </div>
+        )}
+      </div>
+
+      <DialogFooter>
+        <Button id="btn-save-edit-txn" disabled={busy} onClick={save} className="w-full bg-success text-white hover:bg-success/90">
+          Save Changes
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

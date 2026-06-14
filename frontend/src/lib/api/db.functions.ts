@@ -139,6 +139,13 @@ export async function identifyMerchant({ data }: { data: any }) {
   });
 }
 
+export async function updateTransaction({ id, data }: { id: string; data: any }) {
+  return apiRequest(`/api/transactions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function getCompanionSyncLogs() {
   return apiRequest("/api/companion/logs");
 }

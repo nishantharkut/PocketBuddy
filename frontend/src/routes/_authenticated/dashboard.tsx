@@ -45,6 +45,7 @@ import {
   getCampusIntel,
   getWingFeed,
   getWellnessInsights,
+  updateTransaction,
 } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -440,6 +441,7 @@ function Dashboard() {
 
   // Dialogs
   const [identifying, setIdentifying] = useState<Txn | null>(null);
+  const [editingTxn, setEditingTxn] = useState<Txn | null>(null);
   const [adding, setAdding] = useState(false);
   const [showFoodSheet, setShowFoodSheet] = useState(false);
 
@@ -1389,6 +1391,13 @@ function Dashboard() {
                                 Identify?
                               </button>
                             )}
+                            <button
+                              id={`btn-edit-ledger-${t.id}`}
+                              onClick={() => setEditingTxn(t)}
+                              className="ml-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
+                            >
+                              Edit
+                            </button>
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
@@ -1424,6 +1433,23 @@ function Dashboard() {
           <DialogContent id="dialog-merchant-mapping">
             {identifying && (
               <IdentifyForm txn={identifying} onClose={() => { setIdentifying(null); qc.invalidateQueries(); }} />
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit transaction dialog */}
+        <Dialog open={!!editingTxn} onOpenChange={(o) => !o && setEditingTxn(null)}>
+          <DialogContent className="sm:max-w-md bg-background border border-border text-foreground" id="dialog-edit-transaction">
+            {editingTxn && (
+              <EditTxnForm
+                txn={editingTxn}
+                onClose={() => {
+                  setEditingTxn(null);
+                  qc.invalidateQueries({ queryKey: ["txns"] });
+                  qc.invalidateQueries({ queryKey: ["insights"] });
+                  qc.invalidateQueries({ queryKey: ["wellness-insights"] });
+                }}
+              />
             )}
           </DialogContent>
         </Dialog>
@@ -1615,6 +1641,103 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
       )}
       <DialogFooter>
         <Button id="btn-submit-txn" disabled={busy} onClick={save} className="w-full">Add</Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
+  const [name, setName] = useState(txn.mapped_merchant_name ?? txn.raw_merchant_string);
+  const isStandardCat = ["food", "stationery", "travel", "subscription"].includes(txn.category ?? "");
+  const [cat, setCat] = useState<string>(isStandardCat ? (txn.category ?? "food") : "other");
+  const [customCat, setCustomCat] = useState(isStandardCat ? "" : (txn.category ?? ""));
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!name.trim()) {
+      toast.error("Enter merchant display name");
+      return;
+    }
+    if (cat === "other" && !customCat.trim()) {
+      toast.error("Enter custom category");
+      return;
+    }
+    setBusy(true);
+    try {
+      const finalCategory = cat === "other" ? customCat.trim().toLowerCase() : cat;
+      await updateTransaction({
+        id: txn.id,
+        data: {
+          mapped_merchant_name: name.trim(),
+          category: finalCategory,
+        },
+      });
+      toast.success("Transaction updated.");
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update transaction");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Edit Transaction</DialogTitle>
+      </DialogHeader>
+      
+      <div className="space-y-4 py-4">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Original Reference</label>
+          <code className="block rounded bg-surface-raised px-3 py-1.5 text-xs select-all border border-border truncate">{txn.raw_merchant_string}</code>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Display Name</label>
+          <Input
+            id="input-edit-txn-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Canteen, Stationery Shop"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Category</label>
+          <div className="grid grid-cols-2 gap-2">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.v}
+                type="button"
+                onClick={() => setCat(c.v)}
+                className={`rounded-md border p-3 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  cat === c.v ? "border-primary bg-primary/10 text-foreground" : "border-border bg-surface text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {c.l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {cat === "other" && (
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Custom Category</label>
+            <Input
+              id="input-edit-txn-custom-category"
+              value={customCat}
+              onChange={(e) => setCustomCat(e.target.value)}
+              placeholder="e.g., Laundry, Books, Printing"
+            />
+          </div>
+        )}
+      </div>
+
+      <DialogFooter>
+        <Button id="btn-save-edit-txn" disabled={busy} onClick={save} className="w-full bg-success text-white hover:bg-success/90">
+          Save Changes
+        </Button>
       </DialogFooter>
     </>
   );

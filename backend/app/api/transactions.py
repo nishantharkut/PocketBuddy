@@ -26,6 +26,10 @@ class IdentifyReq(BaseModel):
     category: str
     display_name: str
 
+class UpdateTxnReq(BaseModel):
+    mapped_merchant_name: Optional[str] = None
+    category: Optional[str] = None
+
 @router.get("")
 async def get_transactions(user_id: str = Depends(get_current_user)):
     db = get_db()
@@ -113,4 +117,25 @@ async def identify_merchant(txn_id: str, req: IdentifyReq, user_id: str = Depend
         }}
     )
     
+    return {"status": "ok"}
+
+@router.patch("/{txn_id}")
+async def update_transaction(txn_id: str, req: UpdateTxnReq, user_id: str = Depends(get_current_user)):
+    db = get_db()
+    txn = await db.transactions.find_one({"_id": txn_id, "user_id": user_id})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+        
+    update_data = {}
+    if req.mapped_merchant_name is not None:
+        update_data["mapped_merchant_name"] = req.mapped_merchant_name
+        update_data["is_mapped"] = True
+    if req.category is not None:
+        update_data["category"] = req.category
+        
+    if update_data:
+        await db.transactions.update_one(
+            {"_id": txn_id, "user_id": user_id},
+            {"$set": update_data}
+        )
     return {"status": "ok"}

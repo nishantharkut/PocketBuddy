@@ -595,6 +595,7 @@ function month(name: string): string {
    ═══════════════════════════════════════════════════════════════════════ */
 function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: string; l: string }[]; onClose: () => void }) {
   const [name, setName] = useState(txn.mapped_merchant_name ?? txn.raw_merchant_string);
+  const [direction, setDirection] = useState<"debit" | "credit">(txn.direction === "credit" ? "credit" : "debit");
   const knownValues = categories.map((c) => c.v);
   const isKnownCat = knownValues.includes(txn.category ?? "");
   const [cat, setCat] = useState<string>(isKnownCat ? (txn.category ?? "food") : "other");
@@ -627,6 +628,7 @@ function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: 
         data: {
           mapped_merchant_name: name.trim(),
           category: finalCategory,
+          direction: direction,
         },
       });
       toast.success("Transaction updated.");
@@ -648,6 +650,41 @@ function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: 
         <div className="space-y-1">
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Original Reference</label>
           <code className="block rounded bg-surface-raised px-3 py-1.5 text-xs select-all border border-border truncate">{txn.raw_merchant_string}</code>
+        </div>
+
+        {/* Type Toggle */}
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Type</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDirection("debit");
+                if (cat === "salary" || cat === "income") setCat("food");
+              }}
+              className={`rounded-md border p-2 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                direction === "debit"
+                  ? "border-destructive bg-destructive/10 text-destructive-foreground"
+                  : "border-border bg-surface text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDirection("credit");
+                setCat("salary");
+              }}
+              className={`rounded-md border p-2 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                direction === "credit"
+                  ? "border-success bg-success/10 text-success"
+                  : "border-border bg-surface text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Income
+            </button>
+          </div>
         </div>
 
         <div className="space-y-1">

@@ -21,6 +21,7 @@ class TxnReq(BaseModel):
     source: str = "manual"
     is_mapped: bool = True
     mapped_merchant_name: Optional[str] = None
+    direction: Optional[str] = "debit"
 
 class IdentifyReq(BaseModel):
     category: str
@@ -29,6 +30,7 @@ class IdentifyReq(BaseModel):
 class UpdateTxnReq(BaseModel):
     mapped_merchant_name: Optional[str] = None
     category: Optional[str] = None
+    direction: Optional[str] = None
 
 def clean_transaction_label(value: str, field_name: str, max_length: int) -> str:
     cleaned = value.strip()
@@ -59,13 +61,14 @@ async def insert_transaction(req: TxnReq, user_id: str = Depends(get_current_use
         "category": req.category or "other",
         "source": req.source,
         "is_mapped": req.is_mapped,
+        "direction": req.direction or "debit",
         "created_at": datetime.datetime.utcnow()
     }
     
     await db.transactions.insert_one(new_txn)
     merchant = new_txn["mapped_merchant_name"] or new_txn["raw_merchant_string"]
     service_name = subscription_name_for_merchant(merchant)
-    if new_txn["category"] == "subscription" or service_name:
+    if (new_txn["category"] == "subscription" or service_name) and new_txn["direction"] == "debit":
         service_name = service_name or clean_merchant_name(merchant)
         if service_name:
             await upsert_subscription(
@@ -146,6 +149,8 @@ async def update_transaction(txn_id: str, req: UpdateTxnReq, user_id: str = Depe
         update_data["is_mapped"] = True
     if req.category is not None:
         update_data["category"] = clean_transaction_label(req.category, "Category", 40)
+    if req.direction is not None:
+        update_data["direction"] = clean_transaction_label(req.direction, "Direction", 20)
         
     if update_data:
         await db.transactions.update_one(

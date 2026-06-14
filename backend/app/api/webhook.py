@@ -281,16 +281,19 @@ async def ingest_notification(
         return {"status": "auto_verified", "reason": "verified_pool_payment"}
 
     direction = (req.direction or "debit").lower()
-    if direction != "debit":
-        amount_paise = int(round(req.amount * 100)) if req.amount is not None else parse_amount(raw_body)
-        merchant = normalize_merchant(req.merchant)
-        transaction_reference = req.transactionId or parse_transaction_id(raw_body)
-        await mark_sync_log(db, log_id, "received", amount_paise, merchant, transaction_reference)
-        await update_profile_sync_state(db, user_id, req, now)
-        return {"status": "received", "reason": "non_expense_credit"}
-
     amount_paise = int(round(req.amount * 100)) if req.amount is not None else parse_amount(raw_body)
     merchant = normalize_merchant(req.merchant) or parse_merchant(raw_body)
+    if not merchant and direction == "credit":
+        from_match = re.search(
+            r"from\s+(.+?)(?:\s+on\s+\d|\.|,|$)",
+            raw_body,
+            re.IGNORECASE,
+        )
+        if from_match:
+            merchant = normalize_merchant(from_match.group(1))
+        else:
+            merchant = "UPI Credit"
+
     transaction_reference = req.transactionId or parse_transaction_id(raw_body)
 
     if not raw_body or not amount_paise or not merchant:
@@ -322,6 +325,10 @@ async def ingest_notification(
     sub_name = subscription_name_for_merchant(merchant)
     mapped_merchant_name = merchant_doc["display_name"] if merchant_doc else sub_name
     category = merchant_doc["category"] if merchant_doc else ("subscription" if sub_name else None)
+
+    if direction == "credit" and not category:
+        category = "income"
+
     source = "companion_sms" if "sms" in notification_source.lower() else "companion_notification"
     txn_id = str(uuid.uuid4())
     new_txn = {
@@ -331,8 +338,8 @@ async def ingest_notification(
         "currency": req.currency or "INR",
         "direction": direction,
         "raw_merchant_string": merchant,
-        "mapped_merchant_name": mapped_merchant_name,
-        "category": category,
+        "mapped_merchant_name": mapped_merchant_name or merchant,
+        "category": category or "other",
         "is_mapped": bool(merchant_doc or sub_name),
         "source": source,
         "notification_preview": notification_preview,
@@ -346,10 +353,11 @@ async def ingest_notification(
     }
 
     await db.transactions.insert_one(new_txn)
-    await mark_sync_log(db, log_id, "parsed", amount_paise, merchant, txn_id)
+    log_status = "received" if direction == "credit" else "parsed"
+    await mark_sync_log(db, log_id, log_status, amount_paise, merchant, txn_id)
     await update_profile_sync_state(db, user_id, req, now)
 
-    if sub_name:
+    if sub_name and direction == "debit":
         await upsert_subscription_for_transaction(
             db,
             user_id=user_id,

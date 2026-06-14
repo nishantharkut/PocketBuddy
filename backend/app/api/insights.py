@@ -517,7 +517,12 @@ async def get_wellness_insights(user_id: str = Depends(get_current_user)):
 INCOME_KEYWORDS = {"salary", "income", "allowance", "refund", "cashback", "balance", "credit", "stipend", "scholarship", "reimbursement"}
 
 def _is_income(txn: dict) -> bool:
-    """Determine if a transaction is income based on category or merchant name keywords."""
+    """Determine if a transaction is income based on direction or category/merchant name keywords."""
+    direction = txn.get("direction")
+    if direction == "credit":
+        return True
+    if direction == "debit":
+        return False
     cat = (txn.get("category") or "").lower()
     merchant = (txn.get("mapped_merchant_name") or txn.get("raw_merchant_string") or "").lower()
     return any(kw in cat for kw in INCOME_KEYWORDS) or any(kw in merchant for kw in INCOME_KEYWORDS)
@@ -544,11 +549,14 @@ async def get_stats(
     # ── Fetch transactions for the requested month ────────────────────────
     _, days_in_month = calendar.monthrange(year, month)
     month_start = datetime.datetime(year, month, 1, 0, 0, 0)
-    month_end = datetime.datetime(year, month, days_in_month, 23, 59, 59)
+    if month == 12:
+        next_month_start = datetime.datetime(year + 1, 1, 1, 0, 0, 0)
+    else:
+        next_month_start = datetime.datetime(year, month + 1, 1, 0, 0, 0)
 
     cursor = db.transactions.find({
         "user_id": user_id,
-        "created_at": {"$gte": month_start, "$lte": month_end}
+        "created_at": {"$gte": month_start, "$lt": next_month_start}
     }).sort("created_at", -1)
     txns = await cursor.to_list(length=5000)
 
@@ -557,13 +565,12 @@ async def get_stats(
         prev_month, prev_year = 12, year - 1
     else:
         prev_month, prev_year = month - 1, year
-    _, prev_days = calendar.monthrange(prev_year, prev_month)
     prev_start = datetime.datetime(prev_year, prev_month, 1, 0, 0, 0)
-    prev_end = datetime.datetime(prev_year, prev_month, prev_days, 23, 59, 59)
+    prev_next_month_start = month_start
 
     prev_cursor = db.transactions.find({
         "user_id": user_id,
-        "created_at": {"$gte": prev_start, "$lte": prev_end}
+        "created_at": {"$gte": prev_start, "$lt": prev_next_month_start}
     })
     prev_txns = await prev_cursor.to_list(length=5000)
 
@@ -654,10 +661,10 @@ async def get_stats(
 
     # ── Yearly monthly summaries ──────────────────────────────────────────
     year_start = datetime.datetime(year, 1, 1, 0, 0, 0)
-    year_end = datetime.datetime(year, 12, 31, 23, 59, 59)
+    next_year_start = datetime.datetime(year + 1, 1, 1, 0, 0, 0)
     year_cursor = db.transactions.find({
         "user_id": user_id,
-        "created_at": {"$gte": year_start, "$lte": year_end}
+        "created_at": {"$gte": year_start, "$lt": next_year_start}
     })
     year_txns = await year_cursor.to_list(length=10000)
 

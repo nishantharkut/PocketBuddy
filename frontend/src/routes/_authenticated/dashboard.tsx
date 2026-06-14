@@ -1670,6 +1670,7 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
   const [merchant, setMerchant] = useState("");
   const [cat, setCat] = useState<string>("food");
   const [customCat, setCustomCat] = useState("");
+  const [direction, setDirection] = useState<"debit" | "credit">("debit");
   const [busy, setBusy] = useState(false);
 
   const { data: catalogCategories } = useQuery({
@@ -1695,7 +1696,16 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
         finalCategory = customCat.trim().toLowerCase();
         try { await addCatalogItem("transaction-categories", { label: customCat.trim() }); } catch {}
       }
-      await insertTransaction({ data: { amount: Math.round(parseFloat(amount) * 100), raw_merchant_string: merchant, mapped_merchant_name: merchant, category: finalCategory, source: "manual" } });
+      await insertTransaction({
+        data: {
+          amount: Math.round(parseFloat(amount) * 100),
+          raw_merchant_string: merchant,
+          mapped_merchant_name: merchant,
+          category: finalCategory,
+          source: "manual",
+          direction: direction,
+        }
+      });
       toast.success("Transaction logged.");
       qc.invalidateQueries({ queryKey: ["catalog", "transaction-categories"] });
       onClose();
@@ -1708,11 +1718,44 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
   return (
     <>
       <DialogHeader><DialogTitle>Log a transaction</DialogTitle></DialogHeader>
+
+      {/* Type Toggle */}
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => {
+            setDirection("debit");
+            if (cat === "salary" || cat === "income") setCat("food");
+          }}
+          className={`rounded-md border p-2 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            direction === "debit"
+              ? "border-destructive bg-destructive/10 text-destructive-foreground"
+              : "border-border bg-surface text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Expense
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDirection("credit");
+            setCat("salary");
+          }}
+          className={`rounded-md border p-2 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            direction === "credit"
+              ? "border-success bg-success/10 text-success"
+              : "border-border bg-surface text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Income
+        </button>
+      </div>
+
       <div className="flex items-center rounded-md border border-input bg-surface">
         <span className="px-3 text-sm text-muted-foreground">₹</span>
         <input id="input-txn-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="flex-1 bg-transparent py-2 pr-3 text-sm outline-none" placeholder="Amount" />
       </div>
-      <Input id="input-txn-merchant" value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder="e.g. Night Canteen" />
+      <Input id="input-txn-merchant" value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder={direction === "credit" ? "Sender (e.g. Parents, Friend)" : "e.g. Night Canteen"} />
       <div className="grid grid-cols-2 gap-2">
         {categories.map((c) => (
           <button key={c.v} onClick={() => setCat(c.v)} className={`rounded-md border p-3 text-center text-sm ${cat === c.v ? "border-primary bg-primary/10" : "border-border bg-surface"}`}>{c.l}</button>
@@ -1735,6 +1778,7 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
 function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState(txn.mapped_merchant_name ?? txn.raw_merchant_string);
+  const [direction, setDirection] = useState<"debit" | "credit">(txn.direction === "credit" ? "credit" : "debit");
 
   const { data: catalogCategories } = useQuery({
     queryKey: ["catalog", "transaction-categories"],
@@ -1776,6 +1820,7 @@ function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
         data: {
           mapped_merchant_name: name.trim(),
           category: finalCategory,
+          direction: direction,
         },
       });
       toast.success("Transaction updated.");
@@ -1798,6 +1843,41 @@ function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
         <div className="space-y-1">
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Original Reference</label>
           <code className="block rounded bg-surface-raised px-3 py-1.5 text-xs select-all border border-border truncate">{txn.raw_merchant_string}</code>
+        </div>
+
+        {/* Type Toggle */}
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Type</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDirection("debit");
+                if (cat === "salary" || cat === "income") setCat("food");
+              }}
+              className={`rounded-md border p-2 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                direction === "debit"
+                  ? "border-destructive bg-destructive/10 text-destructive-foreground"
+                  : "border-border bg-surface text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDirection("credit");
+                setCat("salary");
+              }}
+              className={`rounded-md border p-2 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                direction === "credit"
+                  ? "border-success bg-success/10 text-success"
+                  : "border-border bg-surface text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Income
+            </button>
+          </div>
         </div>
 
         <div className="space-y-1">

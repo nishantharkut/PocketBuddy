@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     CAMPUS_FOOD_S3_BUCKET: str = ""
     CAMPUS_FOOD_S3_KEY: str = "campus_food.json"
     BEDROCK_ENABLED: bool = False
-    BEDROCK_MODEL_ID: str = "anthropic.claude-3-haiku-20240307-v1:0"
+    BEDROCK_MODEL_ID: str = "amazon.nova-lite-v1:0"
 
     class Config:
         env_file = ".env"

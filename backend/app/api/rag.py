@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.security import get_current_user
 from app.core.database import get_db
 from app.services.campus_food import load_campus_food
+from app.services.bedrock import generate_text
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,13 +34,6 @@ async def get_food_recommendation(req: RagReq, user_id: str = Depends(get_curren
         return {**fallback, "source": "local_fallback"}
 
     try:
-        import boto3
-
-        client = boto3.client(
-            service_name="bedrock-runtime",
-            region_name=settings.AWS_REGION,
-        )
-
         prompt = f"""
         You are an AI financial assistant for a college student.
         The student has {req.days_left} days left in their cycle, Rs {req.remaining_budget:.0f} remaining,
@@ -52,21 +46,7 @@ async def get_food_recommendation(req: RagReq, user_id: str = Depends(get_curren
         Provide a very short, encouraging 2-sentence response telling them what to eat and why it fits their tight budget.
         """
 
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 150,
-            "messages": [{"role": "user", "content": prompt}],
-        })
-
-        response = client.invoke_model(
-            body=body,
-            modelId=settings.BEDROCK_MODEL_ID,
-            accept="application/json",
-            contentType="application/json",
-        )
-
-        res_body = json.loads(response.get("body").read())
-        recommendation = res_body.get("content")[0].get("text")
+        recommendation = generate_text(prompt, max_tokens=150, temperature=0.25)
 
         return {
             "recommendation": recommendation,
@@ -129,31 +109,21 @@ async def get_campus_intel(user_id: str = Depends(get_current_user)):
     # Try Bedrock
     if settings.BEDROCK_ENABLED:
         try:
-            import boto3, json as _json
-
             cursor_food = db.campus_food.find({})
             campus_foods = await cursor_food.to_list(length=20)
             if not campus_foods:
                 campus_foods = load_campus_food()[:5]
 
-            client = boto3.client("bedrock-runtime", region_name=settings.AWS_REGION)
             prompt = f"""You are PocketBuddy, an AI financial wellness guard for Indian college students.
 Student context:
 - Spent Rs {spend_7:.0f} in last 7 days
 - Remaining budget: Rs {remaining:.0f}
 - Last food transaction: {last_food_hours:.0f} hours ago
-- Campus food options: {_json.dumps([{"venue": f.get("venue_name"), "item": f.get("item_name"), "price_rs": f.get("price", 0)//100} for f in campus_foods[:5]], indent=None)}
+- Campus food options: {json.dumps([{"venue": f.get("venue_name"), "item": f.get("item_name"), "price_rs": f.get("price", 0)//100} for f in campus_foods[:5]], indent=None)}
 
 Generate exactly 2 concise, specific, actionable sentences as a campus financial intelligence summary. Be direct, mention real numbers. No emojis."""
 
-            body = _json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 120,
-                "messages": [{"role": "user", "content": prompt}],
-            })
-            response = client.invoke_model(body=body, modelId=settings.BEDROCK_MODEL_ID, accept="application/json", contentType="application/json")
-            res_body = _json.loads(response.get("body").read())
-            text = res_body.get("content", [{}])[0].get("text", "")
+            text = generate_text(prompt, max_tokens=120, temperature=0.2)
             if text:
                 return {"summary": text, "source": "bedrock", "spend_7d": spend_7, "last_food_hours": round(last_food_hours, 1)}
         except Exception as exc:

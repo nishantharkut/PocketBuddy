@@ -1,6 +1,5 @@
 import datetime
 import uuid
-import json
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,6 +7,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
+from app.services.bedrock import generate_json
 
 router = APIRouter()
 logger = logging.getLogger("app.api.travel")
@@ -512,12 +512,6 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
         return fallback_response
 
     try:
-        import boto3
-        client = boto3.client(
-            service_name="bedrock-runtime",
-            region_name=settings.AWS_REGION
-        )
-        
         prompt = f"""
         You are an expert Indian auto/cab fare negotiator and transit helper. 
         The student is at {college} in {region}.
@@ -533,31 +527,8 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
 
         Output ONLY valid JSON matching this schema, without markdown formatting or trailing text. Do not wrap in ```json.
         """
-        
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 400,
-            "messages": [{"role": "user", "content": prompt}]
-        })
-        
-        response = client.invoke_model(
-            body=body,
-            modelId=settings.BEDROCK_MODEL_ID,
-            accept="application/json",
-            contentType="application/json"
-        )
-        
-        res_body = json.loads(response.get("body").read())
-        text = res_body.get("content")[0].get("text").strip()
-        
-        # Clean text if wrapped in markdown
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-        
-        result = json.loads(text)
+
+        result = generate_json(prompt, max_tokens=500, temperature=0.25)
         result["source"] = "bedrock"
         return result
         

@@ -21,7 +21,10 @@ import {
   Users,
   MapPin,
   PhoneCall,
-  Map
+  Map,
+  ArrowRight,
+  TrendingUp,
+  Search
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -29,6 +32,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { rupees } from "@/lib/format";
 import { 
@@ -46,10 +56,22 @@ export const Route = createFileRoute("/_authenticated/travel")({
   component: TravelPage,
 });
 
+const POPULAR_COLLEGES = [
+  "ABV-IIITM Gwalior",
+  "IIT Delhi",
+  "BITS Pilani",
+  "IIT Bombay",
+  "IIIT Bangalore",
+  "VIT Vellore",
+];
+
 function TravelPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   
+  const [selectedCollege, setSelectedCollege] = useState<string>("");
+  const [otherCollege, setOtherCollege] = useState<string>("");
+  const [isCustomCollegeMode, setIsCustomCollegeMode] = useState<boolean>(false);
   const [selectedRouteId, setSelectedRouteId] = useState<string>("");
   const [selectedMode, setSelectedMode] = useState<string>("Auto");
   const [driverQuote, setDriverQuote] = useState<string>("");
@@ -80,24 +102,42 @@ function TravelPage() {
     queryFn: () => getProfile(),
   });
 
-  const { data: routes, isLoading: routesLoading } = useQuery({
-    queryKey: ["travel-routes", user?.id],
-    enabled: !!user,
-    queryFn: () => getTravelRoutes(),
-  });
+  // Set default college from profile
+  useEffect(() => {
+    if (profile && profile.college_name && !selectedCollege) {
+      if (POPULAR_COLLEGES.includes(profile.college_name)) {
+        setSelectedCollege(profile.college_name);
+      } else {
+        setSelectedCollege("Other");
+        setOtherCollege(profile.college_name);
+        setIsCustomCollegeMode(true);
+      }
+    }
+  }, [profile, selectedCollege]);
 
   const activeCollege = useMemo(() => {
-    return profile?.college_name || "ABV-IIITM Gwalior";
-  }, [profile]);
+    if (selectedCollege === "Other") {
+      return otherCollege.trim() || "My Campus";
+    }
+    return selectedCollege || profile?.college_name || "ABV-IIITM Gwalior";
+  }, [selectedCollege, otherCollege, profile]);
+
+  const { data: routes, isLoading: routesLoading } = useQuery({
+    queryKey: ["travel-routes", activeCollege, user?.id],
+    enabled: !!user && !!activeCollege,
+    queryFn: () => getTravelRoutes(activeCollege),
+  });
 
   // Set default route once loaded
   const defaultRouteIdSet = useRef(false);
   useEffect(() => {
-    if (routes && routes.length > 0 && !selectedRouteId && !defaultRouteIdSet.current) {
+    if (routes && routes.length > 0) {
       setSelectedRouteId(routes[0].id);
       defaultRouteIdSet.current = true;
+    } else {
+      setSelectedRouteId("");
     }
-  }, [routes, selectedRouteId]);
+  }, [routes]);
 
   const { data: reports, isLoading: reportsLoading } = useQuery({
     queryKey: ["travel-reports", selectedRouteId],
@@ -113,7 +153,7 @@ function TravelPage() {
 
   const selectedRoute = useMemo(() => {
     if (!routes || !selectedRouteId) return null;
-    return routes.find((r: any) => r.id === selectedRouteId) || routes[0];
+    return routes.find((r: any) => r.id === selectedRouteId) || null;
   }, [routes, selectedRouteId]);
 
   // Automatically select an appropriate mode if the selected route changes
@@ -173,7 +213,7 @@ function TravelPage() {
     mutationFn: submitTravelReport,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["travel-reports", selectedRouteId] });
-      qc.invalidateQueries({ queryKey: ["travel-routes"] }); // refetch ranges
+      qc.invalidateQueries({ queryKey: ["travel-routes", activeCollege] }); // refetch ranges
       qc.invalidateQueries({ queryKey: ["wing-feed"] });
       toast.success("Community fare report submitted! Thank you for helping fellow students.");
       setIsReportOpen(false);
@@ -191,7 +231,7 @@ function TravelPage() {
   const createRouteMutation = useMutation({
     mutationFn: createTravelRoute,
     onSuccess: (newRoute) => {
-      qc.invalidateQueries({ queryKey: ["travel-routes"] });
+      qc.invalidateQueries({ queryKey: ["travel-routes", activeCollege] });
       toast.success(`Custom route "${newRoute.name}" created! Fares dynamically estimated via Ride App APIs.`);
       setIsNewRouteOpen(false);
       setSelectedRouteId(newRoute.id);
@@ -263,7 +303,8 @@ function TravelPage() {
         name: newRouteName.trim(),
         description: newRouteDesc.trim(),
         distance_km: distanceVal,
-        campus_landmark: newRouteLandmark.trim()
+        campus_landmark: newRouteLandmark.trim(),
+        college: activeCollege
       }
     });
   };
@@ -279,19 +320,19 @@ function TravelPage() {
     <AppShell>
       {/* Page Header */}
       <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <MobileMenuButton />
           <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate flex items-center gap-2">
             <Compass className="h-5 w-5 text-primary shrink-0" />
-            <span className="truncate">{activeCollege.split(" ")[0]} Fare Guard</span>
+            <span className="truncate">Campus Fare Guard</span>
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setNewStudentMode(!newStudentMode)}
             className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all ${newStudentMode ? "bg-primary/10 border-primary text-primary" : "bg-white/5 border-border text-muted-foreground hover:text-foreground"}`}
           >
-            New Student
+            How it works
           </button>
           {savings && (
             <Badge variant="outline" className="bg-success/5 border-success/20 text-success font-bold text-xs px-2.5 py-1 flex items-center gap-1 font-mono">
@@ -304,21 +345,96 @@ function TravelPage() {
 
       <div className="pb-24 max-w-6xl mx-auto space-y-6">
         
-        {/* Top Info Banner for non-Gwalior Dynamic Colleges */}
-        <div className="bg-surface border border-border p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden">
-          <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.03), transparent 60%)" }} />
-          <div className="flex gap-3 items-center min-w-0">
-            <div className="p-2 bg-primary/10 border border-primary/20 rounded-xl shrink-0">
-              <Map className="h-5 w-5 text-primary" />
+        {/* Onboarding Guide Card */}
+        {newStudentMode && (
+          <Card className="bg-surface border-border p-5 relative overflow-hidden animate-[fadeIn_0.25s_ease-out]">
+            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top left, rgba(255,107,0,0.04), transparent 60%)" }} />
+            <div className="flex justify-between items-start mb-3">
+              <h2 className="text-xs font-black uppercase tracking-widest text-primary font-display flex items-center gap-1.5">
+                <Info className="h-4 w-4" />
+                <span>Product Guide: Dynamic Fare Index</span>
+              </h2>
+              <button onClick={() => setNewStudentMode(false)} className="text-zinc-600 hover:text-zinc-400 text-xs shrink-0 cursor-pointer">✕</button>
             </div>
-            <div>
-              <p className="text-xs font-black text-foreground uppercase tracking-wider">{activeCollege}</p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">Showing travel routes for your active college campus. Fares automatically simulated via booking apps.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-zinc-400 leading-relaxed font-medium">
+              <div className="space-y-1 bg-background/30 border border-border/40 p-3.5 rounded-xl">
+                <p className="font-bold text-zinc-300 flex items-center gap-1">
+                  <span className="w-5 h-5 rounded-full bg-white/5 border border-border flex items-center justify-center text-[10px] text-primary">1</span>
+                  Ride App Baselines
+                </p>
+                <p className="text-[11px] text-zinc-500">
+                  Standard ride booking apps (Uber, Ola, Rapido) initialize the baseline fares based on simulated distance in kilometers.
+                </p>
+              </div>
+              <div className="space-y-1 bg-background/30 border border-border/40 p-3.5 rounded-xl">
+                <p className="font-bold text-zinc-300 flex items-center gap-1">
+                  <span className="w-5 h-5 rounded-full bg-white/5 border border-border flex items-center justify-center text-[10px] text-primary">2</span>
+                  Student Feedback loop
+                </p>
+                <p className="text-[11px] text-zinc-500">
+                  When you take a ride, report the actual fare paid. The system automatically recalculates the boundary range in real time.
+                </p>
+              </div>
+              <div className="space-y-1 bg-background/30 border border-border/40 p-3.5 rounded-xl">
+                <p className="font-bold text-zinc-300 flex items-center gap-1">
+                  <span className="w-5 h-5 rounded-full bg-white/5 border border-border flex items-center justify-center text-[10px] text-primary">3</span>
+                  Negotiation script
+                </p>
+                <p className="text-[11px] text-zinc-500">
+                  Use the Hindi student scripts to easily quote normal rates and avoid getting overcharged at terminal exits.
+                </p>
+              </div>
             </div>
+          </Card>
+        )}
+
+        {/* Dynamic Campus Selector & Control Bar */}
+        <div className="bg-surface border border-border p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 min-w-0">
+            <div className="flex items-center gap-2 shrink-0">
+              <Map className="h-4.5 w-4.5 text-primary" />
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Campus:</span>
+            </div>
+            
+            <div className="w-full sm:w-60">
+              <Select value={selectedCollege} onValueChange={(v) => {
+                setSelectedCollege(v);
+                if (v !== "Other") {
+                  setIsCustomCollegeMode(false);
+                } else {
+                  setIsCustomCollegeMode(true);
+                }
+                setSelectedRouteId("");
+              }}>
+                <SelectTrigger id="select-campus-dropdown" className="bg-surface-raised border-border text-xs font-bold text-foreground h-9 uppercase tracking-wider w-full">
+                  <SelectValue placeholder="Select Campus" />
+                </SelectTrigger>
+                <SelectContent className="bg-background border border-border text-foreground">
+                  {POPULAR_COLLEGES.map((c) => (
+                    <SelectItem key={c} value={c} className="text-xs font-medium">{c}</SelectItem>
+                  ))}
+                  <SelectItem value="Other" className="text-xs font-medium">Other Campus...</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isCustomCollegeMode && (
+              <div className="flex items-center gap-2 w-full sm:w-64 animate-[fadeIn_0.2s_ease-out]">
+                <Input
+                  id="input-custom-campus"
+                  placeholder="Type college campus name..."
+                  value={otherCollege}
+                  onChange={(e) => setOtherCollege(e.target.value)}
+                  className="bg-surface-raised border-border text-xs font-bold h-9 flex-1"
+                />
+              </div>
+            )}
           </div>
+          
           <Button
             onClick={() => setIsNewRouteOpen(true)}
-            className="w-full sm:w-auto h-9 text-[10px] font-black uppercase tracking-wider bg-primary text-primary-foreground flex items-center justify-center gap-1.5 shrink-0"
+            className="h-9 text-[10px] font-black uppercase tracking-wider bg-primary text-primary-foreground flex items-center justify-center gap-1.5 shrink-0"
           >
             <Plus className="h-4 w-4" />
             <span>Add Route</span>
@@ -332,9 +448,15 @@ function TravelPage() {
             <Skeleton className="h-24 bg-white/5" />
             <Skeleton className="h-24 bg-white/5" />
           </div>
+        ) : !routes || routes.length === 0 ? (
+          <Card className="bg-surface border-border p-10 text-center space-y-3">
+            <Compass className="h-10 w-10 text-zinc-600 mx-auto animate-pulse" />
+            <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">No routes defined for this campus yet.</p>
+            <p className="text-xs text-zinc-600">Click the 'Add Route' button above to dynamically estimate and seed travel routes for {activeCollege}!</p>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {routes?.map((r: any) => (
+            {routes.map((r: any) => (
               <button
                 key={r.id}
                 onClick={() => {
@@ -361,7 +483,7 @@ function TravelPage() {
                   <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-widest truncate">{r.description}</p>
                 </div>
                 <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 mt-2">
-                  <span className="truncate">{r.name.split("→")[1]?.trim() || "ABV-IIITM"}</span>
+                  <span className="truncate">{r.name.split("→")[1]?.trim() || activeCollege}</span>
                   <Navigation className="h-3.5 w-3.5 text-primary" />
                 </div>
               </button>
@@ -466,7 +588,7 @@ function TravelPage() {
                             ? `Likely Overcharged by ₹${overchargeAnalysis.overchargeMin} - ₹${overchargeAnalysis.overchargeMax}` 
                             : "Fair Quote Detected"}
                         </p>
-                        <p className="text-[11px] text-zinc-400 leading-relaxed font-medium">
+                        <p className="text-[11px] text-zinc-400 leading-relaxed font-medium mt-0.5">
                           {overchargeAnalysis.isOvercharged 
                             ? `Normal ${selectedMode} fare for this route is around ₹${overchargeAnalysis.normalMedian}. Avoid paying ₹${driverQuote}.` 
                             : `The fare of ₹${driverQuote} is within the normal boundary (₹${overchargeAnalysis.normalMedian} median).`}

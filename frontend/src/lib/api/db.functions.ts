@@ -177,9 +177,11 @@ export async function addCatalogItem(catalogType: string, data: { label: string;
   });
 }
 
-export async function getTravelRoutes() {
-  return apiRequest("/api/travel/routes");
+export async function getTravelRoutes(college?: string) {
+  const url = college ? `/api/travel/routes?college=${encodeURIComponent(college)}` : "/api/travel/routes";
+  return apiRequest(url);
 }
+
 
 export async function submitTravelReport({ data }: { data: any }) {
   return apiRequest("/api/travel/reports", {
@@ -203,7 +205,7 @@ export async function logTravelSavings({ data }: { data: { amount_saved: number;
   });
 }
 
-export async function createTravelRoute({ data }: { data: { name: string; description?: string; distance_km: number; campus_landmark?: string } }) {
+export async function createTravelRoute({ data }: { data: { name: string; description?: string; distance_km: number; campus_landmark?: string; college?: string } }) {
   return apiRequest("/api/travel/routes", {
     method: "POST",
     body: JSON.stringify(data),

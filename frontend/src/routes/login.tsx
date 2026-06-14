@@ -116,7 +116,8 @@ function LoginPage() {
       {/* Cinematic ambient light overlay */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[450px] w-[450px] rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-[360px] relative z-10">
+      {/* Styled Centered Card Box */}
+      <div className="w-full max-w-[390px] relative z-10 bg-surface-raised/40 backdrop-blur-xl border border-border/50 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/30">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <svg viewBox="0 0 100 100" className="h-12 w-12 shrink-0 filter drop-shadow(0_4px_20px_rgba(255,107,0,0.18))" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -263,23 +264,36 @@ function LoginPage() {
         </div>
 
         <div className="mt-6">
-          {busy ? (
-            <Skeleton className="h-10 w-full rounded-md bg-white/5" />
-          ) : (
-            <Button
-              id={mode === "signup" ? "btn-create-account" : "btn-sign-in"}
-              onClick={tab === "email" ? handleEmail : handlePhone}
-              className="w-full h-10 bg-foreground text-background font-black uppercase tracking-wider text-xs shadow-md transition-all duration-150"
-            >
-              {tab === "phone" && !otpSent
+          <Button
+            id={mode === "signup" ? "btn-create-account" : "btn-sign-in"}
+            onClick={tab === "email" ? handleEmail : handlePhone}
+            disabled={busy}
+            className="w-full h-10 bg-foreground text-background font-black uppercase tracking-wider text-xs shadow-md transition-all duration-150 relative flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {busy ? (
+              <div className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4 text-background" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>
+                  {tab === "phone" && !otpSent
+                    ? "Sending..."
+                    : mode === "signup"
+                      ? "Creating Account..."
+                      : "Signing In..."}
+                </span>
+              </div>
+            ) : (
+              tab === "phone" && !otpSent
                 ? "Send OTP"
                 : mode === "signup"
                   ? "Create Account"
                   : tab === "phone"
                     ? "Verify & Sign In"
-                    : "Sign In"}
-            </Button>
-          )}
+                    : "Sign In"
+            )}
+          </Button>
         </div>
 
         <div className="mt-4 text-center">

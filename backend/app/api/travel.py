@@ -59,6 +59,50 @@ DEFAULT_ROUTES = [
     }
 ]
 
+# Real-world estimated distances in km for popular campuses
+CAMPUS_DISTANCES = {
+    "iit delhi": {
+        "station": 15.5,
+        "bus": 21.0,
+        "airport": 10.0,
+        "station_name": "New Delhi Railway Station (NDLS)",
+        "bus_name": "Kashmere Gate ISBT",
+        "airport_name": "Indira Gandhi International Airport (DEL)"
+    },
+    "bits pilani": {
+        "station": 26.0,
+        "bus": 1.8,
+        "airport": 180.0,
+        "station_name": "Loharu Railway Station (LHU)",
+        "bus_name": "Pilani Bus Stand",
+        "airport_name": "Delhi Airport (IGI)"
+    },
+    "iit bombay": {
+        "station": 8.5,
+        "bus": 9.0,
+        "airport": 7.5,
+        "station_name": "Lokmanya Tilak Terminus (LTT)",
+        "bus_name": "Kurla Bus Stand",
+        "airport_name": "Chhatrapati Shivaji Maharaj Airport (BOM)"
+    },
+    "iiit bangalore": {
+        "station": 24.0,
+        "bus": 2.5,
+        "airport": 54.0,
+        "station_name": "Majestic Railway Station (SBC)",
+        "bus_name": "Electronic City Bus Stand",
+        "airport_name": "Kempegowda International Airport (BLR)"
+    },
+    "vit vellore": {
+        "station": 6.5,
+        "bus": 4.5,
+        "airport": 130.0,
+        "station_name": "Katpadi Junction (KPD)",
+        "bus_name": "Vellore New Bus Stand",
+        "airport_name": "Chennai Airport (MAA)"
+    }
+}
+
 def _to_dict(doc):
     if not doc:
         return doc
@@ -75,6 +119,7 @@ class CustomRouteCreateReq(BaseModel):
     description: Optional[str] = ""
     distance_km: float
     campus_landmark: Optional[str] = "Main Gate"
+    college: Optional[str] = None
 
 class ReportSubmitReq(BaseModel):
     route_id: str
@@ -90,12 +135,14 @@ class SavingsLogReq(BaseModel):
     route_id: str
 
 @router.get("/routes")
-async def get_routes(user_id: str = Depends(get_current_user)):
+async def get_routes(college: Optional[str] = Query(None), user_id: str = Depends(get_current_user)):
     db = get_db()
     
-    # Get user profile to determine college
-    profile = await db.profiles.find_one({"_id": user_id})
-    college = profile.get("college_name") if profile else "ABV-IIITM Gwalior"
+    if not college:
+        # Get user profile to determine college
+        profile = await db.profiles.find_one({"_id": user_id})
+        college = profile.get("college_name") if profile else "ABV-IIITM Gwalior"
+        
     if not college:
         college = "ABV-IIITM Gwalior"
         
@@ -112,27 +159,41 @@ async def get_routes(user_id: str = Depends(get_current_user)):
                 r_doc["source"] = "seeded"
                 await db.travel_routes.insert_one(r_doc)
         else:
-            # Generate default travel booking app-based estimates for any college
+            # Generate default travel booking app-based estimates for the college
+            # Look up standard distances
+            distances = {"station": 12.0, "bus": 7.0, "airport": 25.0}
+            names = {
+                "station_name": "Nearest Railway Station",
+                "bus_name": "Local Bus Stand",
+                "airport_name": "Local Airport"
+            }
+            
+            for key, val in CAMPUS_DISTANCES.items():
+                if key in college.lower():
+                    distances = val
+                    names = val
+                    break
+            
             new_routes = [
                 {
                     "id": f"{uuid.uuid4().hex[:8]}_station",
-                    "name": f"Railway Station → {college}",
+                    "name": f"{names['station_name']} → {college}",
                     "description": f"Standard route from nearest major Railway Station to {college}.",
-                    "distance_km": 11.5,
+                    "distance_km": distances["station"],
                     "campus_landmark": "Main Gate"
                 },
                 {
                     "id": f"{uuid.uuid4().hex[:8]}_bus",
-                    "name": f"Bus Stand → {college}",
+                    "name": f"{names['bus_name']} → {college}",
                     "description": f"Standard route from nearest major Bus Stand to {college}.",
-                    "distance_km": 7.0,
+                    "distance_km": distances["bus"],
                     "campus_landmark": "Main Gate"
                 },
                 {
                     "id": f"{uuid.uuid4().hex[:8]}_airport",
-                    "name": f"Airport → {college}",
+                    "name": f"{names['airport_name']} → {college}",
                     "description": f"Route from local airport to {college} (simulated distance).",
-                    "distance_km": 24.5,
+                    "distance_km": distances["airport"],
                     "campus_landmark": "Main Gate"
                 }
             ]
@@ -140,7 +201,7 @@ async def get_routes(user_id: str = Depends(get_current_user)):
             for nr in new_routes:
                 d = nr["distance_km"]
                 # Formulate approximate ranges based on standard Indian ride app tariffs:
-                # Cab: ~220 base + ₹18/km. Auto: ~70 base + ₹11/km. Bike: ~30 base + ₹7/km.
+                # Cab: ~180 base + ₹16.5/km. Auto: ~70 base + ₹10.5/km. Bike: ~30 base + ₹7/km.
                 modes = [
                     {
                         "mode": "Auto (Ola/Uber/Local)",
@@ -188,9 +249,12 @@ async def get_routes(user_id: str = Depends(get_current_user)):
 async def create_custom_route(req: CustomRouteCreateReq, user_id: str = Depends(get_current_user)):
     db = get_db()
     
-    # Get user profile to check college
-    profile = await db.profiles.find_one({"_id": user_id})
-    college = profile.get("college_name") if profile else "ABV-IIITM Gwalior"
+    # Determine college
+    college = req.college
+    if not college:
+        profile = await db.profiles.find_one({"_id": user_id})
+        college = profile.get("college_name") if profile else "ABV-IIITM Gwalior"
+        
     if not college:
         college = "ABV-IIITM Gwalior"
         

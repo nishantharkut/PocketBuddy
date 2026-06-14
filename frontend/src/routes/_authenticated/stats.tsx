@@ -315,325 +315,328 @@ function StatsPage() {
               )}
             </div>
 
-            {/* ── DAILY EXPENSE BAR CHART ─────────────────────────────── */}
-            {dailyBarData.length > 0 && (
-              <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-                <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-primary" />
-                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
-                    Daily Expenses — {monthName}
-                  </h3>
-                </div>
-                <div className="p-4" style={{ height: 220 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyBarData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis dataKey="day" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                        axisLine={false} tickLine={false} interval={Math.floor(dailyBarData.length / 10)} />
-                      <YAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                        axisLine={false} tickLine={false}
-                        tickFormatter={(v: number) => `₹${v}`} />
-                      <Tooltip content={({ payload, label }) => {
-                        if (!payload?.length) return null;
-                        return (
-                          <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
-                            <p className="text-xs font-bold text-foreground">Day {label}</p>
-                            <p className="text-xs text-[#FF6B4A] tnum font-bold">₹{payload[0].value}</p>
-                          </div>
-                        );
-                      }} />
-                      <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={16}>
-                        {dailyBarData.map((_: any, i: number) => (
-                          <Cell key={i} fill={i === dailyBarData.length - 1 ? "#FF6B00" : "#FF6B4A44"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            {/* ── YEARLY TREND BAR CHART ──────────────────────────────── */}
-            {yearlyBarData.some((d: any) => d.income > 0 || d.expenses > 0) && (
-              <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-primary" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* ── DAILY EXPENSE BAR CHART ─────────────────────────────── */}
+              {dailyBarData.length > 0 && (
+                <div className="bg-surface rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-primary" />
                     <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
-                      {year} Monthly Trend
+                      Daily Expenses — {monthName}
                     </h3>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span className="w-2 h-2 rounded-full bg-[#5DADE2]" /> Income
-                    </span>
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span className="w-2 h-2 rounded-full bg-[#FF6B4A]" /> Expenses
-                    </span>
+                  <div className="p-4" style={{ height: 220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dailyBarData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                        <XAxis dataKey="day" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                          axisLine={false} tickLine={false} interval={Math.floor(dailyBarData.length / 10)} />
+                        <YAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                          axisLine={false} tickLine={false}
+                          tickFormatter={(v: number) => `₹${v}`} />
+                        <Tooltip content={({ payload, label }) => {
+                          if (!payload?.length) return null;
+                          return (
+                            <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
+                              <p className="text-xs font-bold text-foreground">Day {label}</p>
+                              <p className="text-xs text-[#FF6B4A] tnum font-bold">₹{payload[0].value}</p>
+                            </div>
+                          );
+                        }} />
+                        <Bar dataKey="amount" radius={[3, 3, 0, 0]} maxBarSize={16}>
+                          {dailyBarData.map((_: any, i: number) => (
+                            <Cell key={i} fill={i === dailyBarData.length - 1 ? "#FF6B00" : "#FF6B4A44"} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
-                <div className="p-4" style={{ height: 240 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={yearlyBarData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                        axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                        axisLine={false} tickLine={false}
-                        tickFormatter={(v: number) => `₹${v}`} />
-                      <Tooltip content={({ payload, label }) => {
-                        if (!payload?.length) return null;
-                        return (
-                          <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
-                            <p className="text-xs font-bold text-foreground mb-1">{label}</p>
-                            {payload.map((p: any) => (
-                              <p key={p.dataKey} className="text-xs tnum" style={{ color: p.fill || p.color }}>
-                                {p.dataKey === "income" ? "Income" : "Expenses"}: ₹{p.value}
-                              </p>
-                            ))}
-                          </div>
-                        );
-                      }} />
-                      <Bar dataKey="income" fill="#5DADE2" radius={[3, 3, 0, 0]} maxBarSize={20} />
-                      <Bar dataKey="expenses" fill="#FF6B4A" radius={[3, 3, 0, 0]} maxBarSize={20} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
+              )}
 
-            {/* ── SPENDING BY DAY OF WEEK ─────────────────────────────── */}
-            {dowData.some((d: any) => d.amount > 0) && (
-              <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-                <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-[#AF7AC5]" />
-                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
-                    Spending by Day of Week
-                  </h3>
-                </div>
-                <div className="p-4" style={{ height: 200 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dowData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                        axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                        axisLine={false} tickLine={false}
-                        tickFormatter={(v: number) => `₹${v}`} />
-                      <Tooltip content={({ payload, label }) => {
-                        if (!payload?.length) return null;
-                        return (
-                          <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
-                            <p className="text-xs font-bold text-foreground">{label}</p>
-                            <p className="text-xs text-[#AF7AC5] tnum font-bold">₹{payload[0].value}</p>
-                            <p className="text-[10px] text-muted-foreground">{payload[0].payload.count} txns</p>
-                          </div>
-                        );
-                      }} />
-                      <Bar dataKey="amount" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                        {dowData.map((_: any, i: number) => (
-                          <Cell key={i} fill={i >= 5 ? "#AF7AC5" : "#AF7AC566"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            {/* ── HOURLY SPENDING PATTERN (Area Chart) ────────────────── */}
-            {hourlyData.some((h: any) => h.amount > 0) && (
-              <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-                <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-[#F7DC6F]" />
-                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
-                    Spending by Hour of Day
-                  </h3>
-                </div>
-                <div className="p-4" style={{ height: 200 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={hourlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="hourlyGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#F7DC6F" stopOpacity={0.4} />
-                          <stop offset="100%" stopColor="#F7DC6F" stopOpacity={0.05} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis dataKey="label" tick={{ fontSize: 8, fill: "var(--muted-foreground)" }}
-                        axisLine={false} tickLine={false} interval={2} />
-                      <YAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                        axisLine={false} tickLine={false}
-                        tickFormatter={(v: number) => `₹${v}`} />
-                      <Tooltip content={({ payload, label }) => {
-                        if (!payload?.length) return null;
-                        return (
-                          <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
-                            <p className="text-xs font-bold text-foreground">{label}</p>
-                            <p className="text-xs text-[#F7DC6F] tnum font-bold">₹{payload[0].value}</p>
-                          </div>
-                        );
-                      }} />
-                      <Area type="monotone" dataKey="amount" stroke="#F7DC6F" strokeWidth={2}
-                        fill="url(#hourlyGrad)" dot={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            {/* ── BIGGEST TRANSACTION ──────────────────────────────────── */}
-            {stats?.biggest_txn && (
-              <div className="bg-surface rounded-2xl border border-border p-4 md:p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="h-4 w-4 text-[#FFB347]" />
-                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
-                    Biggest Expense This Month
-                  </h3>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-[#FFB347]/10 flex items-center justify-center text-lg">
-                    {getCatIcon(stats.biggest_txn.category)}
+              {/* ── YEARLY TREND BAR CHART ──────────────────────────────── */}
+              {yearlyBarData.some((d: any) => d.income > 0 || d.expenses > 0) && (
+                <div className="bg-surface rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
+                        {year} Monthly Trend
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <span className="w-2 h-2 rounded-full bg-[#5DADE2]" /> Income
+                      </span>
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <span className="w-2 h-2 rounded-full bg-[#FF6B4A]" /> Expenses
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-foreground truncate">{stats.biggest_txn.merchant}</p>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground capitalize">{stats.biggest_txn.category}</p>
+                  <div className="p-4" style={{ height: 220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={yearlyBarData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                          axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                          axisLine={false} tickLine={false}
+                          tickFormatter={(v: number) => `₹${v}`} />
+                        <Tooltip content={({ payload, label }) => {
+                          if (!payload?.length) return null;
+                          return (
+                            <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
+                              <p className="text-xs font-bold text-foreground mb-1">{label}</p>
+                              {payload.map((p: any) => (
+                                <p key={p.dataKey} className="text-xs tnum" style={{ color: p.fill || p.color }}>
+                                  {p.dataKey === "income" ? "Income" : "Expenses"}: ₹{p.value}
+                                </p>
+                              ))}
+                            </div>
+                          );
+                        }} />
+                        <Bar dataKey="income" fill="#5DADE2" radius={[3, 3, 0, 0]} maxBarSize={20} />
+                        <Bar dataKey="expenses" fill="#FF6B4A" radius={[3, 3, 0, 0]} maxBarSize={20} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
-                  <p className="text-lg font-black tnum text-[#FF6B4A]">{rupees(stats.biggest_txn.amount)}</p>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ── TOP MERCHANTS ────────────────────────────────────────── */}
-            {(stats?.top_merchants ?? []).length > 0 && (
-              <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-                <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                  <ShoppingBag className="h-4 w-4 text-[#82E0AA]" />
-                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
-                    Top Merchants
-                  </h3>
+              {/* ── SPENDING BY DAY OF WEEK ─────────────────────────────── */}
+              {dowData.some((d: any) => d.amount > 0) && (
+                <div className="bg-surface rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-[#AF7AC5]" />
+                    <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
+                      Spending by Day of Week
+                    </h3>
+                  </div>
+                  <div className="p-4" style={{ height: 200 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dowData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                          axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                          axisLine={false} tickLine={false}
+                          tickFormatter={(v: number) => `₹${v}`} />
+                        <Tooltip content={({ payload, label }) => {
+                          if (!payload?.length) return null;
+                          return (
+                            <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
+                              <p className="text-xs font-bold text-foreground">{label}</p>
+                              <p className="text-xs text-[#AF7AC5] tnum font-bold">₹{payload[0].value}</p>
+                              <p className="text-[10px] text-muted-foreground">{payload[0].payload.count} txns</p>
+                            </div>
+                          );
+                        }} />
+                        <Bar dataKey="amount" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                          {dowData.map((_: any, i: number) => (
+                            <Cell key={i} fill={i >= 5 ? "#AF7AC5" : "#AF7AC566"} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="divide-y divide-border/30">
-                  {stats.top_merchants.slice(0, 8).map((m: any, i: number) => {
-                    const maxAmt = stats.top_merchants[0]?.amount ?? 1;
-                    const pct = Math.round((m.amount / maxAmt) * 100);
-                    return (
-                      <div key={i} className="px-4 py-3 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span className="text-[10px] font-black tnum text-muted-foreground w-5 shrink-0">
-                              {i + 1}.
+              )}
+
+              {/* ── HOURLY SPENDING PATTERN (Area Chart) ────────────────── */}
+              {hourlyData.some((h: any) => h.amount > 0) && (
+                <div className="bg-surface rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-[#F7DC6F]" />
+                    <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
+                      Spending by Hour of Day
+                    </h3>
+                  </div>
+                  <div className="p-4" style={{ height: 200 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={hourlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="hourlyGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#F7DC6F" stopOpacity={0.4} />
+                            <stop offset="100%" stopColor="#F7DC6F" stopOpacity={0.05} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 8, fill: "var(--muted-foreground)" }}
+                          axisLine={false} tickLine={false} interval={2} />
+                        <YAxis tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                          axisLine={false} tickLine={false}
+                          tickFormatter={(v: number) => `₹${v}`} />
+                        <Tooltip content={({ payload, label }) => {
+                          if (!payload?.length) return null;
+                          return (
+                            <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
+                              <p className="text-xs font-bold text-foreground">{label}</p>
+                              <p className="text-xs text-[#F7DC6F] tnum font-bold">₹{payload[0].value}</p>
+                            </div>
+                          );
+                        }} />
+                        <Area type="monotone" dataKey="amount" stroke="#F7DC6F" strokeWidth={2}
+                          fill="url(#hourlyGrad)" dot={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* ── TOP MERCHANTS ────────────────────────────────────────── */}
+              {(stats?.top_merchants ?? []).length > 0 && (
+                <div className="bg-surface rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4 text-[#82E0AA]" />
+                    <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
+                      Top Merchants
+                    </h3>
+                  </div>
+                  <div className="divide-y divide-border/30">
+                    {stats.top_merchants.slice(0, 8).map((m: any, i: number) => {
+                      const maxAmt = stats.top_merchants[0]?.amount ?? 1;
+                      const pct = Math.round((m.amount / maxAmt) * 100);
+                      return (
+                        <div key={i} className="px-4 py-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="text-[10px] font-black tnum text-muted-foreground w-5 shrink-0">
+                                {i + 1}.
+                              </span>
+                              <span className="text-xs font-bold text-foreground truncate">{m.name}</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">{m.count}×</span>
+                            </div>
+                            <span className="text-xs font-black tnum text-foreground shrink-0 ml-2">
+                              {rupees(m.amount)}
                             </span>
-                            <span className="text-xs font-bold text-foreground truncate">{m.name}</span>
-                            <span className="text-[10px] text-muted-foreground shrink-0">{m.count}×</span>
                           </div>
-                          <span className="text-xs font-black tnum text-foreground shrink-0 ml-2">
-                            {rupees(m.amount)}
+                          <div className="h-1 rounded-full bg-surface-raised overflow-hidden ml-7">
+                            <div className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${pct}%`, backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── WEEKLY BREAKDOWN TABLE ───────────────────────────────── */}
+              {(stats?.weeks ?? []).length > 0 && (
+                <div className="bg-surface rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border">
+                    <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
+                      Weekly Breakdown
+                    </h3>
+                  </div>
+                  <div className="divide-y divide-border/50">
+                    {stats.weeks.map((w: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between px-4 py-3">
+                        <span className="text-xs font-semibold text-muted-foreground tnum">{w.label}</span>
+                        <div className="flex items-center gap-4 text-right">
+                          <span className="text-xs tnum font-bold text-[#5DADE2]">{rupees(w.income)}</span>
+                          <span className="text-xs tnum font-bold text-[#FF6B4A]">{rupees(w.expenses)}</span>
+                          <span className={`text-xs tnum font-black w-20 text-right ${
+                            w.net >= 0 ? "text-foreground" : "text-[#FF6B4A]"
+                          }`}>
+                            {w.net >= 0 ? "+" : ""}{rupees(Math.abs(w.net))}
                           </span>
                         </div>
-                        <div className="h-1 rounded-full bg-surface-raised overflow-hidden ml-7">
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── BIGGEST TRANSACTION ──────────────────────────────────── */}
+              {stats?.biggest_txn && (
+                <div className="bg-surface rounded-2xl border border-border p-4 md:p-5 flex flex-col justify-center">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Zap className="h-4 w-4 text-[#FFB347]" />
+                    <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
+                      Biggest Expense This Month
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-[#FFB347]/10 flex items-center justify-center text-lg">
+                      {getCatIcon(stats.biggest_txn.category)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-foreground truncate">{stats.biggest_txn.merchant}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground capitalize">{stats.biggest_txn.category}</p>
+                    </div>
+                    <p className="text-lg font-black tnum text-[#FF6B4A]">{rupees(stats.biggest_txn.amount)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* ── COMPARISON CARD ─────────────────────────────────────── */}
+              {(stats?.compared_expenses_pct ?? 0) > 0 && (
+                <div className="bg-surface rounded-2xl border border-border p-4 md:p-5 flex flex-col justify-center">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">
+                        Compared Expenses (Last month)
+                      </p>
+                      <p className="text-2xl font-black tnum text-foreground">{stats.compared_expenses_pct}%</p>
+                    </div>
+                    <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
+                      stats.compared_expenses_pct > 100 ? "bg-[#FF6B4A]/10"
+                      : stats.compared_expenses_pct < 80 ? "bg-[#82E0AA]/10" : "bg-[#FFB347]/10"
+                    }`}>
+                      {stats.compared_expenses_pct > 100
+                        ? <TrendingUp className="h-5 w-5 text-[#FF6B4A]" />
+                        : stats.compared_expenses_pct < 80
+                          ? <TrendingDown className="h-5 w-5 text-[#82E0AA]" />
+                          : <Minus className="h-5 w-5 text-[#FFB347]" />}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {stats.compared_expenses_pct > 100
+                      ? "You're spending more this month compared to last month."
+                      : stats.compared_expenses_pct < 80
+                        ? "Great job! You're spending less than last month."
+                        : "Your spending is about the same as last month."}
+                  </p>
+                </div>
+              )}
+
+              {/* ── SOURCE BREAKDOWN ────────────────────────────────────── */}
+              <div className="bg-surface rounded-2xl border border-border p-4 md:p-5 flex flex-col justify-center">
+                <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display mb-3">
+                  Expense Source
+                </h3>
+                <div className="space-y-2">
+                  {[
+                    { label: "Companion (Auto-tracked)", value: stats?.source_breakdown?.companion ?? 0, color: "#5DADE2" },
+                    { label: "Manual", value: stats?.source_breakdown?.manual ?? 0, color: "#FFB347" },
+                  ].map((s) => {
+                    const total = (stats?.source_breakdown?.companion ?? 0) + (stats?.source_breakdown?.manual ?? 0);
+                    const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+                    return (
+                      <div key={s.label} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-foreground">{s.label}</span>
+                          <span className="text-xs font-black tnum text-foreground">{rupees(s.value)}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-surface-raised overflow-hidden">
                           <div className="h-full rounded-full transition-all duration-700"
-                            style={{ width: `${pct}%`, backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                            style={{ width: `${pct}%`, backgroundColor: s.color }} />
                         </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
-            )}
 
-            {/* ── COMPARISON CARD ─────────────────────────────────────── */}
-            {(stats?.compared_expenses_pct ?? 0) > 0 && (
-              <div className="bg-surface rounded-2xl border border-border p-4 md:p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">
-                      Compared Expenses (Last month)
-                    </p>
-                    <p className="text-2xl font-black tnum text-foreground">{stats.compared_expenses_pct}%</p>
-                  </div>
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                    stats.compared_expenses_pct > 100 ? "bg-[#FF6B4A]/10"
-                    : stats.compared_expenses_pct < 80 ? "bg-[#82E0AA]/10" : "bg-[#FFB347]/10"
-                  }`}>
-                    {stats.compared_expenses_pct > 100
-                      ? <TrendingUp className="h-5 w-5 text-[#FF6B4A]" />
-                      : stats.compared_expenses_pct < 80
-                        ? <TrendingDown className="h-5 w-5 text-[#82E0AA]" />
-                        : <Minus className="h-5 w-5 text-[#FFB347]" />}
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {stats.compared_expenses_pct > 100
-                    ? "You're spending more this month compared to last month."
-                    : stats.compared_expenses_pct < 80
-                      ? "Great job! You're spending less than last month."
-                      : "Your spending is about the same as last month."}
-                </p>
-              </div>
-            )}
-
-            {/* ── SOURCE BREAKDOWN ────────────────────────────────────── */}
-            <div className="bg-surface rounded-2xl border border-border p-4 md:p-5">
-              <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display mb-3">
-                Expense Source
-              </h3>
-              <div className="space-y-2">
-                {[
-                  { label: "Companion (Auto-tracked)", value: stats?.source_breakdown?.companion ?? 0, color: "#5DADE2" },
-                  { label: "Manual", value: stats?.source_breakdown?.manual ?? 0, color: "#FFB347" },
-                ].map((s) => {
-                  const total = (stats?.source_breakdown?.companion ?? 0) + (stats?.source_breakdown?.manual ?? 0);
-                  const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
-                  return (
-                    <div key={s.label} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-foreground">{s.label}</span>
-                        <span className="text-xs font-black tnum text-foreground">{rupees(s.value)}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-surface-raised overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${pct}%`, backgroundColor: s.color }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* ── EXPORT ──────────────────────────────────────────────── */}
+              <button onClick={exportCSV} id="btn-export-csv"
+                className="w-full h-full min-h-[96px] flex flex-col items-center justify-center gap-2 p-5 rounded-2xl bg-surface border border-border text-xs font-bold uppercase tracking-wider text-foreground hover:bg-surface-raised transition-all cursor-pointer">
+                <Download className="h-5 w-5 text-primary" />
+                <span>Export Data to CSV</span>
+                <p className="text-[10px] text-muted-foreground font-normal lowercase tracking-normal">Download detailed transaction history</p>
+              </button>
             </div>
-
-            {/* ── WEEKLY BREAKDOWN TABLE ───────────────────────────────── */}
-            {(stats?.weeks ?? []).length > 0 && (
-              <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-                <div className="px-4 py-3 border-b border-border">
-                  <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display">
-                    Weekly Breakdown
-                  </h3>
-                </div>
-                <div className="divide-y divide-border/50">
-                  {stats.weeks.map((w: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between px-4 py-3">
-                      <span className="text-xs font-semibold text-muted-foreground tnum">{w.label}</span>
-                      <div className="flex items-center gap-4 text-right">
-                        <span className="text-xs tnum font-bold text-[#5DADE2]">{rupees(w.income)}</span>
-                        <span className="text-xs tnum font-bold text-[#FF6B4A]">{rupees(w.expenses)}</span>
-                        <span className={`text-xs tnum font-black w-20 text-right ${
-                          w.net >= 0 ? "text-foreground" : "text-[#FF6B4A]"
-                        }`}>
-                          {w.net >= 0 ? "+" : ""}{rupees(Math.abs(w.net))}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── EXPORT ──────────────────────────────────────────────── */}
-            <button onClick={exportCSV} id="btn-export-csv"
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-surface border border-border text-xs font-bold uppercase tracking-wider text-foreground hover:bg-surface-raised transition-all cursor-pointer">
-              <Download className="h-4 w-4" />
-              Export Data to CSV
-            </button>
           </>
         )}
       </div>

@@ -468,7 +468,7 @@ function CalendarView({
             <button
               key={day}
               onClick={() => hasData && onDayClick(day)}
-              className={`border-b border-r border-border/30 min-h-[4.5rem] p-1 text-left transition-colors ${
+              className={`border-b border-r border-border/30 min-h-[4.5rem] p-3 text-left transition-colors w-full h-full flex flex-col items-start justify-start ${
                 hasData ? "cursor-pointer hover:bg-surface-raised/60" : "cursor-default"
               }`}
             >
@@ -527,7 +527,7 @@ function MonthlyView({
                 isCurrent ? "bg-surface-raised/30" : ""
               }`}
             >
-              <div>
+              <div className="text-left">
                 <span className={`text-sm font-bold ${isCurrent ? "text-primary" : "text-foreground"}`}>
                   {m.month_name}
                 </span>
@@ -537,14 +537,25 @@ function MonthlyView({
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-right">
-                <div>
-                  <p className="text-xs tnum font-bold text-[#5DADE2]">{hasData ? rupees(m.income) : "₹0"}</p>
+              <div className="flex items-center gap-3 sm:gap-4 text-right">
+                <div className="flex flex-col items-end">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Income</span>
+                  <p className="text-xs tnum font-black text-[#5DADE2]">{hasData ? rupees(m.income) : "₹0"}</p>
                 </div>
-                <div>
-                  <p className="text-xs tnum font-bold text-[#FF6B4A]">{hasData ? rupees(m.expenses) : "₹0"}</p>
-                  <p className={`text-[9px] tnum font-black ${m.net >= 0 ? "text-foreground" : "text-[#FF6B4A]"}`}>
-                    {hasData ? (m.net >= 0 ? "+" : "") + rupees(Math.abs(m.net)) : "₹0"}
+                <div className="flex flex-col items-end border-l border-border/40 pl-3">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Expenses</span>
+                  <p className="text-xs tnum font-black text-[#FF6B4A]">{hasData ? rupees(m.expenses) : "₹0"}</p>
+                </div>
+                <div className="flex flex-col items-end border-l border-border/40 pl-3">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Balance</span>
+                  <p className={`text-xs tnum font-black ${
+                    m.net > 0 
+                      ? "text-[#16A34A]" 
+                      : m.net < 0 
+                        ? "text-[#FF6B4A]" 
+                        : "text-muted-foreground"
+                  }`}>
+                    {hasData ? (m.net > 0 ? "+" : "") + rupees(m.net) : "₹0"}
                   </p>
                 </div>
               </div>
@@ -552,17 +563,30 @@ function MonthlyView({
 
             {/* Weekly sub-rows for the current expanded month */}
             {isExpanded && isCurrent && weeks.length > 0 && (
-              <div className="border-t border-border/30 bg-surface-raised/20">
+              <div className="border-t border-border/30 bg-surface-raised/20 divide-y divide-border/10">
                 {weeks.map((w: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between px-6 py-2.5 border-b border-border/20 last:border-b-0">
-                    <span className="text-[10px] font-semibold text-muted-foreground tnum">{w.label}</span>
-                    <div className="flex items-center gap-4 text-right">
-                      <span className="text-[10px] tnum font-bold text-[#5DADE2]">{rupees(w.income)}</span>
-                      <div>
-                        <span className="text-[10px] tnum font-bold text-[#FF6B4A]">{rupees(w.expenses)}</span>
-                        <p className={`text-[8px] tnum font-black ${w.net >= 0 ? "text-foreground" : "text-[#FF6B4A]"}`}>
-                          {w.net >= 0 ? "+" : ""}{rupees(Math.abs(w.net))}
-                        </p>
+                  <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-3 gap-2">
+                    <span className="text-xs font-bold text-foreground tnum">{w.label}</span>
+                    <div className="flex items-center gap-3 sm:gap-4 justify-end">
+                      <div className="flex flex-col items-end">
+                        <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground">Income</span>
+                        <span className="text-[10px] tnum font-semibold text-[#5DADE2]">{rupees(w.income)}</span>
+                      </div>
+                      <div className="flex flex-col items-end border-l border-border/30 pl-2.5">
+                        <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground">Expenses</span>
+                        <span className="text-[10px] tnum font-semibold text-[#FF6B4A]">{rupees(w.expenses)}</span>
+                      </div>
+                      <div className="flex flex-col items-end border-l border-border/30 pl-2.5">
+                        <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground">Balance</span>
+                        <span className={`text-[10px] tnum font-bold ${
+                          w.net > 0 
+                            ? "text-[#16A34A]" 
+                            : w.net < 0 
+                              ? "text-[#FF6B4A]" 
+                              : "text-muted-foreground"
+                        }`}>
+                          {(w.net > 0 ? "+" : "") + rupees(w.net)}
+                        </span>
                       </div>
                     </div>
                   </div>

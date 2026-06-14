@@ -89,6 +89,7 @@ function PoolList() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"active" | "completed" | "cancelled">("active");
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -103,10 +104,19 @@ function PoolList() {
   });
 
   const now = Date.now();
-  const active = (pools ?? []).filter(
+  const activePools = (pools ?? []).filter(
     (p) => p.status === "open" && new Date(p.expires_at).getTime() > now,
   );
-  const past = (pools ?? []).filter((p) => !active.includes(p));
+  const completedPools = (pools ?? []).filter((p) => p.status === "completed");
+  const cancelledPools = (pools ?? []).filter(
+    (p) => p.status === "cancelled" || p.status === "closed" || (p.status === "open" && new Date(p.expires_at).getTime() <= now),
+  );
+
+  const tabOptions = [
+    { key: "active", label: `Active (${activePools.length})` },
+    { key: "completed", label: `Completed (${completedPools.length})` },
+    { key: "cancelled", label: `Cancelled (${cancelledPools.length})` },
+  ];
 
   return (
     <AppShell>
@@ -142,35 +152,69 @@ function PoolList() {
           </SheetContent>
         </Sheet>
 
-        <section className="space-y-3">
-          <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase px-1">
-            Active Pools
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {active.length === 0 && (
-              <div className="col-span-full py-10 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
-                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools.</p>
-              </div>
-            )}
-            {active.map((p) => (
-              <PoolCard key={p.id} pool={p} />
+        <section className="space-y-4">
+          {/* ── Tab Bar ─────────────────────────────────────────────────── */}
+          <div className="flex border-b border-border">
+            {tabOptions.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key as any)}
+                id={`tab-pool-${t.key}`}
+                className={`flex-1 py-2.5 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
+                  tab === t.key
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.label}
+                {tab === t.key && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
+                )}
+              </button>
             ))}
           </div>
-        </section>
 
-        {past.length > 0 && (
-          <details className="group pt-2">
-            <summary className="cursor-pointer text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase list-none flex items-center gap-1 hover:text-foreground transition-colors select-none">
-              <span className="transition-transform group-open:rotate-90">▶</span>
-              Past Pools ({past.length})
-            </summary>
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 opacity-65 group-open:animate-[fadeIn_0.2s_ease-out]">
-              {past.map((p) => (
-                <PoolCard key={p.id} pool={p} />
-              ))}
-            </div>
-          </details>
-        )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-[fadeIn_0.2s_ease-out]">
+            {tab === "active" && (
+              <>
+                {activePools.length === 0 && (
+                  <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools.</p>
+                  </div>
+                )}
+                {activePools.map((p) => (
+                  <PoolCard key={p.id} pool={p} />
+                ))}
+              </>
+            )}
+
+            {tab === "completed" && (
+              <>
+                {completedPools.length === 0 && (
+                  <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No completed pools.</p>
+                  </div>
+                )}
+                {completedPools.map((p) => (
+                  <PoolCard key={p.id} pool={p} />
+                ))}
+              </>
+            )}
+
+            {tab === "cancelled" && (
+              <>
+                {cancelledPools.length === 0 && (
+                  <div className="col-span-full py-12 text-center border border-dashed border-border rounded-xl bg-surface-raised/40">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No cancelled or closed pools.</p>
+                  </div>
+                )}
+                {cancelledPools.map((p) => (
+                  <PoolCard key={p.id} pool={p} />
+                ))}
+              </>
+            )}
+          </div>
+        </section>
       </div>
     </AppShell>
   );
@@ -193,6 +237,24 @@ function PoolCard({ pool }: { pool: Pool }) {
   const active = minsLeft > 0 && pool.status === "open";
   const platformBorderColor = getPlatformBorderColor(pool.platform);
 
+  const itemsCount = pool.items?.length ?? 0;
+  const totalCartValue = useMemo(() => {
+    return (pool.items ?? [])
+      .filter((it: any) => it.is_purchased)
+      .reduce((sum: number, it: any) => sum + it.estimated_price, 0);
+  }, [pool.items]);
+
+  let statusLabel = pool.status;
+  if (pool.status === "open" && minsLeft <= 0) {
+    statusLabel = "expired";
+  } else if (pool.status === "closed") {
+    statusLabel = "expired";
+  }
+
+  const dateStr = pool.created_at 
+    ? new Date(pool.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" }) 
+    : "";
+
   return (
     <Link to="/pool/$id" params={{ id: pool.id }} className="block no-underline">
       <Card className={`relative overflow-hidden p-5 border border-border border-l-4 ${platformBorderColor} bg-surface transition-all duration-200 hover:bg-surface-raised hover:border-r-white/10 hover:border-t-white/10 hover:border-b-white/10 hover:shadow-lg hover:shadow-black/50 active:scale-[0.99]`}>
@@ -210,12 +272,18 @@ function PoolCard({ pool }: { pool: Pool }) {
                   </Badge>
                 </div>
               </div>
-              {active && (
-                <span className="inline-flex items-center gap-1.5 bg-white/5 border border-border px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider text-foreground shrink-0">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                  Open
-                </span>
-              )}
+              <span className={`inline-flex items-center gap-1.5 bg-white/5 border px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                active
+                  ? "border-[#16A34A]/30 text-[#16A34A]"
+                  : statusLabel === "completed"
+                  ? "border-emerald-500/20 text-[#16A34A]"
+                  : statusLabel === "cancelled"
+                  ? "border-rose-500/20 text-[#FF6B4A]"
+                  : "border-zinc-500/20 text-zinc-400"
+              }`}>
+                {active && <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
+                {active ? "Active" : statusLabel}
+              </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Host: <span className="font-semibold text-foreground capitalize">{pool.created_by_name || "—"}</span>
@@ -223,13 +291,25 @@ function PoolCard({ pool }: { pool: Pool }) {
           </div>
 
           <div className="mt-5 flex justify-between items-end border-t border-border pt-3">
-            <div>
-              <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
-                Min Cart Target
-              </p>
-              <p className="text-sm font-black text-foreground tnum mt-0.5">
-                {rupees(pool.min_cart_value)}
-              </p>
+            <div className="flex gap-4">
+              <div>
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                  Min Target
+                </p>
+                <p className="text-xs font-black text-foreground tnum mt-0.5">
+                  {rupees(pool.min_cart_value)}
+                </p>
+              </div>
+              <div className="border-l border-border/40 pl-4">
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                  Current Cart
+                </p>
+                <p className={`text-xs font-black tnum mt-0.5 ${
+                  totalCartValue >= pool.min_cart_value ? "text-[#16A34A]" : "text-foreground"
+                }`}>
+                  {rupees(totalCartValue)} <span className="text-[9px] font-normal text-muted-foreground">({itemsCount} items)</span>
+                </p>
+              </div>
             </div>
             <div className="text-right">
               {active ? (
@@ -238,15 +318,9 @@ function PoolCard({ pool }: { pool: Pool }) {
                   <span>{minsLeft}m left</span>
                 </span>
               ) : (
-                <Badge className={`text-xs font-bold uppercase tracking-wider ${
-                  pool.status === "completed"
-                    ? "bg-green-600/15 border border-green-600/30 text-green-500"
-                    : pool.status === "cancelled"
-                    ? "bg-red-600/15 border border-red-600/30 text-red-500"
-                    : "bg-surface-raised text-muted-foreground"
-                }`}>
-                  {pool.status}
-                </Badge>
+                <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                  {dateStr}
+                </span>
               )}
             </div>
           </div>

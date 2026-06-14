@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
-import { Smartphone, Edit3, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Smartphone, Edit3, ChevronLeft, ChevronRight, Download, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -619,7 +619,7 @@ function TotalView({
       <div className="bg-surface rounded-2xl border border-border p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display flex items-center gap-2">
-            <span>💳</span> Accounts
+            <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" /> Accounts
           </h3>
           <span className="text-[10px] font-semibold text-muted-foreground tnum">
             {month(monthName)}.1.{String(year).slice(2)} ~ {month(monthName)}.{stats?.days_in_month ?? 30}.{String(year).slice(2)}

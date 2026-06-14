@@ -136,6 +136,9 @@ function PoolDetail() {
 
   // Track toasting status to avoid spamming on 3-second polls
   const [hasToastedStatus, setHasToastedStatus] = useState<string | null>(null);
+  const [hasPrefilledName, setHasPrefilledName] = useState(false);
+  const [settledPopupOpen, setSettledPopupOpen] = useState(false);
+  const [hasShownSettled, setHasShownSettled] = useState(false);
   useEffect(() => {
     if (pool && hasToastedStatus !== pool.status) {
       setHasToastedStatus(pool.status);
@@ -156,6 +159,30 @@ function PoolDetail() {
       setHostUpi(pool.upi_id ?? profile?.upi_id ?? "");
     }
   }, [pool, profile]);
+
+  // Pre-fill roommate name input automatically
+  useEffect(() => {
+    if (pool && user && !hasPrefilledName) {
+      const isHostUser = pool.host_id === user.id;
+      const cachedName = localStorage.getItem("pocketbuddy_pool_name");
+      const initialName = isHostUser
+        ? (cachedName || pool.created_by_name || "")
+        : (cachedName || user.fullName || "");
+
+      setName(initialName);
+      setHasPrefilledName(true);
+
+      // Self-heal: If host has a different name than pool.created_by_name, sync it to database
+      if (isHostUser && initialName && pool.created_by_name !== initialName) {
+        updateCartPool({
+          id,
+          data: { created_by_name: initialName }
+        }).then(() => {
+          qc.invalidateQueries({ queryKey: ["pool", id] });
+        }).catch(() => {});
+      }
+    }
+  }, [pool, user, hasPrefilledName, id, qc]);
 
   if (!pool)
     return (
@@ -220,7 +247,11 @@ function PoolDetail() {
         pName === "host" || 
         pName === hName || 
         (hName && pName && (hName.includes(pName) || pName.includes(hName))) ||
-        (user && pool.host_id === user.id && (pName === uName || (uName && pName && (uName.includes(pName) || pName.includes(uName)))));
+        (user && pool.host_id === user.id && (
+          pName === uName || 
+          (uName && pName && (uName.includes(pName) || pName.includes(uName))) ||
+          (name && pName === name.trim().toLowerCase())
+        ));
 
       splitBreakdown[p] = {
         name: p,
@@ -249,7 +280,11 @@ function PoolDetail() {
         pName === "host" || 
         pName === hName || 
         (hName && pName && (hName.includes(pName) || pName.includes(hName))) ||
-        (user && pool.host_id === user.id && (pName === uName || (uName && pName && (uName.includes(pName) || pName.includes(uName)))));
+        (user && pool.host_id === user.id && (
+          pName === uName || 
+          (uName && pName && (uName.includes(pName) || pName.includes(uName))) ||
+          (name && pName === name.trim().toLowerCase())
+        ));
 
       splitBreakdown[p] = {
         name: p,
@@ -267,6 +302,17 @@ function PoolDetail() {
     return Array.from(new Set(itemsList.filter((i) => i.is_purchased !== false).map((i) => i.added_by_name)));
   }
 
+  const isFullySettled = pool.status === "completed" && 
+    Object.keys(splitBreakdown).length > 0 && 
+    Object.values(splitBreakdown).every(d => d.paid);
+
+  useEffect(() => {
+    if (isFullySettled && !hasShownSettled) {
+      setSettledPopupOpen(true);
+      setHasShownSettled(true);
+    }
+  }, [isFullySettled, hasShownSettled]);
+
   // Actions
   async function addItem() {
     if (!name.trim() || !item.trim() || !price.trim()) {
@@ -283,6 +329,14 @@ function PoolDetail() {
     localStorage.setItem("pocketbuddy_pool_name", name.trim());
     setBusy(true);
     try {
+      if (isHost && name.trim() !== pool.created_by_name) {
+        await updateCartPool({
+          id,
+          data: { created_by_name: name.trim() }
+        });
+        qc.invalidateQueries({ queryKey: ["pool", id] });
+      }
+
       await insertCartPoolItem({
         data: {
           pool_id: id,
@@ -581,7 +635,29 @@ function PoolDetail() {
 
       <div className="space-y-4 px-4 py-4 pb-96">
         {/* Status Callouts */}
-        {pool.status === "completed" && (
+        {pool.status === "completed" && isFullySettled && (
+          <div className="flex flex-col gap-3 p-4 bg-gradient-to-r from-green-500/15 to-emerald-500/5 border border-green-500/30 text-green-400 rounded-xl text-xs shadow-lg shadow-green-950/20">
+            <div className="flex gap-2.5 items-start">
+              <Sparkles className="h-5 w-5 shrink-0 mt-0.5 text-green-500" />
+              <div>
+                <p className="font-black uppercase tracking-wider text-green-400 text-sm">Pool Fully Settled</p>
+                <p className="text-zinc-300 leading-relaxed mt-1">
+                  Congratulations! All roommate splits for this {theme.name} pool have been paid and verified. No outstanding balances remain.
+                </p>
+              </div>
+            </div>
+            {pool.checkout_notes && (
+              <div className="bg-green-600/5 border border-green-500/10 rounded-lg p-3 text-xs">
+                <span className="font-bold text-green-500 uppercase tracking-widest text-[9px] block mb-1">Host Note / Message</span>
+                <p className="text-zinc-300 leading-relaxed font-semibold">
+                  "{pool.checkout_notes}"
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {pool.status === "completed" && !isFullySettled && (
           <div className="flex flex-col gap-3 p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl text-xs">
             <div className="flex gap-2.5 items-start">
               <Check className="h-4.5 w-4.5 shrink-0 mt-0.5 text-green-500" />
@@ -1310,6 +1386,33 @@ function PoolDetail() {
               className="bg-destructive text-white hover:bg-destructive/90 font-bold uppercase text-xs tracking-wider"
             >
               {busy ? "Cancelling..." : "Confirm Cancellation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settlement Complete Celebration Modal */}
+      <Dialog open={settledPopupOpen} onOpenChange={setSettledPopupOpen}>
+        <DialogContent id="dialog-settlement-complete" className="max-w-[400px] text-center p-6 space-y-4">
+          <div className="mx-auto w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/30 text-green-500 animate-bounce">
+            <Sparkles className="h-8 w-8 animate-pulse" />
+          </div>
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-xl font-black uppercase tracking-tight text-foreground text-center">
+              Settlement Complete!
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-xs">
+            <p className="text-zinc-300 leading-relaxed font-semibold">
+              All roommates have paid their splits, and all payments are fully verified!
+            </p>
+            <p className="text-muted-foreground leading-normal">
+              This pool is now fully settled. The transactions have been logged into your personal finance ledger.
+            </p>
+          </div>
+          <DialogFooter className="sm:justify-center">
+            <Button onClick={() => setSettledPopupOpen(false)} className="bg-green-600 hover:bg-green-700 text-white font-bold uppercase tracking-wider text-xs px-6 py-2.5">
+              Awesome
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -5,7 +5,8 @@ import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import {
   ChevronLeft, ChevronRight, Download, TrendingUp, TrendingDown, Minus,
-  Flame, Calendar, Receipt, Zap, ShoppingBag, Clock
+  Flame, Calendar, Receipt, Zap, ShoppingBag, Clock,
+  Utensils, BookOpen, Bus, Tv, GraduationCap, Coins, Gamepad2, HeartPulse, Wifi, Package
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { rupees } from "@/lib/format";
@@ -28,19 +29,29 @@ const PIE_COLORS = [
   "#D4AC0D", "#E59866", "#7FB3D8", "#C39BD3", "#F5B7B1",
 ];
 
-const CATEGORY_ICONS: Record<string, string> = {
-  food: "🍜", stationery: "📝", travel: "🚌", transport: "🚌",
-  subscription: "📱", education: "📚", salary: "💰", income: "💵",
-  allowance: "💳", other: "📦", entertainment: "🎮", shopping: "🛍️",
-  health: "💊", recharge: "📶",
+const CATEGORY_ICONS: Record<string, React.ComponentType<any>> = {
+  food: Utensils,
+  stationery: BookOpen,
+  travel: Bus,
+  transport: Bus,
+  subscription: Tv,
+  education: GraduationCap,
+  salary: Coins,
+  income: Coins,
+  allowance: Coins,
+  entertainment: Gamepad2,
+  shopping: ShoppingBag,
+  health: HeartPulse,
+  recharge: Wifi,
+  other: Package,
 };
 
-function getCatIcon(cat: string): string {
-  const lower = cat.toLowerCase();
-  for (const [key, icon] of Object.entries(CATEGORY_ICONS)) {
-    if (lower.includes(key)) return icon;
+function getCategoryIcon(cat: string, className = "h-4 w-4") {
+  const lower = (cat || "").toLowerCase();
+  for (const [key, IconComponent] of Object.entries(CATEGORY_ICONS)) {
+    if (lower.includes(key)) return <IconComponent className={className} />;
   }
-  return "📦";
+  return <Package className={className} />;
 }
 
 function StatsPage() {
@@ -305,7 +316,7 @@ function StatsPage() {
                             style={{ backgroundColor: `${item.fill}22`, color: item.fill }}>
                             {Math.round(item.pct)}%
                           </span>
-                          <span className="text-sm mr-1">{getCatIcon(item.name)}</span>
+                          <span className="shrink-0 mr-1">{getCategoryIcon(item.name, "h-4 w-4 text-muted-foreground")}</span>
                           <span className="text-xs font-bold text-foreground capitalize flex-1 truncate">{item.name}</span>
                           <span className="text-xs font-black text-foreground tnum shrink-0">{rupees(item.value)}</span>
                         </div>
@@ -559,8 +570,8 @@ function StatsPage() {
                     </h3>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-[#FFB347]/10 flex items-center justify-center text-lg">
-                      {getCatIcon(stats.biggest_txn.category)}
+                    <div className="w-12 h-12 rounded-xl bg-[#FFB347]/10 flex items-center justify-center">
+                      {getCategoryIcon(stats.biggest_txn.category, "h-5 w-5 text-[#FFB347]")}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-foreground truncate">{stats.biggest_txn.merchant}</p>

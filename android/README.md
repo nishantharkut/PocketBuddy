@@ -238,6 +238,64 @@ Canonical de-duplicated transactions:
 Invoke-RestMethod 'http://127.0.0.1:8000/api/ingest/transactions?limit=10' | ConvertTo-Json -Depth 10
 ```
 
+## Wireless Normal Flow
+
+Use this flow after the backend is deployed on AWS EC2 or another public server. This is closer to how a normal user would use the connector.
+
+The phone does not need USB after the APK is installed.
+
+Expected architecture:
+
+```text
+Phone Wi-Fi/mobile data
+  -> http://<EC2_PUBLIC_IP>/api/ingest/notification
+  -> Nginx on EC2
+  -> FastAPI backend
+  -> MongoDB Atlas
+```
+
+On the web app:
+
+1. Open the deployed site:
+
+```text
+http://<EC2_PUBLIC_IP>
+```
+
+2. Login or signup.
+3. Complete onboarding.
+4. Open Settings -> Companion Device.
+5. Copy the connector config.
+
+It should look like:
+
+```text
+POCKETBUDDY_WEBHOOK_URL=http://<EC2_PUBLIC_IP>/api/ingest/notification
+POCKETBUDDY_WEBHOOK_TOKEN=
+POCKETBUDDY_USER_ID=<your_user_id>
+```
+
+On the Android app:
+
+1. Open `PocketBuddy Connector`.
+2. Paste the webhook URL.
+3. Paste the user ID.
+4. Leave webhook token empty unless the backend gives you one.
+5. Tap `Save connector config`.
+6. Tap `Open notification access`.
+7. Enable PocketBuddy Connector.
+8. Return to the app and confirm it says `Ready to sync`.
+
+Then test from the web app:
+
+1. Keep the backend running on EC2.
+2. Send a real UPI debit/SMS notification, or use a debug build test broadcast.
+3. Open Settings -> Companion Device.
+4. Tap `Check For Real Sync`.
+5. Confirm the event appears in Recent Sync Activity and the transaction appears on the dashboard.
+
+Use USB-only commands like `adb reverse` only for local laptop testing. They are not needed when using the EC2 public URL.
+
 ## Connect Phone To Local Backend
 
 For a USB-connected physical phone, reverse device port `8000` to laptop port `8000`:

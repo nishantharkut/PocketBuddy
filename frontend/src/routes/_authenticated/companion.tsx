@@ -22,6 +22,14 @@ type SyncLog = any;
 
 const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification";
 
+function getCompanionWebhookUrl() {
+  if (typeof window === "undefined") return LOCAL_WEBHOOK_URL;
+
+  const { hostname, origin } = window.location;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+  return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification`;
+}
+
 function randomPairingCode() {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   let s = "PB-";
@@ -53,8 +61,9 @@ function CompanionPage() {
   const latestSyncAt = profile?.companion_last_sync ?? syncLogs[0]?.created_at;
   const hasRealSync = Boolean(profile?.companion_last_sync || syncLogs.length > 0);
   const isConnected = Boolean(profile?.companion_paired || hasRealSync);
+  const companionWebhookUrl = getCompanionWebhookUrl();
   const connectorConfig = [
-    `POCKETBUDDY_WEBHOOK_URL=${LOCAL_WEBHOOK_URL}`,
+    `POCKETBUDDY_WEBHOOK_URL=${companionWebhookUrl}`,
     "POCKETBUDDY_WEBHOOK_TOKEN=",
     `POCKETBUDDY_USER_ID=${user?.id ?? ""}`,
   ].join("\n");
@@ -221,7 +230,7 @@ function CompanionPage() {
                   </p>
                 </div>
                 <Badge variant="outline" className="text-[10px]">
-                  USB
+                  Wireless ready
                 </Badge>
               </div>
             </Card>
@@ -238,7 +247,7 @@ function CompanionPage() {
                 <div>
                   <p className="text-[13px] font-semibold">Connector config</p>
                   <p className="mt-0.5 text-[12px] text-muted-foreground">
-                    Paste these values in the Android setup screen.
+                    Paste these values in the Android setup screen. On AWS this URL works without USB.
                   </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={copyConnectorConfig}>

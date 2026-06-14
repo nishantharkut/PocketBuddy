@@ -142,3 +142,15 @@ export async function identifyMerchant({ data }: { data: any }) {
 export async function getCompanionSyncLogs() {
   return apiRequest("/api/companion/logs");
 }
+
+export async function getDashboardInsights() {
+  return apiRequest("/api/insights");
+}
+
+export async function getCampusIntel() {
+  return apiRequest("/api/rag/campus-intel");
+}
+
+export async function getWingFeed() {
+  return apiRequest("/api/insights/wing-feed");
+}

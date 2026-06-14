@@ -8,6 +8,7 @@ from app.api import (
     campus_food,
     checkins,
     companion,
+    insights,
     pools,
     profile,
     rag,
@@ -37,6 +38,7 @@ app.include_router(companion.router, prefix="/api/companion", tags=["companion"]
 app.include_router(rag.router, prefix="/api/rag", tags=["rag"])
 app.include_router(campus_food.router, prefix="/api/campus-food", tags=["campus-food"])
 app.include_router(seed.router, prefix="/api/seed", tags=["seed"])
+app.include_router(insights.router, prefix="/api/insights", tags=["insights"])
 app.include_router(webhook.router, prefix="/api/ingest", tags=["ingest"])
 app.include_router(webhook.router, prefix="/webhook", tags=["webhook"])
 

@@ -106,14 +106,16 @@ function isHostParticipant(pool: Pool | null | undefined, participantName: strin
   if (!pool) return false;
   const pName = participantName.trim().toLowerCase();
   const hostName = (pool.created_by_name ?? "").trim().toLowerCase();
-  const hostId = pool.host_id;
 
-  if (pName === "host" || pName === hostName || namesMatch(hostName, pName)) {
+  if (pName === "host" || pName === "you" || pName === hostName) {
     return true;
   }
 
-  if (user && user.id === hostId && (pName === (user.fullName ?? "").trim().toLowerCase() || namesMatch(user.fullName, pName))) {
-    return true;
+  if (user && user.fullName) {
+    const userFull = user.fullName.trim().toLowerCase();
+    if (pName === userFull && pool.host_id === user.id) {
+      return true;
+    }
   }
 
   return false;

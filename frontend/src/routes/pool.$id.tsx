@@ -1251,11 +1251,17 @@ function PoolDetail() {
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
                 id="input-pool-name"
+                list="wing-members-list"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your Name (e.g. Kanik)"
                 className="bg-background text-xs h-10 pl-9"
               />
+              <datalist id="wing-members-list">
+                {(pool?.wing_members ?? []).map((m: string) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </div>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -1327,11 +1333,17 @@ function PoolDetail() {
                   <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                   <Input
                     id="input-pool-name-dialog"
+                    list="wing-members-list-dialog"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Kanika"
                     className="h-10 bg-background pl-9 text-sm"
                   />
+                  <datalist id="wing-members-list-dialog">
+                    {(pool?.wing_members ?? []).map((m: string) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
 

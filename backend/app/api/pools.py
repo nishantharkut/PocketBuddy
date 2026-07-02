@@ -326,6 +326,17 @@ async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = Non
     reliability_map = await get_roommate_reliability(db, p.get("wing_label", ""))
     p["reliability_scores"] = {name: reliability_map.get(name, {"score": 90, "label": "New roommate", "color": "blue"}) for name in participants}
     
+    wing_label = p.get("wing_label")
+    wing_members = []
+    if wing_label:
+        profiles_cursor = db.profiles.find({"wing_label": wing_label})
+        profiles = await profiles_cursor.to_list(length=100)
+        uids = [prof["_id"] for prof in profiles]
+        users_cursor = db.users.find({"_id": {"$in": uids}})
+        users = await users_cursor.to_list(length=100)
+        wing_members = [u.get("full_name", "").strip() for u in users if u.get("full_name")]
+    p["wing_members"] = list(set(wing_members))
+    
     return p
 
 
@@ -745,6 +756,32 @@ async def get_pool_items(pool_id: str):
     items = await cursor.to_list(length=500)
     return map_docs(items)
 
+async def match_wing_roommate(db, pool: dict, input_name: str) -> str:
+    cleaned = clean_text(input_name, "Roommate name")
+    wing_label = pool.get("wing_label")
+    if not wing_label:
+        return cleaned
+
+    profiles_cursor = db.profiles.find({"wing_label": wing_label})
+    profiles = await profiles_cursor.to_list(length=100)
+    uids = [prof["_id"] for prof in profiles]
+    users_cursor = db.users.find({"_id": {"$in": uids}})
+    users = await users_cursor.to_list(length=100)
+    wing_members = [u.get("full_name", "").strip() for u in users if u.get("full_name")]
+
+    best_match = None
+    in_key = name_key(cleaned)
+    for member in wing_members:
+        m_key = name_key(member)
+        if in_key == m_key:
+            return member
+        if in_key and m_key and (in_key in m_key or m_key in in_key):
+            best_match = member
+
+    if best_match:
+        return best_match
+    return cleaned
+
 @router.post("/{pool_id}/items")
 async def insert_pool_item(pool_id: str, req: PoolItemReq):
     db = get_db()
@@ -763,12 +800,15 @@ async def insert_pool_item(pool_id: str, req: PoolItemReq):
     if req.estimated_price <= 0 or req.estimated_price > MAX_ITEM_PRICE_PAISE:
          raise HTTPException(status_code=400, detail="Estimated price must be between ₹1 and ₹5,000")
 
+    # Match against registered wing roommates to avoid name collisions/typos
+    matched_name = await match_wing_roommate(db, pool, req.added_by_name)
+
     item_id = str(uuid.uuid4())
 
     new_item = {
         "_id": item_id,
         "pool_id": pool_id,
-        "added_by_name": clean_text(req.added_by_name, "Roommate name"),
+        "added_by_name": matched_name,
         "item_description": clean_text(req.item_description, "Item description", max_chars=MAX_DESCRIPTION_CHARS),
         "estimated_price": req.estimated_price,
         "product_url": validate_product_url(req.product_url),

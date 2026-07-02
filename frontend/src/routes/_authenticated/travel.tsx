@@ -821,14 +821,14 @@ function TravelPage() {
         <Card className="bg-surface border-border overflow-hidden">
           <button
             onClick={() => setShowCalculator(!showCalculator)}
-            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all cursor-pointer"
+            className="w-full flex items-center justify-between p-3.5 hover:bg-white/5 transition-all cursor-pointer"
           >
-            <div className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-primary" />
-              <span className="text-sm font-black uppercase tracking-wider text-foreground">Estimate Fare for Any Route</span>
-              <Badge className="text-[9px] bg-primary/10 border border-primary/20 text-primary font-bold uppercase py-0 px-1.5">Live</Badge>
+            <div className="flex items-center gap-2 min-w-0">
+              <Search className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-foreground truncate">Estimate Fare for Any Route</span>
+              <Badge className="text-[8px] sm:text-[9px] bg-primary/10 border border-primary/20 text-primary font-bold uppercase py-0 px-1.5 shrink-0">Live</Badge>
             </div>
-            <span className="text-xs text-muted-foreground">{showCalculator ? "Hide" : "Open"}</span>
+            <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0 pl-2">{showCalculator ? "Hide" : "Open"}</span>
           </button>
 
           {showCalculator && (
@@ -962,7 +962,7 @@ function TravelPage() {
             </div>
 
             {/* Time of Day Surge Predictor Widget */}
-            <Card className="bg-surface border border-border p-5 space-y-4">
+            <Card className="bg-surface border border-border p-4 sm:p-5 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-primary animate-pulse" />
@@ -971,7 +971,7 @@ function TravelPage() {
                 <Badge className="bg-primary/10 border border-primary/20 text-primary font-mono text-[9px] px-2 py-0.5 font-bold uppercase tracking-wider">Surge Projections</Badge>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
                 {([
                   { label: "Morning Rush", time: "08:00 - 11:00", factor: 1.20, active: timeContext.label === "Morning Rush", colorClass: "text-amber-400 border-amber-500/20 bg-amber-500/5", badgeLabel: "1.2x Surge" },
                   { label: "Off-Peak", time: "11:00 - 17:00", factor: 1.0, active: timeContext.label === "Off-Peak", colorClass: "text-green-400 border-green-500/20 bg-green-500/5", badgeLabel: "Baseline" },
@@ -983,29 +983,29 @@ function TravelPage() {
                   return (
                     <div
                       key={h.label}
-                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 relative overflow-hidden ${
+                      className={`p-3 rounded-xl border transition-all flex flex-col justify-between space-y-2 relative overflow-hidden ${
                         h.active
-                          ? "bg-primary/5 border-primary shadow-[0_0_15px_rgba(99,102,241,0.15)]"
-                          : "bg-surface-raised/40 border-border/60 opacity-80 hover:opacity-100 hover:bg-surface-raised/70"
+                          ? "bg-primary/5 border-primary shadow-[0_0_15px_rgba(99,102,241,0.15)] animate-[pulse_2s_infinite]"
+                          : "bg-surface-raised/40 border-border/60 opacity-85 hover:opacity-100 hover:bg-surface-raised/70"
                       }`}
                     >
                       {h.active && (
-                        <div className="absolute top-0 right-0 bg-primary text-primary-foreground font-mono text-[7px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-bl-lg animate-pulse">
+                        <div className="absolute top-0 right-0 bg-primary text-primary-foreground font-mono text-[6px] sm:text-[7px] font-black uppercase tracking-widest px-1.5 sm:px-2.5 py-0.5 rounded-bl-lg">
                           Live Now
                         </div>
                       )}
                       <div>
-                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-wider">{h.label}</p>
-                        <p className="text-[9px] text-muted-foreground/60">{h.time}</p>
+                        <p className="text-[10px] sm:text-[11px] text-muted-foreground font-black uppercase tracking-wider">{h.label}</p>
+                        <p className="text-[8px] sm:text-[9px] text-muted-foreground/60">{h.time}</p>
                       </div>
 
                       <div className="flex justify-between items-end pt-1">
                         <div>
-                          <p className="text-xl font-mono font-black text-foreground">₹{currentFare}</p>
-                          <p className="text-[8px] text-muted-foreground/80 font-bold uppercase">Estimated Fare</p>
+                          <p className="text-base sm:text-xl font-mono font-black text-foreground">₹{currentFare}</p>
+                          <p className="text-[7px] sm:text-[8px] text-muted-foreground/80 font-bold uppercase">Est. Fare</p>
                         </div>
-                        <Badge variant="outline" className={`text-[8px] font-bold py-0.5 px-2 ${h.colorClass}`}>
-                          {h.badgeLabel}
+                        <Badge variant="outline" className={`text-[7px] sm:text-[8px] font-bold py-0.5 px-1.5 ${h.colorClass} shrink-0`}>
+                          {h.badgeLabel.split(" ")[0]}
                         </Badge>
                       </div>
                     </div>

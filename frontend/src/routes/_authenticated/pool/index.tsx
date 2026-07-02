@@ -286,12 +286,6 @@ function PoolCard({ pool }: { pool: Pool }) {
   const rSummary = useMemo(() => {
     if (pool.status !== "completed") return null;
 
-    const namesMatch = (a: string | null | undefined, b: string | null | undefined) => {
-      const left = (a ?? "").trim().toLowerCase();
-      const right = (b ?? "").trim().toLowerCase();
-      return Boolean(left && right && (left === right || left.includes(right) || right.includes(left)));
-    };
-
     const breakdown = pool.split_breakdown ?? {};
     let unpaidCount = 0;
     let unpaidTotal = 0;
@@ -307,7 +301,7 @@ function PoolCard({ pool }: { pool: Pool }) {
         unpaidTotal += details.total;
       }
 
-      const isMe = user && (rName.toLowerCase() === user.fullName.toLowerCase() || namesMatch(user.fullName, rName));
+      const isMe = user && (rName.toLowerCase() === user.fullName.trim().toLowerCase());
       if (isMe) {
         myOwed = details.total;
         myStatus = details.payment_status;

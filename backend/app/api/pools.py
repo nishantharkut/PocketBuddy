@@ -669,8 +669,14 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
     if participant_keys and name_key(roommate_name) not in participant_keys:
         raise HTTPException(status_code=400, detail="Roommate is not part of this pool")
 
+    # Resolve exact casing of the roommate's name from active pool items to avoid case mismatches in db query
+    exact_roommate_name = next(
+        (item["added_by_name"] for item in items if name_key(item.get("added_by_name")) == name_key(roommate_name)),
+        roommate_name
+    )
+
     payment_entry = {
-        "name": roommate_name,
+        "name": exact_roommate_name,
         "utr": utr,
         "status": "pending",
         "submitted_at": utcnow().isoformat()
@@ -679,7 +685,7 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
     # Remove any existing payment record for this roommate
     await db.cart_pools.update_one(
         {"_id": pool_id},
-        {"$pull": {"payments": {"name": roommate_name}}}
+        {"$pull": {"payments": {"name": exact_roommate_name}}}
     )
 
     # Append the payment entry
@@ -711,17 +717,26 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
     roommate_name = clean_text(req.roommate_name, "Roommate name")
     action = req.action.strip().lower()
 
+    # Resolve exact casing of name from payments list or items list to prevent case mismatches in query update
+    payments = pool.get("payments", [])
+    items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+    items = await items_cursor.to_list(length=500)
+    participants = [pay.get("name") for pay in payments if pay.get("name")] + [it.get("added_by_name") for it in items if it.get("added_by_name")]
+    exact_roommate_name = next(
+        (name for name in participants if name_key(name) == name_key(roommate_name)),
+        roommate_name
+    )
+
     if action in ("verify", "settle_in_kind"):
         status = "verified"
         settlement_mode = "settle_in_kind" if action == "settle_in_kind" else "manual"
         
         # Check if roommate already has a payment log
-        payments = pool.get("payments", [])
-        has_payment = any(name_key(p["name"]) == name_key(roommate_name) for p in payments)
+        has_payment = any(name_key(p["name"]) == name_key(exact_roommate_name) for p in payments)
         
         if has_payment:
             result = await db.cart_pools.update_one(
-                {"_id": pool_id, "payments.name": roommate_name},
+                {"_id": pool_id, "payments.name": exact_roommate_name},
                 {"$set": {
                     "payments.$.status": status,
                     "payments.$.verified_at": utcnow().isoformat(),
@@ -732,7 +747,7 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
                 raise HTTPException(status_code=404, detail="Payment confirmation not found")
         else:
             payment_entry = {
-                "name": roommate_name,
+                "name": exact_roommate_name,
                 "utr": "SETTLED_BY_HOST" if action == "verify" else "SETTLED_IN_KIND",
                 "status": status,
                 "submitted_at": utcnow().isoformat(),
@@ -747,7 +762,7 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
     elif action == "reject":
         result = await db.cart_pools.update_one(
             {"_id": pool_id},
-            {"$pull": {"payments": {"name": roommate_name}}}
+            {"$pull": {"payments": {"name": exact_roommate_name}}}
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="Payment confirmation not found")
@@ -783,17 +798,12 @@ async def match_wing_roommate(db, pool: dict, input_name: str) -> str:
     users = await users_cursor.to_list(length=100)
     wing_members = [u.get("full_name", "").strip() for u in users if u.get("full_name")]
 
-    best_match = None
     in_key = name_key(cleaned)
     for member in wing_members:
         m_key = name_key(member)
         if in_key == m_key:
             return member
-        if in_key and m_key and (in_key in m_key or m_key in in_key):
-            best_match = member
 
-    if best_match:
-        return best_match
     return cleaned
 
 @router.post("/{pool_id}/items")

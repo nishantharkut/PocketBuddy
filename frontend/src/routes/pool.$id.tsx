@@ -96,11 +96,7 @@ function listActiveParticipants(itemsList: any[]) {
   );
 }
 
-function namesMatch(a: string | null | undefined, b: string | null | undefined) {
-  const left = (a ?? "").trim().toLowerCase();
-  const right = (b ?? "").trim().toLowerCase();
-  return Boolean(left && right && (left === right || left.includes(right) || right.includes(left)));
-}
+
 
 function isHostParticipant(pool: Pool | null | undefined, participantName: string, user: any) {
   if (!pool) return false;
@@ -129,7 +125,7 @@ function isPoolFullySettled(pool: Pool | null | undefined, itemsList: any[], use
 
   return activeParticipants.every((participantName) => {
     if (isHostParticipant(pool, participantName, user)) return true;
-    const payment = (pool.payments ?? []).find((pay: any) => pay.name === participantName);
+    const payment = (pool.payments ?? []).find((pay: any) => pay.name.trim().toLowerCase() === participantName.trim().toLowerCase());
     return payment?.status === "verified";
   });
 }
@@ -369,7 +365,7 @@ function PoolDetail() {
         .filter((i) => i.is_purchased !== false)
         .reduce((s, i) => s + i.estimated_price, 0);
 
-      const payment = (pool.payments ?? []).find((pay: any) => pay.name === p);
+      const payment = (pool.payments ?? []).find((pay: any) => pay.name.trim().toLowerCase() === p.trim().toLowerCase());
       const isHostUser = isHostParticipant(pool, p, user);
 
       splitBreakdown[p] = {

@@ -35,6 +35,7 @@ import {
   deleteAccountData,
   updateTransaction,
   confirmTransaction,
+  submitParserCorrection,
 } from "@/lib/api/db.functions";
 import { relativeTime } from "@/lib/format";
 
@@ -166,11 +167,11 @@ function PrivacyPage() {
 
   async function saveEditTxn(txn: any) {
     try {
-      await updateTransaction({
-        id: txn.id,
+      await submitParserCorrection({
         data: {
-          mapped_merchant_name: editMerchant,
-          category: editCategory,
+          transaction_id: txn.id,
+          corrected_merchant: editMerchant,
+          corrected_category: editCategory,
         },
       });
       await confirmTransaction({ id: txn.id });

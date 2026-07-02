@@ -232,6 +232,11 @@ export async function getTravelSavings() {
   return apiRequest("/api/travel/savings");
 }
 
+export async function getTravelRouteEstimate(origin: string, destination: string) {
+  const url = `/api/travel/estimate?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`;
+  return apiRequest(url);
+}
+
 export async function logTravelSavings({ data }: { data: { amount_saved: number; route_id: string } }) {
   return apiRequest("/api/travel/savings", {
     method: "POST",

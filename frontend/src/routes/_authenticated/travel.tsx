@@ -49,7 +49,8 @@ import {
   logTravelSavings,
   createTravelRoute,
   getProfile,
-  getAiTravelCoach
+  getAiTravelCoach,
+  getTravelRouteEstimate
 } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/travel")({
@@ -81,6 +82,12 @@ function TravelPage() {
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [isNewRouteOpen, setIsNewRouteOpen] = useState<boolean>(false);
   const [newStudentMode, setNewStudentMode] = useState<boolean>(true);
+  const [showCalculator, setShowCalculator] = useState<boolean>(true);
+  const [dynamicOrigin, setDynamicOrigin] = useState<string>("");
+  const [dynamicDestination, setDynamicDestination] = useState<string>("");
+  const [isEstimating, setIsEstimating] = useState<boolean>(false);
+  const [estimatedResult, setEstimatedResult] = useState<any>(null);
+  const [splitPeople, setSplitPeople] = useState<number>(2);
 
   // Form State for reporting
   const [reportMode, setReportMode] = useState<string>("Auto");
@@ -170,6 +177,20 @@ function TravelPage() {
     return routes.find((r: any) => r.id === selectedRouteId) || null;
   }, [routes, selectedRouteId]);
 
+  const splitFareData = useMemo(() => {
+    if (!selectedRoute?.modes?.length) return null;
+    const modeDetails = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase()))
+      || selectedRoute.modes[0];
+    const peopleCount = Math.max(1, splitPeople);
+    const perPerson = Math.ceil(modeDetails.median_fare / peopleCount);
+    return {
+      perPerson,
+      median: modeDetails.median_fare,
+      max: modeDetails.max_fare,
+      peopleCount,
+    };
+  }, [selectedRoute, selectedMode, splitPeople]);
+
   // Automatically select an appropriate mode if the selected route changes
   useEffect(() => {
     if (selectedRoute && selectedRoute.modes && selectedRoute.modes.length > 0) {
@@ -212,6 +233,25 @@ function TravelPage() {
       overchargeMax,
     };
   }, [selectedRoute, selectedMode, driverQuote]);
+
+  const handleEstimateRoute = async () => {
+    if (!dynamicOrigin.trim() || !dynamicDestination.trim()) {
+      toast.error("Enter both origin and destination.");
+      return;
+    }
+
+    setIsEstimating(true);
+    setEstimatedResult(null);
+
+    try {
+      const result = await getTravelRouteEstimate(dynamicOrigin.trim(), dynamicDestination.trim());
+      setEstimatedResult(result);
+    } catch {
+      toast.error("Failed to estimate route. Try again.");
+    } finally {
+      setIsEstimating(false);
+    }
+  };
 
   // Mutation for logging savings
   const logSavingsMutation = useMutation({
@@ -536,6 +576,130 @@ function TravelPage() {
             ))}
           </div>
         )}
+
+        <Card className="bg-surface border-border overflow-hidden">
+          <button
+            onClick={() => setShowCalculator(!showCalculator)}
+            className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/5 transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-primary" />
+              <span className="text-sm font-black uppercase tracking-wider text-foreground">Estimate Fare for Any Route</span>
+              <Badge className="text-[9px] bg-primary/10 border border-primary/20 text-primary font-bold uppercase py-0 px-1.5">Live</Badge>
+            </div>
+            <span className="text-xs text-zinc-500">{showCalculator ? "Hide" : "Open"}</span>
+          </button>
+
+          {showCalculator && (
+            <div className="px-4 pb-5 space-y-4 border-t border-border animate-[fadeIn_0.2s_ease-out]">
+              <p className="text-[11px] text-zinc-500 pt-3">
+                Type any origin and destination to get a live distance and fare snapshot. Google Maps is used when available, otherwise the app falls back to a local estimate.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">From</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+                    <Input
+                      id="input-dynamic-origin"
+                      placeholder="e.g. Gwalior Railway Station"
+                      value={dynamicOrigin}
+                      onChange={(e) => setDynamicOrigin(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleEstimateRoute()}
+                      className="bg-surface-raised border-border text-xs h-10 pl-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">To</label>
+                  <div className="relative">
+                    <Compass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+                    <Input
+                      id="input-dynamic-destination"
+                      placeholder="e.g. ABV-IIITM Gwalior"
+                      value={dynamicDestination}
+                      onChange={(e) => setDynamicDestination(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleEstimateRoute()}
+                      className="bg-surface-raised border-border text-xs h-10 pl-9"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest self-center">Quick:</span>
+                {["Railway Station", "Airport", "Bus Stand", "City Centre"].map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => setDynamicOrigin(q)}
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-full border border-border bg-surface-raised text-zinc-500 hover:text-primary hover:border-primary/40 transition-all cursor-pointer"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+
+              <Button
+                id="btn-estimate-route"
+                onClick={handleEstimateRoute}
+                disabled={isEstimating}
+                className="w-full bg-primary text-primary-foreground font-black uppercase tracking-wider h-10 text-xs flex items-center justify-center gap-2"
+              >
+                {isEstimating ? (
+                  <><span className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full inline-block" />Calculating...</>
+                ) : (
+                  <><Search className="h-4 w-4" />Get Fare Estimate</>
+                )}
+              </Button>
+
+              {estimatedResult && (
+                <div className="space-y-3 animate-[fadeIn_0.25s_ease-out]">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Navigation className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-black uppercase tracking-wider text-foreground">
+                        {estimatedResult.distance_km} km • ~{estimatedResult.duration_mins} min drive
+                      </span>
+                    </div>
+                    <Badge className={`text-[9px] font-bold uppercase py-0.5 px-2 ${estimatedResult.source === "google_api" ? "bg-green-500/15 border border-green-500/30 text-green-400" : "bg-amber-500/15 border border-amber-500/30 text-amber-400"}`}>
+                      {estimatedResult.source === "google_api" ? "Live Google Routes" : "Smart Estimate"}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {estimatedResult.modes.map((m: any) => (
+                      <div key={m.mode} className="bg-surface-raised border border-border/60 rounded-xl p-3 space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-foreground">{m.mode.split(" ")[0]}</p>
+                        <p className="text-base font-black text-primary font-mono">₹{m.min_fare}–₹{m.max_fare}</p>
+                        <p className="text-[9px] text-zinc-500">Median ₹{m.median_fare}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <Card className="bg-surface border-border p-4 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">1. Check Fare</p>
+            <p className="text-sm font-bold text-foreground">Compare a driver quote against the live route median.</p>
+          </Card>
+          <Card className="bg-surface border-border p-4 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">2. Split Fare</p>
+            <p className="text-sm font-bold text-foreground">See per-person cost if you’re sharing the ride.</p>
+            {splitFareData && <p className="text-xs text-primary font-mono">₹{splitFareData.perPerson} each</p>}
+          </Card>
+          <Card className="bg-surface border-border p-4 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">3. AI Coach</p>
+            <p className="text-sm font-bold text-foreground">Generate a negotiation script from the live fare.</p>
+          </Card>
+          <Card className="bg-surface border-border p-4 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">4. Reports</p>
+            <p className="text-sm font-bold text-foreground">Use student reports to keep the range current.</p>
+          </Card>
+        </div>
 
         {selectedRoute && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

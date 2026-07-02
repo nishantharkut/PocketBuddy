@@ -2,6 +2,11 @@ import datetime
 import uuid
 import logging
 import re
+import asyncio
+import hashlib
+import json
+from urllib.parse import urlencode
+from urllib.request import urlopen, Request
 from typing import Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -139,6 +144,98 @@ class ReportSubmitReq(BaseModel):
 class SavingsLogReq(BaseModel):
     amount_saved: float
     route_id: str
+
+
+class RouteEstimateReq(BaseModel):
+    origin: str
+    destination: str
+
+
+def _normalize_place_name(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
+def _local_route_distance_km(origin: str, destination: str) -> float:
+    origin_norm = _normalize_place_name(origin)
+    destination_norm = _normalize_place_name(destination)
+
+    known_points = {
+        "gwalior railway station": 6.2,
+        "railway station": 6.2,
+        "airport": 12.8,
+        "bus stand": 8.1,
+        "abv-iiitm": 1.0,
+        "iiitm": 1.0,
+    }
+
+    for key, base_distance in known_points.items():
+        if key in origin_norm or key in destination_norm:
+            return base_distance
+
+    seed = f"{origin_norm}|{destination_norm}".encode("utf-8")
+    digest = hashlib.sha256(seed).digest()
+    raw = int.from_bytes(digest[:2], "big")
+    return round(2.5 + (raw % 280) / 10.0, 1)
+
+
+def _fare_modes_for_distance(distance_km: float) -> list[dict[str, int | str]]:
+    return [
+        {
+            "mode": "Auto (Ola/Uber/Local)",
+            "min_fare": int(60 + distance_km * 9),
+            "max_fare": int(80 + distance_km * 12),
+            "median_fare": int(70 + distance_km * 10.5),
+        },
+        {
+            "mode": "Cab (Uber/Ola)",
+            "min_fare": int(180 + distance_km * 14),
+            "max_fare": int(240 + distance_km * 19),
+            "median_fare": int(210 + distance_km * 16.5),
+        },
+        {
+            "mode": "Bike (Rapido/Ola)",
+            "min_fare": int(25 + distance_km * 6),
+            "max_fare": int(35 + distance_km * 8),
+            "median_fare": int(30 + distance_km * 7),
+        },
+        {
+            "mode": "Shared Auto",
+            "min_fare": int(35 + distance_km * 5),
+            "max_fare": int(55 + distance_km * 7),
+            "median_fare": int(45 + distance_km * 6),
+        },
+    ]
+
+
+async def _estimate_google_distance_km(origin: str, destination: str) -> tuple[float, int] | None:
+    if not settings.google_maps_api_key:
+        return None
+
+    params = urlencode({
+        "origin": origin,
+        "destination": destination,
+        "key": settings.google_maps_api_key,
+    })
+    url = f"https://maps.googleapis.com/maps/api/directions/json?{params}"
+
+    def _fetch() -> tuple[float, int] | None:
+        req = Request(url, headers={"User-Agent": "PocketBuddy/1.0"})
+        with urlopen(req, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if payload.get("status") != "OK":
+            return None
+        route = payload.get("routes", [{}])[0]
+        leg = route.get("legs", [{}])[0]
+        distance_meters = leg.get("distance", {}).get("value")
+        duration_seconds = leg.get("duration", {}).get("value")
+        if not distance_meters or not duration_seconds:
+            return None
+        return round(distance_meters / 1000.0, 1), max(1, round(duration_seconds / 60.0))
+
+    try:
+        return await asyncio.to_thread(_fetch)
+    except Exception:
+        return None
 
 @router.get("/routes")
 async def get_routes(college: Optional[str] = Query(None), user_id: str = Depends(get_current_user)):
@@ -461,6 +558,27 @@ async def log_savings(req: SavingsLogReq, user_id: str = Depends(get_current_use
     })
 
     return {"status": "ok", "id": savings_id, "amount_saved": req.amount_saved}
+
+
+@router.get("/estimate")
+async def estimate_route(origin: str = Query(...), destination: str = Query(...), user_id: str = Depends(get_current_user)):
+    google_result = await _estimate_google_distance_km(origin, destination)
+    if google_result:
+        distance_km, duration_mins = google_result
+        source = "google_api"
+    else:
+        distance_km = _local_route_distance_km(origin, destination)
+        duration_mins = max(5, round(distance_km * 3))
+        source = "local_estimate"
+
+    return {
+        "origin": origin,
+        "destination": destination,
+        "distance_km": distance_km,
+        "duration_mins": duration_mins,
+        "source": source,
+        "modes": _fare_modes_for_distance(distance_km),
+    }
 
 
 class AiCoachReq(BaseModel):

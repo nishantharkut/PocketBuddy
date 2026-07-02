@@ -146,6 +146,189 @@ async def expire_pool_if_needed(db, pool: dict) -> dict:
         pool["status"] = "closed"
     return pool
 
+async def get_roommate_reliability(db, wing_label: str) -> dict:
+    pools = await db.cart_pools.find({"wing_label": wing_label, "status": "completed"}).to_list(length=100)
+    roommate_stats = {}
+    
+    for pool in pools:
+        pool_id = pool["_id"]
+        completed_at = pool.get("completed_at")
+        if not completed_at:
+            continue
+        
+        items = await db.cart_pool_items.find({"pool_id": pool_id}).to_list(length=500)
+        participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
+        host_name = pool.get("created_by_name", "")
+        
+        for roommate in participants:
+            if name_key(roommate) == name_key(host_name) or roommate.lower() == "you":
+                continue
+                
+            r_key = name_key(roommate)
+            r_name = roommate
+            
+            stats = roommate_stats.setdefault(r_key, {
+                "name": r_name,
+                "total_pools": 0,
+                "verified_pools": 0,
+                "pending_pools": 0,
+                "total_repayment_time_sec": 0.0,
+            })
+            stats["total_pools"] += 1
+            
+            payments = pool.get("payments", [])
+            pm = next((p for p in payments if name_key(p["name"]) == r_key), None)
+            
+            if pm and pm.get("status") == "verified":
+                stats["verified_pools"] += 1
+                pay_time_str = pm.get("submitted_at") or pm.get("verified_at")
+                if pay_time_str:
+                    try:
+                        pay_time = datetime.datetime.fromisoformat(pay_time_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        diff_sec = max(0.0, (pay_time - completed_at).total_seconds())
+                        stats["total_repayment_time_sec"] += diff_sec
+                    except:
+                        pass
+            else:
+                stats["pending_pools"] += 1
+                
+    reliability = {}
+    for r_key, stats in roommate_stats.items():
+        total_pools = stats["total_pools"]
+        if total_pools == 0:
+            continue
+            
+        pool_scores = []
+        for pool in pools:
+            pool_id = pool["_id"]
+            completed_at = pool.get("completed_at")
+            if not completed_at:
+                continue
+                
+            items = await db.cart_pool_items.find({"pool_id": pool_id}).to_list(length=500)
+            participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
+            if name_key(stats["name"]) not in [name_key(p) for p in participants]:
+                continue
+                
+            payments = pool.get("payments", [])
+            pm = next((p for p in payments if name_key(p["name"]) == r_key), None)
+            
+            if pm and pm.get("status") == "verified":
+                pay_time_str = pm.get("submitted_at") or pm.get("verified_at")
+                if pay_time_str:
+                    try:
+                        pay_time = datetime.datetime.fromisoformat(pay_time_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        diff_sec = (pay_time - completed_at).total_seconds()
+                        diff_hours = diff_sec / 3600.0
+                        if diff_hours <= 1:
+                            pool_scores.append(100)
+                        elif diff_hours <= 6:
+                            pool_scores.append(95)
+                        elif diff_hours <= 24:
+                            pool_scores.append(85)
+                        else:
+                            pool_scores.append(70)
+                    except:
+                        pool_scores.append(85)
+                else:
+                    pool_scores.append(85)
+            else:
+                elapsed_hours = (datetime.datetime.utcnow() - completed_at).total_seconds() / 3600.0
+                if elapsed_hours <= 24:
+                    pool_scores.append(70)
+                elif elapsed_hours <= 48:
+                    pool_scores.append(30)
+                else:
+                    pool_scores.append(10)
+                    
+        avg_score = int(sum(pool_scores) / len(pool_scores)) if pool_scores else 90
+        
+        if avg_score >= 95:
+            label = "Instant Pays"
+            color = "green"
+        elif avg_score >= 85:
+            label = "Pays in hours"
+            color = "blue"
+        elif avg_score >= 70:
+            label = "Takes a day"
+            color = "yellow"
+        else:
+            label = "Slow payer"
+            color = "red"
+            
+        reliability[stats["name"]] = {
+            "name": stats["name"],
+            "score": avg_score,
+            "label": label,
+            "color": color,
+            "total_pools": total_pools,
+            "pending_pools": stats["pending_pools"],
+            "avg_repayment_time_hours": round((stats["total_repayment_time_sec"] / stats["verified_pools"] / 3600.0) if stats["verified_pools"] > 0 else 0.0, 1)
+        }
+        
+    return reliability
+
+
+async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = None) -> dict:
+    pool_id = p["_id"] if "_id" in p else p.get("id")
+    items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+    items = await items_cursor.to_list(length=200)
+    
+    grouped = {}
+    for item in items:
+        grouped.setdefault(item["added_by_name"], []).append(item)
+        
+    participants = list(grouped.keys())
+    active_participants = [name for name, its in grouped.items() if any(it.get("is_purchased", True) for it in its)]
+    
+    split_breakdown = {}
+    if p.get("status") in ("completed", "closed") and p.get("status") != "open":
+        num_people = len(active_participants)
+        net_overhead = (p.get("final_overhead") or 0) - (p.get("final_discount") or 0)
+        overhead_share = int(net_overhead / num_people) if num_people > 0 else 0
+        
+        for name in active_participants:
+            p_items_total = sum(it["estimated_price"] for it in grouped[name] if it.get("is_purchased", True))
+            payment = next((pay for pay in p.get("payments", []) if pay["name"].lower() == name.lower()), None)
+            is_host = (name.lower() == "you" or name_key(name) == name_key(p.get("created_by_name")))
+            
+            split_breakdown[name] = {
+                "name": name,
+                "items_total": p_items_total,
+                "share": overhead_share,
+                "total": p_items_total + overhead_share,
+                "paid": True if is_host else (payment["status"] == "verified" if payment else False),
+                "payment_status": "host" if is_host else (payment["status"] if payment else "unpaid"),
+                "utr": payment["utr"] if payment else "",
+                "settlement_mode": payment.get("settlement_mode") if payment else None,
+                "confidence": payment.get("confidence") if payment else None
+            }
+    else:
+        num_people = len(participants)
+        delivery_per_person = int(p.get("delivery_fee", 0) / num_people) if num_people > 0 else p.get("delivery_fee", 0)
+        
+        for name in participants:
+            p_items_total = sum(it["estimated_price"] for it in grouped[name])
+            is_host = (name.lower() == "you" or name_key(name) == name_key(p.get("created_by_name")))
+            
+            split_breakdown[name] = {
+                "name": name,
+                "items_total": p_items_total,
+                "share": delivery_per_person,
+                "total": p_items_total + delivery_per_person,
+                "paid": True if is_host else False,
+                "payment_status": "host" if is_host else "unpaid",
+                "utr": ""
+            }
+            
+    p["split_breakdown"] = split_breakdown
+    
+    reliability_map = await get_roommate_reliability(db, p.get("wing_label", ""))
+    p["reliability_scores"] = {name: reliability_map.get(name, {"score": 90, "label": "New roommate", "color": "blue"}) for name in participants}
+    
+    return p
+
+
 @router.get("")
 async def get_cart_pools(user_id: str = Depends(get_current_user)):
     db = get_db()
@@ -153,7 +336,6 @@ async def get_cart_pools(user_id: str = Depends(get_current_user)):
     if not profile or not profile.get("wing_label"):
         return []
 
-    # Auto-expire pools that have passed their expiration date
     now = utcnow()
     await db.cart_pools.update_many(
         {
@@ -169,18 +351,135 @@ async def get_cart_pools(user_id: str = Depends(get_current_user)):
     }).sort("created_at", -1)
 
     pools = await cursor.to_list(length=50)
+    enriched_pools = []
 
     for p in pools:
         p["id"] = str(p.pop("_id"))
-        # Serialize datetime fields with Z suffix for frontend UTC compatibility
         from app.core.security import _serialize_value
         for k, v in list(p.items()):
             p[k] = _serialize_value(v)
+        
+        p = await enrich_pool_document(db, p, user_id)
+        
         items_cursor = db.cart_pool_items.find({"pool_id": p["id"]})
         items = await items_cursor.to_list(length=100)
         p["items"] = map_docs(items)
+        enriched_pools.append(p)
 
-    return pools
+    return enriched_pools
+
+
+@router.get("/wing/reliability")
+async def get_wing_reliability(user_id: str = Depends(get_current_user)):
+    db = get_db()
+    profile = await db.profiles.find_one({"_id": user_id})
+    if not profile or not profile.get("wing_label"):
+        return {}
+    reliability = await get_roommate_reliability(db, profile["wing_label"])
+    return reliability
+
+
+@router.get("/wing/netted-balances")
+async def get_wing_netted_balances(user_id: str = Depends(get_current_user)):
+    db = get_db()
+    profile = await db.profiles.find_one({"_id": user_id})
+    if not profile or not profile.get("wing_label"):
+        return {"balances": {"you_owe": [], "owes_you": []}, "suggested_settlements": []}
+        
+    wing_label = profile["wing_label"]
+    user_doc = await db.users.find_one({"_id": user_id})
+    full_name = user_doc.get("full_name", "") if user_doc else ""
+    
+    pools = await db.cart_pools.find({"wing_label": wing_label, "status": "completed"}).to_list(length=100)
+    debts = {}
+    
+    for pool in pools:
+        pool_id = pool["_id"]
+        host_id = pool.get("host_id")
+        host_user = await db.users.find_one({"_id": host_id})
+        host_name = host_user.get("full_name", "") if host_user else pool.get("created_by_name", "")
+        
+        items = await db.cart_pool_items.find({"pool_id": pool_id}).to_list(length=500)
+        participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
+        num_people = len(participants)
+        
+        final_overhead = pool.get("final_overhead", 0)
+        final_discount = pool.get("final_discount", 0)
+        net_overhead = final_overhead - final_discount
+        overhead_share = int(net_overhead / num_people) if num_people > 0 else 0
+        
+        for roommate in participants:
+            if name_key(roommate) == name_key(host_name):
+                continue
+                
+            payments = pool.get("payments", [])
+            pm = next((p for p in payments if name_key(p["name"]) == name_key(roommate)), None)
+            
+            if not pm or pm.get("status") != "verified":
+                p_items_total = sum(it["estimated_price"] for it in items if it.get("is_purchased", True) and name_key(it["added_by_name"]) == name_key(roommate))
+                total_owed = p_items_total + overhead_share
+                
+                u1 = roommate.strip()
+                u2 = host_name.strip()
+                debts.setdefault(u1, {}).setdefault(u2, 0)
+                debts[u1][u2] += total_owed
+                
+    all_users = list(set(list(debts.keys()) + [u2 for u1 in debts for u2 in debts[u1]]))
+    netted_debts = {}
+    
+    for i in range(len(all_users)):
+        for j in range(i+1, len(all_users)):
+            u1 = all_users[i]
+            u2 = all_users[j]
+            
+            owes_1_to_2 = debts.get(u1, {}).get(u2, 0)
+            owes_2_to_1 = debts.get(u2, {}).get(u1, 0)
+            
+            if owes_1_to_2 > owes_2_to_1:
+                diff = owes_1_to_2 - owes_2_to_1
+                if diff > 0:
+                    netted_debts.setdefault(u1, {})[u2] = diff
+            elif owes_2_to_1 > owes_1_to_2:
+                diff = owes_2_to_1 - owes_1_to_2
+                if diff > 0:
+                    netted_debts.setdefault(u2, {})[u1] = diff
+                    
+    user_key = full_name.strip()
+    owes_you = []
+    you_owe = []
+    suggested_settlements = []
+    
+    for debtor, creditors in netted_debts.items():
+        for creditor, amount in creditors.items():
+            if amount <= 0:
+                continue
+                
+            suggested_settlements.append({
+                "debtor": debtor,
+                "creditor": creditor,
+                "amount": amount,
+                "text": f"{debtor} owes {creditor} ₹{amount/100:.2f}"
+            })
+            
+            if name_key(debtor) == name_key(user_key):
+                you_owe.append({
+                    "name": creditor,
+                    "amount": amount
+                })
+            elif name_key(creditor) == name_key(user_key):
+                owes_you.append({
+                    "name": debtor,
+                    "amount": amount
+                })
+                
+    return {
+        "balances": {
+            "you_owe": you_owe,
+            "owes_you": owes_you
+        },
+        "suggested_settlements": suggested_settlements
+    }
+
 
 @router.post("")
 async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user)):
@@ -223,6 +522,7 @@ async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user
     await db.cart_pools.insert_one(new_pool)
     return map_doc(new_pool)
 
+
 @router.get("/{pool_id}")
 async def get_pool(pool_id: str):
     db = get_db()
@@ -231,8 +531,14 @@ async def get_pool(pool_id: str):
         raise HTTPException(status_code=404, detail="Pool not found")
     
     pool = await expire_pool_if_needed(db, pool)
-
-    return map_doc(pool)
+    
+    pool["id"] = str(pool.pop("_id"))
+    from app.core.security import _serialize_value
+    for k, v in list(pool.items()):
+        pool[k] = _serialize_value(v)
+        
+    pool = await enrich_pool_document(db, pool)
+    return pool
 
 @router.put("/{pool_id}")
 async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(get_current_user)):
@@ -305,10 +611,18 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
                 "created_at": utcnow()
             }
             await db.transactions.insert_one(new_txn)
+        
+        updates["completed_at"] = utcnow()
 
     await db.cart_pools.update_one({"_id": pool_id}, {"$set": updates})
     updated_pool = await db.cart_pools.find_one({"_id": pool_id})
-    return map_doc(updated_pool)
+    if updated_pool:
+        updated_pool["id"] = str(updated_pool.pop("_id"))
+        from app.core.security import _serialize_value
+        for k, v in list(updated_pool.items()):
+            updated_pool[k] = _serialize_value(v)
+        updated_pool = await enrich_pool_document(db, updated_pool)
+    return updated_pool
 
 @router.post("/{pool_id}/payment-confirm")
 async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
@@ -350,7 +664,13 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
     )
 
     updated = await db.cart_pools.find_one({"_id": pool_id})
-    return map_doc(updated)
+    if updated:
+        updated["id"] = str(updated.pop("_id"))
+        from app.core.security import _serialize_value
+        for k, v in list(updated.items()):
+            updated[k] = _serialize_value(v)
+        updated = await enrich_pool_document(db, updated)
+    return updated
 
 @router.post("/{pool_id}/payment-verify")
 async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Depends(get_current_user)):
@@ -366,13 +686,39 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
     roommate_name = clean_text(req.roommate_name, "Roommate name")
     action = req.action.strip().lower()
 
-    if action == "verify":
-        result = await db.cart_pools.update_one(
-            {"_id": pool_id, "payments.name": roommate_name},
-            {"$set": {"payments.$.status": "verified"}}
-        )
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Payment confirmation not found")
+    if action in ("verify", "settle_in_kind"):
+        status = "verified"
+        settlement_mode = "settle_in_kind" if action == "settle_in_kind" else "manual"
+        
+        # Check if roommate already has a payment log
+        payments = pool.get("payments", [])
+        has_payment = any(name_key(p["name"]) == name_key(roommate_name) for p in payments)
+        
+        if has_payment:
+            result = await db.cart_pools.update_one(
+                {"_id": pool_id, "payments.name": roommate_name},
+                {"$set": {
+                    "payments.$.status": status,
+                    "payments.$.verified_at": utcnow().isoformat(),
+                    "payments.$.settlement_mode": settlement_mode
+                }}
+            )
+            if result.matched_count == 0:
+                raise HTTPException(status_code=404, detail="Payment confirmation not found")
+        else:
+            payment_entry = {
+                "name": roommate_name,
+                "utr": "SETTLED_BY_HOST" if action == "verify" else "SETTLED_IN_KIND",
+                "status": status,
+                "submitted_at": utcnow().isoformat(),
+                "verified_at": utcnow().isoformat(),
+                "settlement_mode": settlement_mode
+            }
+            await db.cart_pools.update_one(
+                {"_id": pool_id},
+                {"$push": {"payments": payment_entry}}
+            )
+            
     elif action == "reject":
         result = await db.cart_pools.update_one(
             {"_id": pool_id},
@@ -384,7 +730,13 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
         raise HTTPException(status_code=400, detail="Invalid action")
 
     updated = await db.cart_pools.find_one({"_id": pool_id})
-    return map_doc(updated)
+    if updated:
+        updated["id"] = str(updated.pop("_id"))
+        from app.core.security import _serialize_value
+        for k, v in list(updated.items()):
+            updated[k] = _serialize_value(v)
+        updated = await enrich_pool_document(db, updated)
+    return updated
 
 @router.get("/{pool_id}/items")
 async def get_pool_items(pool_id: str):

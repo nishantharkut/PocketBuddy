@@ -537,8 +537,8 @@ function PoolDetail() {
     }
   }
 
-  // Host verify or reject roommate payment UTR
-  async function handleVerifyPayment(roommateName: string, action: "verify" | "reject") {
+  // Host verify, reject, or settle-in-kind roommate payment
+  async function handleVerifyPayment(roommateName: string, action: "verify" | "reject" | "settle_in_kind") {
     try {
       await paymentVerify({
         pool_id: id,
@@ -547,7 +547,7 @@ function PoolDetail() {
           action
         }
       });
-      toast.success(action === "verify" ? `Verified payment for ${roommateName}` : `Rejected payment for ${roommateName}`);
+      toast.success(action === "verify" ? `Verified payment for ${roommateName}` : action === "settle_in_kind" ? `Settled in kind for ${roommateName}` : `Rejected payment for ${roommateName}`);
       qc.invalidateQueries({ queryKey: ["pool", id] });
     } catch (err: any) {
       toast.error(err.message || "Verification action failed");
@@ -810,42 +810,95 @@ function PoolDetail() {
                 </p>
 
                 {/* Host Payment Verification Checklist */}
-                <div className="space-y-2.5 max-h-48 overflow-auto pr-1">
-                  {(pool.payments ?? []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic py-1 pl-1">No payment notifications submitted yet.</p>
-                  ) : (
-                    (pool.payments as any[]).map((pay) => (
-                      <div key={pay.name} className="flex items-center justify-between bg-surface p-3.5 rounded-xl border border-border text-xs">
-                        <div className="space-y-0.5">
-                          <p className="font-bold capitalize text-foreground">{pay.name}</p>
-                          <p className="text-xs text-muted-foreground font-mono">UTR ID: {pay.utr}</p>
+                <div className="space-y-2.5 max-h-60 overflow-auto pr-1">
+                  {(() => {
+                    const breakdown = pool.split_breakdown ?? {};
+                    const roommates = Object.keys(breakdown).filter((rName) => {
+                      const isHost = rName.toLowerCase() === "you" || rName.toLowerCase() === (pool.created_by_name ?? "").toLowerCase();
+                      return !isHost;
+                    });
+
+                    if (roommates.length === 0) {
+                      return <p className="text-xs text-muted-foreground italic py-1 pl-1">No roommates in this pool yet.</p>;
+                    }
+
+                    return roommates.map((rName) => {
+                      const details = breakdown[rName];
+                      const rel = (pool.reliability_scores ?? {})[rName] ?? { score: 90, label: "New roommate", color: "blue" };
+                      
+                      let badgeColor = "bg-blue-500/10 text-blue-500 border-blue-500/20";
+                      if (rel.color === "green") badgeColor = "bg-green-500/10 text-green-500 border-green-500/20";
+                      else if (rel.color === "yellow") badgeColor = "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+                      else if (rel.color === "red") badgeColor = "bg-red-500/10 text-red-500 border-red-500/20";
+
+                      return (
+                        <div key={rName} className="flex flex-col gap-2.5 bg-surface p-3.5 rounded-xl border border-border text-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <p className="font-bold capitalize text-foreground flex flex-wrap items-center gap-1.5">
+                                {rName}
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${badgeColor} font-bold`}>
+                                  {rel.label} ({rel.score}%)
+                                </span>
+                              </p>
+                              <p className="text-xs text-muted-foreground font-semibold">
+                                Share: {rupees(details.total)}
+                              </p>
+                              {details.utr && (
+                                <p className="text-[10px] text-muted-foreground font-mono">
+                                  UTR: {details.utr}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {details.paid ? (
+                                <div className="flex flex-col items-end gap-1">
+                                  <Badge className="bg-green-600/10 border border-green-600/20 text-green-500 font-bold py-1 px-2.5">
+                                    VERIFIED
+                                  </Badge>
+                                  {details.settlement_mode === "settle_in_kind" && (
+                                    <span className="text-[10px] text-amber-500 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">
+                                      Settled In Kind
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleVerifyPayment(rName, "verify")}
+                                      className="h-8 bg-green-600 text-white hover:bg-green-700 py-1 px-2 text-[10px] uppercase font-bold tracking-wider"
+                                    >
+                                      Approve
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleVerifyPayment(rName, "settle_in_kind")}
+                                      className="h-8 border-amber-500/20 text-amber-500 hover:bg-amber-500/5 py-1 px-2 text-[10px] uppercase font-bold tracking-wider"
+                                    >
+                                      In Kind
+                                    </Button>
+                                  </div>
+                                  {details.payment_status === "pending" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleVerifyPayment(rName, "reject")}
+                                      className="h-7 border-destructive/20 text-destructive hover:bg-destructive/5 py-1 px-2 text-[10px] uppercase font-bold tracking-wider w-full"
+                                    >
+                                      Reject
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          {pay.status === "verified" ? (
-                            <Badge className="bg-green-600/10 border border-green-600/20 text-green-500 font-bold py-1 px-2.5">VERIFIED</Badge>
-                          ) : (
-                            <>
-                              <Button
-                                size="sm"
-                                onClick={() => handleVerifyPayment(pay.name, "verify")}
-                                className="h-8 bg-green-600 text-white hover:bg-green-700 py-1 px-3 text-xs uppercase font-bold tracking-wider"
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleVerifyPayment(pay.name, "reject")}
-                                className="h-8 border-destructive/20 text-destructive hover:bg-destructive/5 py-1 px-3 text-xs uppercase font-bold tracking-wider"
-                              >
-                                Reject
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
+                      );
+                    });
+                  })()}
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-3 border-t border-border">

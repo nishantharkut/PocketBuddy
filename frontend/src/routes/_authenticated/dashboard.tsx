@@ -54,6 +54,7 @@ import {
   scanMenuPhoto,
   verifyCampusFoodItem,
   submitParserCorrection,
+  getWingNettedBalances,
 } from "@/lib/api/db.functions";
 
 
@@ -365,6 +366,12 @@ function Dashboard() {
     enabled: !!user,
     queryFn: () => getTravelSavings(),
   });
+  const { data: nettedBalances } = useQuery({
+    queryKey: ["netted-balances", user?.id],
+    enabled: !!user,
+    staleTime: 30_000,
+    queryFn: () => getWingNettedBalances(),
+  });
   const wingEvents = wingFeed?.events ?? [];
 
   // Burnout score derived from insights
@@ -374,7 +381,8 @@ function Dashboard() {
     const cycleStart = getCycleStart(profile.cycle_start_day);
     const cycleEnd = getCycleEnd(cycleStart);
     const cycleTxns = (txns ?? []).filter((t) => new Date(t.created_at) >= cycleStart);
-    const totalSpent = cycleTxns.reduce((s, t) => s + t.amount, 0) / 100;
+    const unpaidPoolDebt = (insights?.unpaid_pool_debt_paise ?? 0) / 100;
+    const totalSpent = (cycleTxns.reduce((s, t) => s + t.amount, 0) / 100) + unpaidPoolDebt;
     const remaining = Math.max(0, totalAllowance - totalSpent);
     const today = new Date();
     const daysSinceStart = Math.max(1, daysBetween(cycleStart, today));
@@ -397,8 +405,9 @@ function Dashboard() {
       safeDailyLimit,
       spentToday,
       pct: Math.min(100, Math.round((totalSpent / totalAllowance) * 100)),
+      unpaidPoolDebt,
     };
-  }, [profile, txns]);
+  }, [profile, txns, insights]);
 
   // Burnout score is now calculated on the backend via /api/insights/wellness
 
@@ -1096,7 +1105,7 @@ function Dashboard() {
 
                     <div className="mt-8">
                       <Progress id="progress-runway" value={calc.pct} className="h-1 bg-surface-raised" />
-                      <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between font-medium">
+                      <div className="mt-3 text-xs text-muted-foreground flex flex-col md:flex-row md:items-center justify-between gap-2 font-medium">
                         {profile?.companion_paired ? (
                           <span className="flex items-center gap-1.5 text-zinc-400">
                             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
@@ -1106,6 +1115,11 @@ function Dashboard() {
                           <Link to="/companion" className="text-warning flex items-center gap-1.5 hover:underline">
                             <span className="w-1.5 h-1.5 bg-warning rounded-full" /> Manual tracking mode
                           </Link>
+                        )}
+                        {calc.unpaidPoolDebt > 0 && (
+                          <span className="text-amber-500 flex items-center gap-1.5 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            ⚠️ Includes {rupees(calc.unpaidPoolDebt * 100)} unpaid pool debt
+                          </span>
                         )}
                         <span className="font-bold text-foreground">{calc.pct}% Spent</span>
                       </div>
@@ -1289,6 +1303,67 @@ function Dashboard() {
 
           {/* ── Sidebar ─────────────────────────────────────────────────── */}
           <div className="md:col-span-5 lg:col-span-4 space-y-5">
+
+            {/* ── Wing Netting & Suggested Settlements ─────────────────── */}
+            {nettedBalances && (nettedBalances.balances?.you_owe?.length > 0 || nettedBalances.balances?.owes_you?.length > 0 || nettedBalances.suggested_settlements?.length > 0) && (
+              <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden transition-all duration-300 hover:border-white/10">
+                <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 opacity-80" />
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase">Wing Netting & Settlements</p>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full border text-emerald-500 border-emerald-500/20 bg-emerald-500/5">
+                    NETTED ACTIVE
+                  </span>
+                </div>
+                
+                <div className="space-y-4">
+                  {/* Nishant owes others (you_owe) */}
+                  {nettedBalances.balances?.you_owe?.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">You Owe</p>
+                      <div className="space-y-1.5">
+                        {nettedBalances.balances.you_owe.map((item: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg text-xs border border-border">
+                            <span className="font-semibold text-zinc-300">{item.name}</span>
+                            <span className="font-bold text-red-400 font-mono">{rupees(item.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Others owe Nishant (owes_you) */}
+                  {nettedBalances.balances?.owes_you?.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Owes You</p>
+                      <div className="space-y-1.5">
+                        {nettedBalances.balances.owes_you.map((item: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg text-xs border border-border">
+                            <span className="font-semibold text-zinc-300">{item.name}</span>
+                            <span className="font-bold text-green-400 font-mono">{rupees(item.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Suggested settlements path */}
+                  {nettedBalances.suggested_settlements?.length > 0 && (
+                    <div className="space-y-2 pt-3 border-t border-border/60">
+                      <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>💡 Optimized Settlement Plan</span>
+                      </p>
+                      <div className="space-y-1.5">
+                        {nettedBalances.suggested_settlements.map((item: any, idx: number) => (
+                          <p key={idx} className="text-xs text-zinc-300 bg-emerald-500/5 border border-emerald-500/10 px-3 py-2 rounded-lg font-medium leading-relaxed">
+                            {item.text}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ── Survive Until Broke Card ─────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">

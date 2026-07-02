@@ -204,36 +204,133 @@ async def mark_sync_log(
 async def try_auto_verify_pool_payment(db, user_id: str, text: str, amount_from_req: Optional[float] = None, utr_from_req: Optional[str] = None) -> bool:
     # Look for credit keywords
     text_lower = text.lower()
-    credit_keywords = ["received", "credited", "deposit", "added", "plus", "credited to a/c"]
+    credit_keywords = ["received", "credited", "deposit", "added", "plus", "credited to a/c", "sent you"]
     is_credit = any(kw in text_lower for kw in credit_keywords) or (amount_from_req is not None and "credit" in text_lower)
 
     if not is_credit:
         return False
 
+    # Extract transaction reference (UTR)
     utr = utr_from_req or parse_transaction_id(text)
-    if not utr:
+
+    # Parse amount in paise
+    amount_paise = parse_amount(text)
+    if not amount_paise and amount_from_req is not None:
+        amount_paise = int(round(amount_from_req * 100))
+
+    if not amount_paise:
         return False
 
-    # Find completed pool hosted by this user with a pending payment matching this UTR
-    pool = await db.cart_pools.find_one({
+    # Helper function for key normalization
+    def local_name_key(v: Optional[str]) -> str:
+        return " ".join((v or "").strip().split()).casefold()
+
+    # Parse sender name
+    sender_name = None
+    sender_patterns = [
+        r"received\s+from\s+([a-zA-Z\s]+?)(?:\s+via|\s+on|\s+using|\.|$)",
+        r"([a-zA-Z\s]+?)\s+sent\s+you",
+        r"credited\s+by\s+([a-zA-Z\s]+?)(?:\s+on\s+via|\.|$)",
+        r"transfer\s+from\s+([a-zA-Z\s]+?)(?:\s+via|\s+on|\.|$)",
+        r"from\s+([a-zA-Z\s]+?)\s+to\s+a/c",
+    ]
+    for pattern in sender_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            sender_name = match.group(1).strip()
+            break
+
+    # Search for completed pools in the last 48 hours hosted by this user
+    since = datetime.datetime.utcnow() - datetime.timedelta(hours=48)
+    pools_cursor = db.cart_pools.find({
         "host_id": user_id,
         "status": "completed",
-        "payments": {
-            "$elemMatch": {
-                "utr": utr,
-                "status": "pending"
-            }
-        }
+        "completed_at": {"$gte": since}
     })
+    pools = await pools_cursor.to_list(length=20)
 
-    if pool:
-        # Mark roommate status to verified
-        res = await db.cart_pools.update_one(
-            {"_id": pool["_id"], "payments.utr": utr},
-            {"$set": {"payments.$.status": "verified"}}
-        )
-        if res.modified_count > 0:
-            return True
+    for pool in pools:
+        pool_id = pool["_id"]
+        items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+        items = await items_cursor.to_list(length=1000)
+
+        participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
+        num_people = len(participants)
+
+        final_overhead = pool.get("final_overhead", 0)
+        final_discount = pool.get("final_discount", 0)
+        net_overhead = final_overhead - final_discount
+        overhead_share = int(net_overhead / num_people) if num_people > 0 else 0
+
+        for roommate in participants:
+            if roommate.lower() == "you" or local_name_key(roommate) == local_name_key(pool.get("created_by_name")):
+                continue
+
+            roommate_items_total = sum(it["estimated_price"] for it in items if it.get("is_purchased", True) and local_name_key(it["added_by_name"]) == local_name_key(roommate))
+            total_owed = roommate_items_total + overhead_share
+
+            payments = pool.get("payments", [])
+            roommate_payment = next((p for p in payments if local_name_key(p["name"]) == local_name_key(roommate)), None)
+
+            if not roommate_payment or roommate_payment.get("status") in ("pending", "needs_review"):
+                # Compare amount (allowing ±100 paise i.e. 1 rupee tolerance)
+                if abs(total_owed - amount_paise) <= 100:
+                    confidence = "medium"
+                    if sender_name:
+                        r_key = local_name_key(roommate)
+                        s_key = local_name_key(sender_name)
+                        if r_key in s_key or s_key in r_key:
+                            confidence = "high"
+
+                    status = "verified" if confidence == "high" else "needs_review"
+
+                    payment_entry = {
+                        "name": roommate,
+                        "utr": utr or (roommate_payment.get("utr") if roommate_payment else "AUTO_VERIFIED"),
+                        "status": status,
+                        "submitted_at": roommate_payment.get("submitted_at") if roommate_payment else datetime.datetime.utcnow().isoformat(),
+                        "verified_at": datetime.datetime.utcnow().isoformat() if status == "verified" else None,
+                        "confidence": confidence,
+                        "parsed_sender": sender_name,
+                        "settlement_mode": "manual" if status == "verified" else None
+                    }
+
+                    # Remove existing payment record for this roommate and push the updated one
+                    await db.cart_pools.update_one(
+                        {"_id": pool_id},
+                        {"$pull": {"payments": {"name": roommate}}}
+                    )
+                    await db.cart_pools.update_one(
+                        {"_id": pool_id},
+                        {"$push": {"payments": payment_entry}}
+                    )
+
+                    logger.info(f"Auto-verified roommate split: {roommate} in pool {pool_id} with confidence {confidence}")
+                    return True
+
+    # Fallback to manual UTR matching
+    if utr:
+        pool = await db.cart_pools.find_one({
+            "host_id": user_id,
+            "status": "completed",
+            "payments": {
+                "$elemMatch": {
+                    "utr": utr,
+                    "status": "pending"
+                }
+            }
+        })
+        if pool:
+            res = await db.cart_pools.update_one(
+                {"_id": pool["_id"], "payments.utr": utr},
+                {"$set": {
+                    "payments.$.status": "verified",
+                    "payments.$.verified_at": datetime.datetime.utcnow().isoformat()
+                }}
+            )
+            if res.modified_count > 0:
+                logger.info(f"Matched manual UTR {utr} for pool {pool['_id']}")
+                return True
 
     return False
 

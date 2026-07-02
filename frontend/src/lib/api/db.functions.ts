@@ -249,3 +249,7 @@ export async function getStats(month: number, year: number) {
   return apiRequest(`/api/insights/stats?month=${month}&year=${year}`);
 }
 
+export async function getWingNettedBalances() {
+  return apiRequest("/api/cart-pools/wing/netted-balances");
+}
+

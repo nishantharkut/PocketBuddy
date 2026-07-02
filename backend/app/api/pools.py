@@ -292,8 +292,12 @@ async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = Non
             payment = next((pay for pay in p.get("payments", []) if pay["name"].lower() == name.lower()), None)
             is_host = (name.lower() == "you" or name_key(name) == name_key(p.get("created_by_name")))
             
+            usr = await db.users.find_one({"full_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}})
+            r_email = usr.get("email", "") if usr else ""
+            
             split_breakdown[name] = {
                 "name": name,
+                "email": r_email,
                 "items_total": p_items_total,
                 "share": overhead_share,
                 "total": p_items_total + overhead_share,
@@ -311,8 +315,12 @@ async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = Non
             p_items_total = sum(it["estimated_price"] for it in grouped[name])
             is_host = (name.lower() == "you" or name_key(name) == name_key(p.get("created_by_name")))
             
+            usr = await db.users.find_one({"full_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}})
+            r_email = usr.get("email", "") if usr else ""
+            
             split_breakdown[name] = {
                 "name": name,
+                "email": r_email,
                 "items_total": p_items_total,
                 "share": delivery_per_person,
                 "total": p_items_total + delivery_per_person,

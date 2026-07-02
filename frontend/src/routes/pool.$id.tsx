@@ -15,6 +15,7 @@ import { ChevronLeft, Share2, Trash2, Check, X, AlertCircle, Sparkles, ExternalL
 import { toast } from "sonner";
 import { rupees, relativeTime } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
+import { signUpFn, signInWithPasswordFn } from "@/lib/api/auth.functions";
 import {
   getCartPool,
   getCartPoolItems,
@@ -23,6 +24,7 @@ import {
   updateCartPool,
   updateCartPoolItem,
   getProfile,
+  updateProfile,
   paymentConfirm,
   paymentVerify,
 } from "@/lib/api/db.functions";
@@ -199,6 +201,67 @@ function PoolDetail() {
       }
     }
   }, [pool, hasToastedStatus]);
+
+  // Quick auth state for unauthenticated roommates
+  const { login: pbLogin } = useAuth();
+  const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+
+  async function handleQuickAuth(e: React.FormEvent) {
+    e.preventDefault();
+    if (!authEmail || !authPassword) {
+      toast.error("Please fill in all credentials");
+      return;
+    }
+    if (authMode === "signup" && !authName) {
+      toast.error("Please enter your name");
+      return;
+    }
+
+    setAuthBusy(true);
+    try {
+      if (authMode === "signup") {
+        const res = await signUpFn({
+          data: {
+            email: authEmail,
+            password: authPassword,
+            fullName: authName,
+          },
+        });
+        if (res && res.sessionToken && res.user) {
+          pbLogin(res.sessionToken, res.user);
+          await updateProfile({
+            data: {
+              onboarding_completed: true,
+              setup_completed: true,
+              wing_label: pool.wing_label // Auto-add to the host's wing for rating compatibility
+            }
+          });
+          toast.success("Joined pool successfully!");
+          qc.invalidateQueries({ queryKey: ["pool", id] });
+        }
+      } else {
+        const res = await signInWithPasswordFn({
+          data: {
+            email: authEmail,
+            password: authPassword,
+          },
+        });
+        if (res && res.sessionToken && res.user) {
+          pbLogin(res.sessionToken, res.user);
+          toast.success("Logged in successfully!");
+          qc.invalidateQueries({ queryKey: ["pool", id] });
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Authentication failed");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
 
   // Pre-fill checkout inputs when modal opens
   useEffect(() => {
@@ -564,6 +627,93 @@ function PoolDetail() {
     ? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiPayUrl)}`
     : "";
 
+  if (!user) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[calc(100vh-10rem)] p-4">
+          <Card className="w-full max-w-md bg-surface border border-border overflow-hidden relative">
+            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary to-accent opacity-80" />
+            <div className="p-6 md:p-8 space-y-6">
+              <div className="text-center space-y-2">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 border border-primary/20 text-primary mb-2">
+                  <Shield className="h-6 w-6" />
+                </div>
+                <h3 className="text-xl font-bold tracking-tight text-foreground">
+                  {authMode === "signup" ? "Join Cart Pool" : "Welcome Back"}
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {authMode === "signup"
+                    ? `Register in 5 seconds to join ${pool.created_by_name}'s ${theme.name} cart pool safely.`
+                    : "Log in with your email to participate in this cart pool."}
+                </p>
+              </div>
+
+              <form onSubmit={handleQuickAuth} className="space-y-4">
+                {authMode === "signup" && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="auth-name" className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-0.5">Full name</label>
+                    <Input
+                      id="auth-name"
+                      value={authName}
+                      onChange={(e) => setAuthName(e.target.value)}
+                      placeholder="e.g. Deb Mukherjee"
+                      className="bg-background text-sm h-10"
+                      required
+                    />
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label htmlFor="auth-email" className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-0.5">Email address</label>
+                  <Input
+                    id="auth-email"
+                    type="email"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    placeholder="e.g. deb@iiitm.ac.in"
+                    className="bg-background text-sm h-10"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="auth-password" className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-0.5">Password</label>
+                  <Input
+                    id="auth-password"
+                    type="password"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="bg-background text-sm h-10"
+                    required
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={authBusy}
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-10 font-bold uppercase tracking-wider text-xs"
+                >
+                  {authBusy ? "Authenticating..." : authMode === "signup" ? "Create Account & Join" : "Log In & Join"}
+                </Button>
+              </form>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setAuthMode(authMode === "signup" ? "login" : "signup")}
+                  className="text-xs font-semibold text-primary hover:underline bg-transparent border-0"
+                >
+                  {authMode === "signup"
+                    ? "Already have an account? Log in"
+                    : "Don't have an account? Sign up"}
+                </button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       {/* Dynamic Header Banner */}
@@ -841,6 +991,11 @@ function PoolDetail() {
                                   {rel.label} ({rel.score}%)
                                 </span>
                               </p>
+                              {details.email && (
+                                <p className="text-[10px] text-zinc-500 font-semibold lowercase">
+                                  {details.email}
+                                </p>
+                              )}
                               <p className="text-xs text-muted-foreground font-semibold">
                                 Share: {rupees(details.total)}
                               </p>
@@ -1154,9 +1309,16 @@ function PoolDetail() {
             return (
               <Card key={who} className="p-4 bg-surface border border-border space-y-3">
                 <div className="flex justify-between items-center border-b border-border/80 pb-2">
-                  <span className="font-bold text-xs text-foreground capitalize flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5 text-zinc-500" />
-                    <span>{who}</span>
+                  <span className="font-bold text-xs text-foreground capitalize flex flex-col items-start min-w-0">
+                    <span className="flex items-center gap-1.5 font-bold">
+                      <User className="h-3.5 w-3.5 text-zinc-500" />
+                      <span>{who}</span>
+                    </span>
+                    {splitBreakdown[who]?.email && (
+                      <span className="text-[10px] text-zinc-500 font-semibold lowercase mt-0.5 block truncate max-w-[200px]">
+                        {splitBreakdown[who].email}
+                      </span>
+                    )}
                   </span>
                   <span className="font-black text-xs text-foreground tnum">
                     {rupees(whoTotal)}
@@ -1247,21 +1409,9 @@ function PoolDetail() {
             <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Registration Free</span>
           </div>
           <div className="space-y-2">
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-              <Input
-                id="input-pool-name"
-                list="wing-members-list"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your Name (e.g. Kanik)"
-                className="bg-background text-xs h-10 pl-9"
-              />
-              <datalist id="wing-members-list">
-                {(pool?.wing_members ?? []).map((m: string) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
+            <div className="flex items-center gap-2 bg-muted/30 border border-border px-3 py-2 rounded-xl text-xs text-zinc-400">
+              <User className="h-4 w-4 text-primary shrink-0" />
+              <span>Adding as: <strong className="text-foreground">{user?.fullName}</strong> ({user?.email})</span>
             </div>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -1326,24 +1476,12 @@ function PoolDetail() {
 
             <div className="space-y-3 text-sm">
               <div className="space-y-1.5">
-                <label htmlFor="input-pool-name-dialog" className="text-xs font-semibold text-muted-foreground">
-                  Your name
+                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">
+                  Adding as
                 </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-                  <Input
-                    id="input-pool-name-dialog"
-                    list="wing-members-list-dialog"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Kanika"
-                    className="h-10 bg-background pl-9 text-sm"
-                  />
-                  <datalist id="wing-members-list-dialog">
-                    {(pool?.wing_members ?? []).map((m: string) => (
-                      <option key={m} value={m} />
-                    ))}
-                  </datalist>
+                <div className="flex items-center gap-2.5 bg-muted/30 border border-border px-3 py-2.5 rounded-xl text-sm text-zinc-400">
+                  <User className="h-4.5 w-4.5 text-primary shrink-0" />
+                  <span><strong className="text-foreground">{user?.fullName}</strong> ({user?.email})</span>
                 </div>
               </div>
 

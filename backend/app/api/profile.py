@@ -22,6 +22,7 @@ class ProfileUpdateReq(BaseModel):
     setup_completed: Optional[bool] = None
     pairing_code: Optional[str] = None
     upi_id: Optional[str] = None
+    phone: Optional[str] = None
     companion_paired: Optional[bool] = None
     companion_device_name: Optional[str] = None
     companion_last_sync: Optional[str] = None
@@ -32,6 +33,9 @@ async def get_profile(user_id: str = Depends(get_current_user)):
     profile = await db.profiles.find_one({"_id": user_id})
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
+    user = await db.users.find_one({"_id": user_id})
+    if user:
+        profile["phone"] = user.get("phone_number", "")
     return map_doc(profile)
 
 @router.post("")
@@ -39,10 +43,21 @@ async def update_profile(req: ProfileUpdateReq, user_id: str = Depends(get_curre
     db = get_db()
     updates = req.model_dump(exclude_unset=True)
     
+    if "phone" in updates:
+        phone_val = updates.pop("phone")
+        if phone_val:
+            await db.users.update_one({"_id": user_id}, {"$set": {"phone_number": phone_val}})
+
     if not updates:
         profile = await db.profiles.find_one({"_id": user_id})
+        user = await db.users.find_one({"_id": user_id})
+        if user and profile:
+            profile["phone"] = user.get("phone_number", "")
         return map_doc(profile)
 
     await db.profiles.update_one({"_id": user_id}, {"$set": updates})
     profile = await db.profiles.find_one({"_id": user_id})
+    user = await db.users.find_one({"_id": user_id})
+    if user and profile:
+        profile["phone"] = user.get("phone_number", "")
     return map_doc(profile)

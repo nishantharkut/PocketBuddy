@@ -120,6 +120,34 @@ async def get_insights(user_id: str = Depends(get_current_user)):
     mess_count = max(0, len(food_txns) - delivery_count)
     delivery_spend_paise = sum(t.get("amount", 0) for t in delivery_txns)
 
+    # Calculate unpaid pool debts (committed spend runway impact)
+    unpaid_pool_debt_paise = 0
+    user_doc = await db.users.find_one({"_id": user_id})
+    full_name = user_doc.get("full_name", "") if user_doc else ""
+    if full_name and profile and profile.get("wing_label"):
+        wing_label = profile["wing_label"]
+        def local_name_key(v):
+            return " ".join((v or "").strip().split()).casefold()
+            
+        async for p in db.cart_pools.find({"wing_label": wing_label, "status": "completed", "host_id": {"$ne": user_id}}):
+            pool_id = p["_id"]
+            items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+            items = await items_cursor.to_list(length=1000)
+            
+            participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
+            user_items = [it for it in items if it.get("is_purchased", True) and local_name_key(it["added_by_name"]) == local_name_key(full_name)]
+            if user_items:
+                payments = p.get("payments", [])
+                user_payment = next((pay for pay in payments if local_name_key(pay["name"]) == local_name_key(full_name)), None)
+                if not user_payment or user_payment.get("status") != "verified":
+                    p_items_total = sum(it["estimated_price"] for it in user_items)
+                    final_overhead = p.get("final_overhead", 0)
+                    final_discount = p.get("final_discount", 0)
+                    net_overhead = final_overhead - final_discount
+                    num_people = len(participants)
+                    overhead_share = int(net_overhead / num_people) if num_people > 0 else 0
+                    unpaid_pool_debt_paise += (p_items_total + overhead_share)
+
     # ── Subscription bleed ─────────────────────────────────────────────────
     subs_cursor = db.subscriptions.find({"user_id": user_id, "is_active": {"$ne": False}})
     subs = await subs_cursor.to_list(length=100)
@@ -152,6 +180,7 @@ async def get_insights(user_id: str = Depends(get_current_user)):
             "monthly_bleed_paise": monthly_sub_bleed,
             "count": len(subs),
         },
+        "unpaid_pool_debt_paise": unpaid_pool_debt_paise
     }
 
 
@@ -300,6 +329,34 @@ async def get_wellness_insights(user_id: str = Depends(get_current_user)):
     else:
         avg_food_gap_hours_7d = 168.0
 
+    # Calculate unpaid pool debts (committed spend runway impact)
+    unpaid_pool_debt_paise = 0
+    user_doc = await db.users.find_one({"_id": user_id})
+    full_name = user_doc.get("full_name", "") if user_doc else ""
+    if full_name and profile and profile.get("wing_label"):
+        wing_label = profile["wing_label"]
+        def local_name_key(v):
+            return " ".join((v or "").strip().split()).casefold()
+            
+        async for p in db.cart_pools.find({"wing_label": wing_label, "status": "completed", "host_id": {"$ne": user_id}}):
+            pool_id = p["_id"]
+            items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+            items = await items_cursor.to_list(length=1000)
+            
+            participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
+            user_items = [it for it in items if it.get("is_purchased", True) and local_name_key(it["added_by_name"]) == local_name_key(full_name)]
+            if user_items:
+                payments = p.get("payments", [])
+                user_payment = next((pay for pay in payments if local_name_key(pay["name"]) == local_name_key(full_name)), None)
+                if not user_payment or user_payment.get("status") != "verified":
+                    p_items_total = sum(it["estimated_price"] for it in user_items)
+                    final_overhead = p.get("final_overhead", 0)
+                    final_discount = p.get("final_discount", 0)
+                    net_overhead = final_overhead - final_discount
+                    num_people = len(participants)
+                    overhead_share = int(net_overhead / num_people) if num_people > 0 else 0
+                    unpaid_pool_debt_paise += (p_items_total + overhead_share)
+
     # 3. Financial runway & safe daily limit
     cycle_start_day = profile.get("cycle_start_day") or 1
     monthly_allowance = profile.get("monthly_allowance") or 1000000  # in paise
@@ -309,7 +366,7 @@ async def get_wellness_insights(user_id: str = Depends(get_current_user)):
     cycle_end = get_cycle_end(cycle_start)
 
     cycle_txns = [t for t in txns if t.get("created_at") and t["created_at"] >= cycle_start]
-    total_spent_rs = sum(t.get("amount", 0) for t in cycle_txns) / 100
+    total_spent_rs = (sum(t.get("amount", 0) for t in cycle_txns) + unpaid_pool_debt_paise) / 100
     remaining_rs = max(0.0, total_allowance_rs - total_spent_rs)
 
     days_since_start = max(1, (now - cycle_start).days)

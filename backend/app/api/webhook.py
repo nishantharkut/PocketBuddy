@@ -45,14 +45,34 @@ class WebhookReq(BaseModel):
 
 
 def parse_amount(text: str) -> Optional[int]:
-    amount_match = re.search(
+    # Try currency-prefixed patterns first (₹/Rs/INR before the number)
+    prefix_match = re.search(
         r"(?:₹|rs\.?|inr)\s*([0-9,]+(?:\.[0-9]{1,2})?)",
         text,
         re.IGNORECASE,
     )
-    if not amount_match:
-        return None
-    return int(round(float(amount_match.group(1).replace(",", "")) * 100))
+    if prefix_match:
+        return int(round(float(prefix_match.group(1).replace(",", "")) * 100))
+
+    # Try amount-labeled patterns: "Amt Rs 247", "Amount: 247", "amount of Rs 247"
+    labeled_match = re.search(
+        r"(?:amt|amount)[\s:.of]*(?:₹|rs\.?|inr)?\s*([0-9,]+(?:\.[0-9]{1,2})?)",
+        text,
+        re.IGNORECASE,
+    )
+    if labeled_match:
+        return int(round(float(labeled_match.group(1).replace(",", "")) * 100))
+
+    # Try currency-suffixed patterns (number before INR/Rs)
+    suffix_match = re.search(
+        r"([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:₹|rs\.?|inr)\b",
+        text,
+        re.IGNORECASE,
+    )
+    if suffix_match:
+        return int(round(float(suffix_match.group(1).replace(",", "")) * 100))
+
+    return None
 
 
 def parse_merchant(text: str) -> Optional[str]:
@@ -73,8 +93,16 @@ def parse_merchant(text: str) -> Optional[str]:
 
 def parse_transaction_id(text: str) -> Optional[str]:
     patterns = [
-        r"(?:upi\s*ref(?:erence)?\s*(?:no\.?|number)?|upi\s*txn(?:\s*id)?|upi\s*transaction(?:\s*id)?|utr|txn\s*id)\s*[:.\-]?\s*([A-Z0-9]{6,})",
+        # Standard UPI references
+        r"(?:upi\s*ref(?:erence)?\s*(?:no\.?|number)?|upi\s*txn(?:\s*id)?|upi\s*transaction(?:\s*id)?|utr|txn\s*id)\s*[:.\\-]?\s*([A-Z0-9]{6,})",
+        # UPI/NNNNN style (NPCI format)
         r"UPI/([A-Z0-9_\-]{6,})",
+        # IMPS / NEFT / RTGS ref
+        r"(?:imps|neft|rtgs)\s*ref(?:erence)?\s*(?:no\.?|number?)?\s*[:.\\-]?\s*([A-Z0-9]{6,})",
+        # Generic "Ref No" / "Reference No"
+        r"ref(?:erence)?\s*(?:no\.?|number?|#)\s*[:.\\-]?\s*([A-Z0-9]{8,})",
+        # Fallback — any standalone 12-digit number (standard UTR length)
+        r"\b(\d{12})\b",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -201,39 +229,172 @@ async def mark_sync_log(
     )
 
 
-async def try_auto_verify_pool_payment(db, user_id: str, text: str, amount_from_req: Optional[float] = None, utr_from_req: Optional[str] = None) -> bool:
-    # Look for credit keywords
+async def try_auto_verify_pool_payment(
+    db,
+    user_id: str,
+    text: str,
+    amount_from_req: Optional[float] = None,
+    utr_from_req: Optional[str] = None,
+    direction_from_req: Optional[str] = None,
+) -> bool:
     text_lower = text.lower()
-    credit_keywords = ["received", "credited", "deposit", "added", "plus", "credited to a/c"]
-    is_credit = any(kw in text_lower for kw in credit_keywords) or (amount_from_req is not None and "credit" in text_lower)
+
+    # --- Step 1: Determine transaction direction ---
+    # If Android app tells us the direction, trust it completely.
+    if direction_from_req:
+        if direction_from_req.lower() == "debit":
+            return False  # Host spent money — not a roommate paying in
+        is_credit = direction_from_req.lower() == "credit"
+    else:
+        # Explicit debit keywords — bail out immediately
+        debit_keywords = [
+            "debited", "deducted", "withdrawn", "sent to", "paid to",
+            "transferred to", "payment to", "spent at", "purchase at",
+            "debit", "dr ", "dr.",
+        ]
+        if any(kw in text_lower for kw in debit_keywords):
+            return False
+
+        # Credit indicators
+        credit_keywords = [
+            "received", "credited", "credit", "cr ", "cr.",
+            "deposit", "deposited", "added", "sent you",
+            "credited to a/c", "credited to your",
+            "payment received", "money received", "amount received",
+            "transferred to your", "transfer to your a/c",
+            "refund", "cashback", "reversed",
+        ]
+        is_credit = any(kw in text_lower for kw in credit_keywords)
 
     if not is_credit:
         return False
 
+    # --- Step 2: Extract UTR ---
     utr = utr_from_req or parse_transaction_id(text)
-    if not utr:
+
+    # --- Step 3: Parse amount ---
+    # Prefer amount from Android app (already parsed), fall back to text parsing
+    amount_paise = int(round(amount_from_req * 100)) if amount_from_req is not None else parse_amount(text)
+    if not amount_paise:
         return False
 
-    # Find completed pool hosted by this user with a pending payment matching this UTR
-    pool = await db.cart_pools.find_one({
+    # --- Step 4: Extract sender name from notification text ---
+    def local_name_key(v: Optional[str]) -> str:
+        return " ".join((v or "").strip().split()).casefold()
+
+    sender_name = None
+    sender_patterns = [
+        r"received\s+from\s+([a-zA-Z][a-zA-Z\s]{1,40}?)(?:\s+via|\s+on|\s+using|\s+ref|\.|,|$)",
+        r"([a-zA-Z][a-zA-Z\s]{1,40}?)\s+sent\s+you",
+        r"credited\s+by\s+([a-zA-Z][a-zA-Z\s]{1,40}?)(?:\s+on|\s+via|\.|,|$)",
+        r"transfer\s+from\s+([a-zA-Z][a-zA-Z\s]{1,40}?)(?:\s+via|\s+on|\.|,|$)",
+        r"from\s+([a-zA-Z][a-zA-Z\s]{1,40}?)\s+to\s+(?:a/c|your|acct)",
+        r"payment\s+from\s+([a-zA-Z][a-zA-Z\s]{1,40}?)(?:\s+via|\s+on|\.|,|$)",
+        r"money\s+from\s+([a-zA-Z][a-zA-Z\s]{1,40}?)(?:\s+via|\s+on|\.|,|$)",
+    ]
+    for pattern in sender_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            raw = match.group(1).strip()
+            # Reject if it looks like a bank/app name
+            noise = {"upi", "neft", "rtgs", "imps", "bank", "gpay", "phonepe", "paytm", "bhim", "google", "amazon"}
+            if not any(n in raw.lower() for n in noise):
+                sender_name = raw
+                break
+
+    # --- Step 5: Scan completed pools ---
+    since = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+    pools_cursor = db.cart_pools.find({
         "host_id": user_id,
         "status": "completed",
-        "payments": {
-            "$elemMatch": {
-                "utr": utr,
-                "status": "pending"
-            }
-        }
+        "completed_at": {"$gte": since}
     })
+    pools = await pools_cursor.to_list(length=20)
 
-    if pool:
-        # Mark roommate status to verified
-        res = await db.cart_pools.update_one(
-            {"_id": pool["_id"], "payments.utr": utr},
-            {"$set": {"payments.$.status": "verified"}}
-        )
-        if res.modified_count > 0:
-            return True
+    for pool in pools:
+        pool_id = pool["_id"]
+        items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+        items = await items_cursor.to_list(length=1000)
+
+        participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
+        num_people = len(participants)
+
+        final_overhead = pool.get("final_overhead", 0)
+        final_discount = pool.get("final_discount", 0)
+        net_overhead = final_overhead - final_discount
+        overhead_share = int(net_overhead / num_people) if num_people > 0 else 0
+
+        for roommate in participants:
+            if roommate.lower() == "you" or local_name_key(roommate) == local_name_key(pool.get("created_by_name")):
+                continue
+
+            roommate_items_total = sum(it["estimated_price"] for it in items if it.get("is_purchased", True) and local_name_key(it["added_by_name"]) == local_name_key(roommate))
+            total_owed = roommate_items_total + overhead_share
+
+            payments = pool.get("payments", [])
+            roommate_payment = next((p for p in payments if local_name_key(p["name"]) == local_name_key(roommate)), None)
+
+            if not roommate_payment or roommate_payment.get("status") in ("pending", "needs_review"):
+                # Compare amount (allowing ±500 paise i.e. 5 rupee tolerance for rounding)
+                if abs(total_owed - amount_paise) <= 500:
+                    confidence = "medium"
+                    if sender_name:
+                        r_key = local_name_key(roommate)
+                        s_key = local_name_key(sender_name)
+                        if r_key in s_key or s_key in r_key:
+                            confidence = "high"
+
+                    status = "verified" if confidence == "high" else "needs_review"
+
+                    payment_entry = {
+                        "name": roommate,
+                        "utr": utr or (roommate_payment.get("utr") if roommate_payment else "AUTO_VERIFIED"),
+                        "status": status,
+                        "submitted_at": roommate_payment.get("submitted_at") if roommate_payment else datetime.datetime.utcnow().isoformat(),
+                        "verified_at": datetime.datetime.utcnow().isoformat() if status == "verified" else None,
+                        "confidence": confidence,
+                        "parsed_sender": sender_name,
+                        "settlement_mode": "manual" if status == "verified" else None
+                    }
+
+                    # Remove existing payment record for this roommate and push the updated one
+                    await db.cart_pools.update_one(
+                        {"_id": pool_id},
+                        {"$pull": {"payments": {"name": roommate}}}
+                    )
+                    await db.cart_pools.update_one(
+                        {"_id": pool_id},
+                        {"$push": {"payments": payment_entry}}
+                    )
+
+                    logger.info(f"Auto-verified roommate split: {roommate} in pool {pool_id} with confidence {confidence}")
+                    return True
+
+    # --- Step 6: Fallback — UTR direct lookup (last 7 days only) ---
+    if utr:
+        since = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        pool = await db.cart_pools.find_one({
+            "host_id": user_id,
+            "status": "completed",
+            "completed_at": {"$gte": since},
+            "payments": {
+                "$elemMatch": {
+                    "utr": utr,
+                    "status": "pending"
+                }
+            }
+        })
+        if pool:
+            res = await db.cart_pools.update_one(
+                {"_id": pool["_id"], "payments.utr": utr},
+                {"$set": {
+                    "payments.$.status": "verified",
+                    "payments.$.verified_at": datetime.datetime.utcnow().isoformat()
+                }}
+            )
+            if res.modified_count > 0:
+                logger.info(f"Matched manual UTR {utr} for pool {pool['_id']}")
+                return True
 
     return False
 
@@ -296,7 +457,8 @@ async def ingest_notification(
         user_id,
         raw_body,
         amount_from_req=req.amount,
-        utr_from_req=req.transactionId
+        utr_from_req=req.transactionId,
+        direction_from_req=req.direction,
     )
     if is_auto_verified:
         await db.companion_sync_log.update_one(

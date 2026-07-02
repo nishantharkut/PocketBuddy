@@ -66,6 +66,7 @@ _DEFAULT_SEEDS: dict[str, list[dict]] = {
         {"value": "swiggy_instamart", "label": "Swiggy Instamart", "sort_order": 2, "metadata": {"default_min_cart": 19900, "default_delivery_fee": 3500}},
         {"value": "bigbasket", "label": "BigBasket", "sort_order": 3, "metadata": {"default_min_cart": 29900, "default_delivery_fee": 3000}},
         {"value": "jiomart", "label": "JioMart", "sort_order": 4, "metadata": {"default_min_cart": 19900, "default_delivery_fee": 2900}},
+        {"value": "amazon_now", "label": "Amazon Now", "sort_order": 5, "metadata": {"default_min_cart": 29900, "default_delivery_fee": 3000}},
     ],
 }
 
@@ -112,31 +113,26 @@ def _resolve_parent_category(label: str) -> str:
 
 
 async def _ensure_seeded(db, catalog_type: str) -> None:
-    """Lazy-seed defaults on first access if collection has no items for this type."""
-    count = await db.catalog_items.count_documents({"catalog_type": catalog_type})
-    if count > 0:
-        return
-
+    """Lazy-seed defaults on first access if collection has no items for this type, or upsert missing ones."""
     seeds = _DEFAULT_SEEDS.get(catalog_type, [])
     if not seeds:
         return
 
     now = datetime.datetime.utcnow()
-    docs = []
     for seed in seeds:
-        docs.append({
-            "_id": str(uuid.uuid4()),
-            "catalog_type": catalog_type,
-            "value": seed["value"],
-            "label": seed["label"],
-            "source": "default",
-            "created_by": None,
-            "sort_order": seed.get("sort_order", 99),
-            "metadata": seed.get("metadata", {}),
-            "created_at": now,
-        })
-
-    await db.catalog_items.insert_many(docs)
+        exists = await db.catalog_items.find_one({"catalog_type": catalog_type, "value": seed["value"]})
+        if not exists:
+            await db.catalog_items.insert_one({
+                "_id": str(uuid.uuid4()),
+                "catalog_type": catalog_type,
+                "value": seed["value"],
+                "label": seed["label"],
+                "source": "default",
+                "created_by": None,
+                "sort_order": seed.get("sort_order", 99),
+                "metadata": seed.get("metadata", {}),
+                "created_at": now,
+            })
 
 
 # ---------------------------------------------------------------------------

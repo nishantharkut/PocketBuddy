@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { rupees } from "@/lib/format";
-import { Clock } from "lucide-react";
+import { Clock, AlertCircle, Check } from "lucide-react";
 import { getProfile, getCartPools, insertCartPool, getCatalog, addCatalogItem } from "@/lib/api/db.functions";
 
 export const Route = createFileRoute("/_authenticated/pool/")({
@@ -37,6 +37,7 @@ const FALLBACK_PLATFORMS = [
   { v: "swiggy_instamart", l: "Swiggy Instamart" },
   { v: "bigbasket", l: "BigBasket" },
   { v: "jiomart", l: "JioMart" },
+  { v: "amazon_now", l: "Amazon Now" },
 ];
 
 const BRAND_THEMES: Record<string, { bg: string; text: string; name: string; gradient: string; accent: string }> = {
@@ -75,6 +76,13 @@ const BRAND_THEMES: Record<string, { bg: string; text: string; name: string; gra
     gradient: "from-[#0078AD] to-[#005B8C]",
     accent: "text-[#0078AD]"
   },
+  amazon_now: {
+    bg: "bg-[#FF9900]",
+    text: "text-black",
+    name: "Amazon Now",
+    gradient: "from-[#19222D] to-[#FF9900]",
+    accent: "text-[#FF9900]"
+  },
 };
 
 function getPlatformBorderColor(platform: string): string {
@@ -84,6 +92,7 @@ function getPlatformBorderColor(platform: string): string {
     swiggy_instamart: "border-l-[#FC8019]",
     bigbasket: "border-l-[#84C225]",
     jiomart: "border-l-[#0078AD]",
+    amazon_now: "border-l-[#FF9900]",
   };
   return map[platform] || "border-l-primary";
 }
@@ -94,6 +103,7 @@ function PoolList() {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"active" | "completed" | "cancelled">("active");
+  const now = Date.now();
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -107,11 +117,24 @@ function PoolList() {
     queryFn: () => getCartPools(),
   });
 
-  const now = Date.now();
+  const isPoolFullyPaid = (p: any) => {
+    if (p.status !== "completed") return false;
+    const breakdown = p.split_breakdown ?? {};
+    const roommates = Object.keys(breakdown).filter((rName) => {
+      const isHost = rName.toLowerCase() === "you" || rName.toLowerCase() === (p.created_by_name ?? "").toLowerCase();
+      return !isHost;
+    });
+    if (roommates.length === 0) return true;
+    return roommates.every((rName) => breakdown[rName].paid);
+  };
+
   const activePools = (pools ?? []).filter(
-    (p) => p.status === "open" && new Date(p.expires_at).getTime() > now,
+    (p) => (p.status === "open" && new Date(p.expires_at).getTime() > now) ||
+           (p.status === "completed" && !isPoolFullyPaid(p)),
   );
-  const completedPools = (pools ?? []).filter((p) => p.status === "completed");
+  const completedPools = (pools ?? []).filter(
+    (p) => p.status === "completed" && isPoolFullyPaid(p),
+  );
   const cancelledPools = (pools ?? []).filter(
     (p) => p.status === "cancelled" || p.status === "closed" || (p.status === "open" && new Date(p.expires_at).getTime() <= now),
   );
@@ -166,7 +189,7 @@ function PoolList() {
           </Sheet>
         ) : (
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent id="dialog-create-pool" className="max-h-[85vh] max-w-xl overflow-y-auto bg-background text-foreground border border-border">
+            <DialogContent id="dialog-create-pool" aria-describedby={undefined} className="max-h-[85vh] max-w-xl overflow-y-auto bg-background text-foreground border border-border">
               {createPoolForm}
             </DialogContent>
           </Dialog>
@@ -241,6 +264,7 @@ function PoolList() {
 }
 
 function PoolCard({ pool }: { pool: Pool }) {
+  const { user } = useAuth();
   const minsLeft = Math.max(
     0,
     Math.round((new Date(pool.expires_at).getTime() - Date.now()) / 60000),
@@ -256,6 +280,46 @@ function PoolCard({ pool }: { pool: Pool }) {
 
   const active = minsLeft > 0 && pool.status === "open";
   const platformBorderColor = getPlatformBorderColor(pool.platform);
+
+  const isFullyPaid = useMemo(() => {
+    if (pool.status !== "completed") return false;
+    const breakdown = pool.split_breakdown ?? {};
+    const roommates = Object.keys(breakdown).filter((rName) => {
+      const isHost = rName.toLowerCase() === "you" || rName.toLowerCase() === (pool.created_by_name ?? "").toLowerCase();
+      return !isHost;
+    });
+    if (roommates.length === 0) return true;
+    return roommates.every((rName) => breakdown[rName].paid);
+  }, [pool.status, pool.split_breakdown, pool.created_by_name]);
+
+  // Roommate summary calculations
+  const rSummary = useMemo(() => {
+    if (pool.status !== "completed") return null;
+
+    const breakdown = pool.split_breakdown ?? {};
+    let unpaidCount = 0;
+    let unpaidTotal = 0;
+    let myOwed = 0;
+    let myStatus = "";
+
+    Object.entries(breakdown).forEach(([rName, details]: [string, any]) => {
+      const isHost = rName.toLowerCase() === "you" || rName.toLowerCase() === (pool.created_by_name ?? "").toLowerCase();
+      if (isHost) return;
+
+      if (!details.paid) {
+        unpaidCount += 1;
+        unpaidTotal += details.total;
+      }
+
+      const isMe = user && (rName.toLowerCase() === user.fullName.trim().toLowerCase());
+      if (isMe) {
+        myOwed = details.total;
+        myStatus = details.payment_status;
+      }
+    });
+
+    return { unpaidCount, unpaidTotal, myOwed, myStatus };
+  }, [pool, user]);
 
   const itemsCount = pool.items?.length ?? 0;
   const totalCartValue = useMemo(() => {
@@ -296,18 +360,94 @@ function PoolCard({ pool }: { pool: Pool }) {
                 active
                   ? "border-[#16A34A]/30 text-[#16A34A]"
                   : statusLabel === "completed"
-                  ? "border-emerald-500/20 text-[#16A34A]"
+                  ? (isFullyPaid ? "border-green-500/30 text-green-400 bg-green-500/5" : "border-amber-500/30 text-amber-400 bg-amber-500/5")
                   : statusLabel === "cancelled"
                   ? "border-rose-500/20 text-[#FF6B4A]"
                   : "border-zinc-500/20 text-zinc-400"
               }`}>
                 {active && <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
-                {active ? "Active" : statusLabel}
+                {active ? "Active" : (statusLabel === "completed" ? (isFullyPaid ? "Settled" : "Splits Active") : statusLabel)}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Host: <span className="font-semibold text-foreground capitalize">{pool.created_by_name || "—"}</span>
             </p>
+
+            {rSummary && (
+              <div className="mt-3">
+                {user && pool.host_id === user.id ? (
+                  rSummary.unpaidTotal > 0 ? (
+                    <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 px-3 py-2 rounded-xl text-xs text-amber-400 font-bold shadow-sm shadow-black/25">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
+                      <span>Collect: <strong className="text-foreground">{rupees(rSummary.unpaidTotal)}</strong> pending from {rSummary.unpaidCount} roommates</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/25 px-3 py-2 rounded-xl text-xs text-green-400 font-bold shadow-sm shadow-black/25">
+                      <Check className="h-4 w-4 shrink-0 text-green-500" />
+                      <span>All splits collected & verified!</span>
+                    </div>
+                  )
+                ) : (
+                  rSummary.myOwed > 0 && (
+                    rSummary.myStatus === "verified" ? (
+                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/25 px-3 py-2 rounded-xl text-xs text-green-400 font-bold shadow-sm shadow-black/25">
+                        <Check className="h-4 w-4 shrink-0 text-green-500" />
+                        <span>You paid: <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong> (verified)</span>
+                      </div>
+                    ) : rSummary.myStatus === "pending" ? (
+                      <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/25 px-3 py-2 rounded-xl text-xs text-blue-400 font-bold shadow-sm shadow-black/25 animate-pulse">
+                        <Clock className="h-4 w-4 shrink-0 text-blue-500" />
+                        <span>Verifying your split of <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong> (UTR submitted)</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/25 px-3 py-2 rounded-xl text-xs text-rose-400 font-bold shadow-sm shadow-black/25">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                        <span>You owe: <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong> to host</span>
+                      </div>
+                    )
+                  )
+                )}
+              </div>
+            )}
+
+            {pool.status === "completed" && (
+              <div className="mt-3.5 space-y-2 border-t border-border/50 pt-2.5">
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest pl-0.5">Roommate Splits Status:</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(pool.split_breakdown ?? {}).map(([rName, details]: [string, any]) => {
+                    const isHost = rName.toLowerCase() === "you" || rName.toLowerCase() === (pool.created_by_name ?? "").toLowerCase();
+                    if (isHost) return null;
+
+                    const status = details.payment_status;
+                    let dotColor = "bg-zinc-500";
+                    let textColor = "text-zinc-400";
+                    let label = "Unpaid";
+                    if (status === "verified") {
+                      dotColor = "bg-green-500";
+                      textColor = "text-green-400/90";
+                      label = details.settlement_mode === "settle_in_kind" ? "In-Kind" : "Paid";
+                    } else if (status === "pending") {
+                      dotColor = "bg-amber-500 animate-pulse";
+                      textColor = "text-amber-400";
+                      label = "Verifying";
+                    }
+
+                    return (
+                      <span
+                        key={rName}
+                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-border bg-white/5 text-[10px] font-bold ${textColor}`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+                        <span className="capitalize">{rName} ({rupees(details.total)}): {label}</span>
+                      </span>
+                    );
+                  })}
+                  {Object.keys(pool.split_breakdown ?? {}).filter(k => k.toLowerCase() !== "you" && k.toLowerCase() !== (pool.created_by_name ?? "").toLowerCase()).length === 0 && (
+                    <span className="text-[10px] text-zinc-500 italic pl-0.5">No roommate splits generated.</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-5 flex justify-between items-end border-t border-border pt-3">
@@ -367,6 +507,8 @@ function CreatePoolForm({
   const [minCart, setMinCart] = useState("199");
   const [fee, setFee] = useState("25");
   const [dur, setDur] = useState("30");
+  const [autoNudge, setAutoNudge] = useState(false);
+  const [nudgeInterval, setNudgeInterval] = useState("24");
   const [busy, setBusy] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
 
@@ -435,6 +577,8 @@ function CreatePoolForm({
           min_cart_value: Math.round(parseFloat(minCart) * 100),
           delivery_fee: Math.round(parseFloat(fee) * 100),
           expires_at: expires,
+          auto_nudge_enabled: autoNudge,
+          nudge_interval_hours: parseInt(nudgeInterval, 10),
         },
       });
       toast.success("Pool created! Share with your wing.");
@@ -548,6 +692,38 @@ function CreatePoolForm({
             </SelectContent>
           </Select>
         </div>
+
+        <div className="space-y-3 pt-2 border-t border-border/50">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-foreground">Auto-Nudge Roommates</span>
+              <span className="text-[10px] text-muted-foreground">Automated WhatsApp alerts for unpaid splits</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={autoNudge}
+              onChange={(e) => setAutoNudge(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary accent-primary"
+            />
+          </div>
+          {autoNudge && (
+            <div className="animate-fade-in">
+              <label className="text-xs text-muted-foreground font-semibold">Reminder Frequency</label>
+              <Select value={nudgeInterval} onValueChange={setNudgeInterval}>
+                <SelectTrigger className="mt-1 text-xs h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="12">Every 12 hours</SelectItem>
+                  <SelectItem value="24">Every 24 hours (Daily)</SelectItem>
+                  <SelectItem value="48">Every 2 days</SelectItem>
+                  <SelectItem value="72">Every 3 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
         <Button
           id="btn-create-pool"
           onClick={create}

@@ -14,6 +14,17 @@ class Settings(BaseSettings):
     BEDROCK_REGION: str = "us-east-1"
     BEDROCK_MODEL_ID: str = "us.amazon.nova-lite-v1:0"
 
+    WHATSAPP_API_TOKEN: str = ""
+    WHATSAPP_PHONE_NUMBER_ID: str = ""
+
+    # Twilio WhatsApp
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_WHATSAPP_FROM: str = ""  # e.g. whatsapp:+14155238886
+
+    # Frontend base URL (change to deployed URL in production)
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+
     class Config:
         env_file = ".env"
 

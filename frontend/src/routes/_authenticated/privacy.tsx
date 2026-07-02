@@ -167,11 +167,15 @@ function PrivacyPage() {
 
   async function saveEditTxn(txn: any) {
     try {
+      const amountFloat = parseFloat(editAmount);
+      const correctedAmountPaise = isNaN(amountFloat) ? undefined : Math.round(amountFloat * 100);
+
       await submitParserCorrection({
         data: {
           transaction_id: txn.id,
           corrected_merchant: editMerchant,
           corrected_category: editCategory,
+          corrected_amount: correctedAmountPaise,
         },
       });
       qc.invalidateQueries({ queryKey: ["txns"] });
@@ -375,6 +379,19 @@ function PrivacyPage() {
                               value={editMerchant}
                               onChange={(e) => setEditMerchant(e.target.value)}
                               placeholder="Merchant name"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                              Amount (₹)
+                            </label>
+                            <input
+                              type="number"
+                              step="any"
+                              className="w-full rounded-md border border-border bg-background px-3 py-2 text-[12px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                              value={editAmount}
+                              onChange={(e) => setEditAmount(e.target.value)}
+                              placeholder="Amount in Rupees"
                             />
                           </div>
                           <div>

@@ -249,3 +249,15 @@ export async function getStats(month: number, year: number) {
   return apiRequest(`/api/insights/stats?month=${month}&year=${year}`);
 }
 
+export async function clearCompanionLogs() {
+  return apiRequest("/api/companion/clear-logs", { method: "POST" });
+}
+
+export async function deleteAccountData() {
+  return apiRequest("/api/profile/delete-account", { method: "POST" });
+}
+
+export async function confirmTransaction({ id }: { id: string }) {
+  return apiRequest(`/api/transactions/${id}/confirm`, { method: "POST" });
+}
+

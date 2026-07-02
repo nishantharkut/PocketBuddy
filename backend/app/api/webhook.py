@@ -274,6 +274,9 @@ async def ingest_notification(
     device_id = req.deviceId or x_pocketbuddy_device_id
     log_id = str(uuid.uuid4())
 
+    sync_enabled = profile.get("companion_sync_enabled", True)
+    initial_status = "pending" if sync_enabled else "paused"
+
     await db.companion_sync_log.insert_one(
         {
             "_id": log_id,
@@ -282,13 +285,17 @@ async def ingest_notification(
             "device_name": req.device_name or req.sourceApp or req.packageName,
             "notification_source": notification_source,
             "notification_preview": notification_preview,
-            "processing_status": "pending",
+            "processing_status": initial_status,
             "package_name": req.packageName,
             "source_app": req.sourceApp,
             "transaction_reference": req.transactionId,
             "created_at": now,
         }
     )
+
+    if not sync_enabled:
+        await update_profile_sync_state(db, user_id, req, now)
+        return {"status": "paused", "reason": "sync_disabled_by_user"}
 
     # Intercept roommate split payments sent to the host via UPI
     is_auto_verified = await try_auto_verify_pool_payment(

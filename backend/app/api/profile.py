@@ -25,6 +25,7 @@ class ProfileUpdateReq(BaseModel):
     companion_paired: Optional[bool] = None
     companion_device_name: Optional[str] = None
     companion_last_sync: Optional[str] = None
+    companion_sync_enabled: Optional[bool] = None
 
 @router.get("")
 async def get_profile(user_id: str = Depends(get_current_user)):
@@ -46,3 +47,20 @@ async def update_profile(req: ProfileUpdateReq, user_id: str = Depends(get_curre
     await db.profiles.update_one({"_id": user_id}, {"$set": updates})
     profile = await db.profiles.find_one({"_id": user_id})
     return map_doc(profile)
+
+@router.post("/delete-account")
+async def delete_account(user_id: str = Depends(get_current_user)):
+    db = get_db()
+    
+    # Cascade delete all data for this user
+    await db.transactions.delete_many({"user_id": user_id})
+    await db.subscriptions.delete_many({"user_id": user_id})
+    await db.companion_sync_log.delete_many({"user_id": user_id})
+    await db.parser_corrections.delete_many({"user_id": user_id})
+    await db.checkin_logs.delete_many({"user_id": user_id})
+    await db.travel_savings.delete_many({"user_id": user_id})
+    await db.cart_pools.delete_many({"host_id": user_id})
+    await db.profiles.delete_one({"_id": user_id})
+    await db.users.delete_one({"_id": user_id})
+    
+    return {"status": "ok", "message": "Account deleted successfully"}

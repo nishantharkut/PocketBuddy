@@ -52,6 +52,41 @@ class SetupActivity : Activity() {
         retryQueue = WebhookRetryQueue(applicationContext)
         applySystemBarTheme()
         setContentView(buildContentView())
+        handleDeepLinkIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLinkIntent(intent)
+    }
+
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        val data: Uri = intent?.data ?: return
+        if (data.scheme == "pocketbuddy" && data.host == "configure") {
+            val webhookUrl = data.getQueryParameter("webhook_url")
+            val userId = data.getQueryParameter("user_id")
+            val webhookToken = data.getQueryParameter("webhook_token")
+
+            if (!webhookUrl.isNullOrBlank() && !userId.isNullOrBlank()) {
+                configStore.save(
+                    webhookUrl = webhookUrl,
+                    userId = userId,
+                    webhookToken = webhookToken.orEmpty()
+                )
+                if (::webhookUrlInput.isInitialized) {
+                    webhookUrlInput.setText(webhookUrl)
+                }
+                if (::userIdInput.isInitialized) {
+                    userIdInput.setText(userId)
+                }
+                if (::webhookTokenInput.isInitialized) {
+                    webhookTokenInput.setText(webhookToken.orEmpty())
+                }
+                Toast.makeText(this, "Configuration auto-loaded from browser!", Toast.LENGTH_LONG).show()
+                refreshStatus()
+            }
+        }
     }
 
     override fun onResume() {

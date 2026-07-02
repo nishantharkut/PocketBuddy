@@ -26,11 +26,17 @@ class ConnectorConfigStore(context: Context) {
             ?.takeIf(String::isNotBlank)
             ?: BuildConfig.POCKETBUDDY_USER_ID.trim().takeIf(String::isNotBlank)
 
-    fun save(webhookUrl: String, userId: String, webhookToken: String) {
+    fun accountEmail(): String? =
+        preferences.getString(KEY_ACCOUNT_EMAIL, null)
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+
+    fun save(webhookUrl: String, userId: String, webhookToken: String, accountEmail: String? = null) {
         preferences.edit()
             .putString(KEY_WEBHOOK_URL, webhookUrl.trim())
             .putString(KEY_USER_ID, userId.trim())
             .putString(KEY_WEBHOOK_TOKEN, webhookToken.trim())
+            .putString(KEY_ACCOUNT_EMAIL, accountEmail?.trim())
             .apply()
     }
 
@@ -39,6 +45,7 @@ class ConnectorConfigStore(context: Context) {
             .remove(KEY_WEBHOOK_URL)
             .remove(KEY_USER_ID)
             .remove(KEY_WEBHOOK_TOKEN)
+            .remove(KEY_ACCOUNT_EMAIL)
             .apply()
     }
 
@@ -47,6 +54,7 @@ class ConnectorConfigStore(context: Context) {
         private const val KEY_WEBHOOK_URL = "webhook_url"
         private const val KEY_WEBHOOK_TOKEN = "webhook_token"
         private const val KEY_USER_ID = "user_id"
+        private const val KEY_ACCOUNT_EMAIL = "account_email"
 
         private fun looksLikeUrl(value: String): Boolean =
             value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true)

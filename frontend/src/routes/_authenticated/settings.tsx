@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Wifi,
   WifiOff,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Dialog,
@@ -764,6 +765,50 @@ function SettingsPage() {
             onClick={resetCycle}
             danger
           />
+        </div>
+
+        {/* ── PRIVACY & TRUST ── */}
+        <SectionHeader icon={<ShieldCheck size={13} />} label="PRIVACY & TRUST" />
+        <div
+          style={{
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "14px",
+            overflow: "hidden",
+            marginBottom: "24px",
+          }}
+        >
+          <div style={{ padding: "18px" }}>
+            <p style={{ fontSize: "13px", color: "var(--foreground)", fontWeight: 500, marginBottom: "6px" }}>
+              Privacy Center
+            </p>
+            <p style={{ fontSize: "12px", color: "var(--muted-foreground)", marginBottom: "16px", lineHeight: 1.5 }}>
+              Control your data — pause sync, clear logs, review low-confidence transactions, or delete your account entirely.
+            </p>
+            <Link to="/privacy">
+              <button
+                id="btn-open-privacy-center"
+                style={{
+                  padding: "9px 16px",
+                  background: "transparent",
+                  border: "1px solid rgba(255,107,0,0.4)",
+                  borderRadius: "8px",
+                  color: "var(--primary)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  letterSpacing: "0.03em",
+                  transition: "all 0.2s ease",
+                  fontFamily: "var(--font-sans)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                Open Privacy Center →
+              </button>
+            </Link>
+          </div>
         </div>
 
         {/* ── ACCOUNT ── */}

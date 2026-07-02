@@ -66,6 +66,61 @@ class WebhookClient(
         })
     }
 
+    fun unpair(deviceId: String, userId: String, onComplete: ((PostResult) -> Unit)? = null) {
+        val endpointUrl = endpointUrlOverride
+            ?: configStore?.webhookUrl()
+            ?: BuildConfig.POCKETBUDDY_WEBHOOK_URL.trim()
+        val webhookToken = configStore?.webhookToken()
+            ?: BuildConfig.POCKETBUDDY_WEBHOOK_TOKEN.trim().takeIf(String::isNotBlank)
+
+        if (endpointUrl.isBlank()) {
+            onComplete?.invoke(PostResult.Failure("Webhook URL is blank"))
+            return
+        }
+
+        val json = org.json.JSONObject().apply {
+            put("userId", userId)
+            put("deviceId", deviceId)
+            put("type", "unpair")
+            put("text", "unpair")
+            put("packageName", "com.pocketbuddy.connector")
+            put("sourceApp", "PocketBuddy Android Connector")
+            put("timestamp", System.currentTimeMillis())
+            put("amount", 0.0)
+            put("currency", "INR")
+            put("direction", "debit")
+        }
+
+        val request = Request.Builder()
+            .url(endpointUrl)
+            .post(json.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .header("X-PocketBuddy-Connector", BuildConfig.APPLICATION_ID)
+            .header("X-PocketBuddy-Connector-Version", BuildConfig.VERSION_NAME)
+            .header("X-PocketBuddy-Device-Id", deviceId)
+            .apply {
+                header("X-PocketBuddy-User-Id", userId)
+                webhookToken?.let { header("Authorization", "Bearer $it") }
+            }
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.w(TAG, "Unpair POST failed", e)
+                onComplete?.invoke(PostResult.Failure(e.message ?: "Network failure"))
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (it.isSuccessful) {
+                        onComplete?.invoke(PostResult.Success)
+                    } else {
+                        onComplete?.invoke(PostResult.Failure("Server error: ${it.code}"))
+                    }
+                }
+            }
+        })
+    }
+
     sealed interface PostResult {
         data object Success : PostResult
         data class Failure(val reason: String) : PostResult

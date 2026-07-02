@@ -158,3 +158,16 @@ async def update_transaction(txn_id: str, req: UpdateTxnReq, user_id: str = Depe
             {"$set": update_data}
         )
     return {"status": "ok"}
+
+@router.post("/{txn_id}/confirm")
+async def confirm_transaction(txn_id: str, user_id: str = Depends(get_current_user)):
+    """Mark a low-confidence transaction as user-reviewed and clear needs_verification flag."""
+    db = get_db()
+    txn = await db.transactions.find_one({"_id": txn_id, "user_id": user_id})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    await db.transactions.update_one(
+        {"_id": txn_id, "user_id": user_id},
+        {"$set": {"needs_verification": False, "user_confirmed_at": datetime.datetime.utcnow()}}
+    )
+    return {"status": "ok"}

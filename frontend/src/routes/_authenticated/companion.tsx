@@ -83,6 +83,7 @@ function CompanionPage() {
     `POCKETBUDDY_WEBHOOK_URL=${companionWebhookUrl}`,
       `POCKETBUDDY_WEBHOOK_TOKEN=${pairingCode}`,
     `POCKETBUDDY_USER_ID=${user?.id ?? ""}`,
+    `POCKETBUDDY_ACCOUNT_EMAIL=${user?.email ?? ""}`,
     ].join("\n");
   }
 
@@ -92,6 +93,16 @@ function CompanionPage() {
     if (profile?.pairing_code) setPairing(profile.pairing_code);
     else if (!pairing) setPairing(randomPairingCode());
   }, [profile, pairing]);
+
+  const isAndroid = typeof window !== "undefined" && /android/i.test(window.navigator.userAgent);
+
+  async function launchAutoConfigure() {
+    const savedPairing = await savePairingCode(pairingForDisplay, false);
+    if (!savedPairing) return;
+
+    const deepLinkUrl = `pocketbuddy://configure?webhook_url=${encodeURIComponent(companionWebhookUrl)}&user_id=${encodeURIComponent(user?.id ?? "")}&webhook_token=${encodeURIComponent(savedPairing)}&account_email=${encodeURIComponent(user?.email ?? "")}`;
+    window.location.href = deepLinkUrl;
+  }
 
   async function checkRealSync() {
     const [freshProfile, freshLogs] = await Promise.all([
@@ -233,6 +244,29 @@ function CompanionPage() {
               </p>
             </Card>
 
+            {/* Automated Setup */}
+            <Card className="bg-primary/5 border border-primary/20 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Smartphone className="h-4.5 w-4.5 text-primary shrink-0" />
+                <p className="text-[13px] font-bold text-foreground">One-Tap Auto Configure</p>
+              </div>
+              <p className="text-[12px] text-muted-foreground leading-relaxed">
+                Skip copying and pasting. Click below to automatically open the Android connector app and apply all configuration fields.
+              </p>
+              {isAndroid ? (
+                <Button 
+                  className="w-full bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider py-2.5 h-10 hover:bg-primary/90"
+                  onClick={launchAutoConfigure}
+                >
+                  One-Tap Auto Configure
+                </Button>
+              ) : (
+                <div className="rounded-lg bg-card border border-border p-3 text-[11px] text-muted-foreground leading-normal">
+                  💡 <b>Opening this on Desktop?</b> Log in to PocketBuddy on your Android phone's web browser, navigate to settings/companion, and click this button to auto-configure instantly.
+                </div>
+              )}
+            </Card>
+
             <AndroidInstallGuideCard />
 
             <Card className="bg-surface-raised p-4">
@@ -335,6 +369,29 @@ function CompanionPage() {
                   Wireless ready
                 </Badge>
               </div>
+            </Card>
+
+            {/* Automated Setup */}
+            <Card className="bg-primary/5 border border-primary/20 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Smartphone className="h-4.5 w-4.5 text-primary shrink-0" />
+                <p className="text-[13px] font-bold text-foreground">One-Tap Auto Configure</p>
+              </div>
+              <p className="text-[12px] text-muted-foreground leading-relaxed">
+                Skip copying and pasting. Click below to automatically open the Android connector app and apply all configuration fields.
+              </p>
+              {isAndroid ? (
+                <Button 
+                  className="w-full bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider py-2.5 h-10 hover:bg-primary/90"
+                  onClick={launchAutoConfigure}
+                >
+                  One-Tap Auto Configure
+                </Button>
+              ) : (
+                <div className="rounded-lg bg-card border border-border p-3 text-[11px] text-muted-foreground leading-normal">
+                  💡 <b>Opening this on Desktop?</b> Log in to PocketBuddy on your Android phone's web browser, navigate to settings/companion, and click this button to auto-configure instantly.
+                </div>
+              )}
             </Card>
 
             <AndroidInstallGuideCard />

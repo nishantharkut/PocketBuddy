@@ -64,6 +64,7 @@ function SettingsPage() {
     queryKey: ["profile", user?.id],
     enabled: !!user,
     queryFn: () => getProfile(),
+    refetchInterval: 5000,
   });
 
   const { data: subs } = useQuery({
@@ -80,6 +81,11 @@ function SettingsPage() {
   const [examStart, setExamStart] = useState("");
   const [examEnd, setExamEnd] = useState("");
   const [mess, setMess] = useState(false);
+  const [messBillingModel, setMessBillingModel] = useState("included");
+  const [messMonthlyCost, setMessMonthlyCost] = useState("0");
+  const [messPerMealCost, setMessPerMealCost] = useState("0");
+  const [messMealsPerDay, setMessMealsPerDay] = useState("2");
+  const [examSafetyBuffer, setExamSafetyBuffer] = useState("0");
   const [upiId, setUpiId] = useState("");
   const [addingSub, setAddingSub] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -94,6 +100,11 @@ function SettingsPage() {
     setExamStart(profile.exam_start_date ?? "");
     setExamEnd(profile.exam_end_date ?? "");
     setMess(profile.mess_enrolled ?? false);
+    setMessBillingModel(profile.mess_billing_model ?? (profile.mess_enrolled ? "included" : "none"));
+    setMessMonthlyCost(String(Math.round((profile.mess_monthly_cost ?? 0) / 100)));
+    setMessPerMealCost(String(Math.round((profile.mess_per_meal_cost ?? 0) / 100)));
+    setMessMealsPerDay(String(profile.mess_meals_per_day ?? 2));
+    setExamSafetyBuffer(String(Math.round((profile.exam_safety_buffer ?? 0) / 100)));
     setUpiId(profile.upi_id ?? "");
   }, [profile]);
 
@@ -111,10 +122,16 @@ function SettingsPage() {
           exam_start_date: examStart || null,
           exam_end_date: examEnd || null,
           mess_enrolled: mess,
+          mess_billing_model: mess ? messBillingModel : "none",
+          mess_monthly_cost: Math.max(0, Math.round((parseFloat(messMonthlyCost) || 0) * 100)),
+          mess_per_meal_cost: Math.max(0, Math.round((parseFloat(messPerMealCost) || 0) * 100)),
+          mess_meals_per_day: Math.min(4, Math.max(1, parseInt(messMealsPerDay, 10) || 2)),
+          exam_safety_buffer: Math.max(0, Math.round((parseFloat(examSafetyBuffer) || 0) * 100)),
           upi_id: upiId,
         },
       });
       qc.invalidateQueries({ queryKey: ["profile"] });
+      qc.invalidateQueries({ queryKey: ["runway-forecast"] });
       toast.success("Profile updated.");
     } catch (err: any) {
       toast.error(err.message || "Failed to update profile");
@@ -354,6 +371,20 @@ function SettingsPage() {
             </SettingsField>
           </div>
 
+          {(examStart || examEnd) && (
+            <div className="border-b border-border/50 animate-[fadeIn_0.2s_ease-out]">
+              <SettingsField label="Exam Safety Buffer (₹)">
+                <Input
+                  type="number"
+                  value={examSafetyBuffer}
+                  onChange={(e) => setExamSafetyBuffer(e.target.value)}
+                  style={inputStyle}
+                  placeholder="e.g. 1000"
+                />
+              </SettingsField>
+            </div>
+          )}
+
           <div
             style={{
               height: "1px",
@@ -397,6 +428,67 @@ function SettingsPage() {
             </div>
             <Switch checked={mess} onCheckedChange={setMess} />
           </div>
+
+          {mess && (
+            <div className="border-t border-border/50 bg-white/[0.01] animate-[fadeIn_0.2s_ease-out]">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-b border-border/50">
+                <SettingsField label="Mess Billing Model" noBorderRight>
+                  <Select value={messBillingModel} onValueChange={setMessBillingModel}>
+                    <SelectTrigger style={inputStyle}>
+                      <SelectValue placeholder="Select Model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="included">Included in hostel / tuition</SelectItem>
+                      <SelectItem value="monthly">Monthly fixed cost</SelectItem>
+                      <SelectItem value="per_meal">Billed per meal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingsField>
+
+                {messBillingModel === "monthly" && (
+                  <SettingsField label="Mess Monthly Cost (₹)">
+                    <Input
+                      type="number"
+                      value={messMonthlyCost}
+                      onChange={(e) => setMessMonthlyCost(e.target.value)}
+                      style={inputStyle}
+                      placeholder="e.g. 3500"
+                    />
+                  </SettingsField>
+                )}
+
+                {messBillingModel === "per_meal" && (
+                  <SettingsField label="Per Meal Cost (₹)">
+                    <Input
+                      type="number"
+                      value={messPerMealCost}
+                      onChange={(e) => setMessPerMealCost(e.target.value)}
+                      style={inputStyle}
+                      placeholder="e.g. 50"
+                    />
+                  </SettingsField>
+                )}
+              </div>
+
+              {messBillingModel === "per_meal" && (
+                <div className="grid grid-cols-1 border-b border-border/50">
+                  <SettingsField label="Meals Per Day">
+                    <Select value={messMealsPerDay} onValueChange={setMessMealsPerDay}>
+                      <SelectTrigger style={inputStyle}>
+                        <SelectValue placeholder="Meals per day" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 meal / day</SelectItem>
+                        <SelectItem value="2">2 meals / day</SelectItem>
+                        <SelectItem value="3">3 meals / day</SelectItem>
+                        <SelectItem value="4">4 meals / day</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </SettingsField>
+                </div>
+              )}
+            </div>
+          )}
 
           <div
             style={{

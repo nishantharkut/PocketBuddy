@@ -1,5 +1,7 @@
 import json
 import logging
+import datetime
+import re
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -9,6 +11,8 @@ from app.core.security import get_current_user
 from app.core.database import get_db
 from app.services.campus_food import load_campus_food
 from app.services.bedrock import generate_text
+from app.services.runway import build_runway_forecast, derive_pool_obligations
+from app.services.subscriptions import detect_recurring_subscriptions
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -141,4 +145,114 @@ Generate exactly 2 concise, specific, actionable sentences as a campus financial
         parts.append(f"₹{remaining:.0f} remaining in your current cycle.")
     summary = " ".join(parts) if parts else "Start logging transactions to activate campus intelligence."
     return {"summary": summary, "source": "local_fallback", "spend_7d": spend_7, "last_food_hours": round(last_food_hours, 1)}
+
+
+@router.get("/runway-intel")
+async def get_runway_intel(user_id: str = Depends(get_current_user)):
+    """Returns a short AI-generated or local-fallback runway intelligence summary."""
+    db = get_db()
+    now = datetime.datetime.utcnow()
+    profile = await db.profiles.find_one({"_id": user_id}) or {}
+
+    # Trigger subscription recurrence detection
+    await detect_recurring_subscriptions(db, user_id)
+
+    # Fetch last 120 days of transaction history
+    history_start = now - datetime.timedelta(days=120)
+    transactions = await db.transactions.find(
+        {"user_id": user_id, "created_at": {"$gte": history_start}}
+    ).sort("created_at", 1).to_list(length=5000)
+
+    # Fetch active subscriptions
+    subscriptions = await db.subscriptions.find(
+        {"user_id": user_id, "is_active": {"$ne": False}}
+    ).to_list(length=250)
+
+    # Fetch name and pooling context
+    user = await db.users.find_one({"_id": user_id}) or {}
+    full_name = str(user.get("full_name") or "").strip()
+    pool_ids: set[str] = set()
+    if full_name:
+        name_regex = re.compile(f"^{re.escape(full_name)}$", re.IGNORECASE)
+        user_items = await db.cart_pool_items.find({"added_by_name": name_regex}).to_list(length=1000)
+        pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
+
+    hosted = await db.cart_pools.find(
+        {"host_id": user_id, "status": {"$in": ["open", "closed", "completed"]}}
+    ).to_list(length=250)
+    pool_ids.update(str(pool.get("_id")) for pool in hosted)
+
+    pools = []
+    pool_items = []
+    if pool_ids:
+        pools = await db.cart_pools.find({"_id": {"$in": list(pool_ids)}}).to_list(length=500)
+        pool_items = await db.cart_pool_items.find({"pool_id": {"$in": list(pool_ids)}}).to_list(length=2500)
+
+    obligations = derive_pool_obligations(
+        pools,
+        pool_items,
+        user_id=user_id,
+        user_name=full_name,
+        now=now,
+    )
+
+    forecast = build_runway_forecast(
+        profile=profile,
+        transactions=transactions,
+        subscriptions=subscriptions,
+        pool_obligations=obligations,
+        now=now,
+    )
+
+    status = forecast.get("status")
+    days_left = forecast["current_cycle"]["days_left"]
+    broke_days = forecast["projection"]["days_until_broke"]
+    shortfall_prob = forecast["projection"]["shortfall_probability"]
+    safe_daily = forecast["projection"]["safe_daily_spend"] // 100
+    projected_daily = forecast["projection"]["projected_daily_spend"] // 100
+    ask_amount = forecast["projection"]["ask_home_amount"] // 100
+    commitments_total = forecast["commitments"]["total"] // 100
+    remaining = forecast["current_cycle"]["remaining"] // 100
+
+    # Build local fallback
+    if status == "shortfall":
+        fallback_summary = (
+            f"Based on your current spending pace, you will run out of allowance in {broke_days} days "
+            f"({days_left - broke_days} days before the cycle ends). "
+            f"We recommend asking home for ₹{ask_amount:,} to cover your shortfall and reducing discretionary expenses."
+        )
+    elif status == "watch" or shortfall_prob >= 0.35:
+        fallback_summary = (
+            f"Your remaining runway is tight (shortfall probability: {shortfall_prob * 100:.0f}%). "
+            f"Try to keep daily discretionary spending under ₹{safe_daily}, as your current projected pace is ₹{projected_daily}/day."
+        )
+    else:
+        fallback_summary = (
+            f"Great job! You're on track to finish this cycle with a healthy balance. "
+            f"You have ₹{safe_daily}/day safe limit left. Maintain your pace of ₹{projected_daily}/day to stay green."
+        )
+
+    # Try Bedrock
+    if settings.BEDROCK_ENABLED:
+        try:
+            prompt = f"""You are PocketBuddy, an AI financial wellness advisor for college students.
+Here is the student's runway forecast details:
+- Cycle days left: {days_left} days
+- Safe daily spend limit: Rs {safe_daily}
+- Current daily spend pace (EWMA): Rs {projected_daily}
+- Forecast status: {status.upper()}
+- Shortfall probability: {shortfall_prob * 100:.0f}%
+- Days until broke: {broke_days} (out of {days_left} days left)
+- Ask home amount needed: Rs {ask_amount}
+- Upcoming commitments total: Rs {commitments_total}
+
+Generate exactly 2 concise, highly personalized, and action-oriented sentences. Be direct, address the student directly, reference their specific numbers, and suggest concrete actions (e.g. eat at mess, join pool, negotiate travel fares, or budget request home). No emojis. No preamble."""
+
+            text = generate_text(prompt, max_tokens=150, temperature=0.25)
+            if text:
+                return {"summary": text, "source": "bedrock"}
+        except Exception as exc:
+            logger.warning("Bedrock runway-intel failed: %s", exc)
+
+    return {"summary": fallback_summary, "source": "local_fallback"}
 

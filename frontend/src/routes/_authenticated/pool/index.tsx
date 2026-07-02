@@ -8,7 +8,9 @@ import { PlatformIcon } from "@/components/PlatformIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Select,
   SelectContent,
@@ -89,6 +91,7 @@ function getPlatformBorderColor(platform: string): string {
 function PoolList() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"active" | "completed" | "cancelled">("active");
 
@@ -119,6 +122,23 @@ function PoolList() {
     { key: "cancelled", label: `Cancelled (${cancelledPools.length})` },
   ];
 
+  const createPoolForm = (
+    <CreatePoolForm
+      userId={user?.id}
+      userName={
+        (typeof window !== "undefined" && localStorage.getItem("pocketbuddy_pool_name")) ||
+        user?.fullName ||
+        "Host"
+      }
+      wing={profile?.wing_label ?? ""}
+      onDone={() => {
+        setOpen(false);
+        qc.invalidateQueries({ queryKey: ["all-pools"] });
+        qc.invalidateQueries({ queryKey: ["pools"] });
+      }}
+    />
+  );
+
   return (
     <AppShell>
       <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
@@ -128,34 +148,29 @@ function PoolList() {
         </div>
       </div>
       <div className="space-y-6 py-6">
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild>
-            <button
-              id="card-create-pool"
-              className="w-full rounded-xl border border-dashed border-primary/30 hover:border-primary/60 bg-surface/50 p-6 text-center transition-all duration-200 hover:bg-surface-raised active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-lg hover:shadow-black/20"
-            >
-              <p className="text-xs font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors">
-                + Start a New Cart Pool
-              </p>
-            </button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[85vh] overflow-auto" id="sheet-create-pool">
-            <CreatePoolForm
-              userId={user?.id}
-              userName={
-                (typeof window !== "undefined" && localStorage.getItem("pocketbuddy_pool_name")) ||
-                user?.fullName ||
-                "Host"
-              }
-              wing={profile?.wing_label ?? ""}
-              onDone={() => {
-                setOpen(false);
-                qc.invalidateQueries({ queryKey: ["all-pools"] });
-                qc.invalidateQueries({ queryKey: ["pools"] });
-              }}
-            />
-          </SheetContent>
-        </Sheet>
+        <button
+          id="card-create-pool"
+          onClick={() => setOpen(true)}
+          className="w-full rounded-xl border border-dashed border-primary/30 hover:border-primary/60 bg-surface/50 p-6 text-center transition-all duration-200 hover:bg-surface-raised active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-lg hover:shadow-black/20"
+        >
+          <p className="text-xs font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors">
+            + Start a New Cart Pool
+          </p>
+        </button>
+
+        {isMobile ? (
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetContent side="bottom" className="max-h-[85vh] overflow-auto" id="sheet-create-pool">
+              {createPoolForm}
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent id="dialog-create-pool" className="max-h-[85vh] max-w-xl overflow-y-auto bg-background text-foreground border border-border">
+              {createPoolForm}
+            </DialogContent>
+          </Dialog>
+        )}
 
         <section className="space-y-4">
           {/* ── Tab Bar ─────────────────────────────────────────────────── */}

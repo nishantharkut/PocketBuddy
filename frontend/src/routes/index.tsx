@@ -72,7 +72,7 @@ function useTheme() {
 function ParticleCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const theme = useTheme();
-  
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -95,16 +95,16 @@ function ParticleCanvas() {
 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
+
       particles.forEach((p) => {
         p.x += p.vx; p.y += p.vy;
         if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
         if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        
-        ctx.fillStyle = isLight 
+
+        ctx.fillStyle = isLight
           ? `rgba(255,107,0,${p.alpha * 0.4})`
-          : `rgba(194,125,86,${p.alpha})`; 
+          : `rgba(194,125,86,${p.alpha})`;
         ctx.fill();
       });
 
@@ -118,8 +118,8 @@ function ParticleCanvas() {
             ctx.lineTo(particles[j].x, particles[j].y);
             ctx.strokeStyle = isLight
               ? `rgba(255,107,0,${0.07 * (1 - dist / 120)})`
-              : `rgba(140,120,83,${0.12 * (1 - dist / 120)})`; 
-            ctx.lineWidth = 0.5; 
+              : `rgba(140,120,83,${0.12 * (1 - dist / 120)})`;
+            ctx.lineWidth = 0.5;
             ctx.stroke();
           }
         }
@@ -131,6 +131,461 @@ function ParticleCanvas() {
   }, [theme]);
 
   return <canvas ref={canvasRef} style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", opacity: 0.65 }} />;
+}
+
+function HeroBrowserMockup() {
+  const { ref, inView } = useInView(0.1);
+  const [activeTab, setActiveTab] = useState(0);
+  const [tappedCard, setTappedCard] = useState<string | null>(null);
+
+  const tapCard = (id: string) => {
+    setTappedCard(id);
+    setTimeout(() => setTappedCard(null), 200);
+  };
+
+  // ── Tab Renderers ──────────────────────────────────────────────────
+  const renderOverview = () => (
+    <>
+      {/* Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {[
+          { id: "runway", label: "Runway", value: "16 days", tone: "text-pb-green border-pb-green/10 bg-pb-green/5" },
+          { id: "safetoday", label: "Safe today", value: "125", tone: "text-[#C27D56] border-[#C27D56]/10 bg-[#C27D56]/5" },
+          { id: "remaining", label: "Remaining", value: "5,780", tone: "text-foreground border-border bg-card/20" },
+          { id: "poolsplit", label: "Pool split", value: "4 members", tone: "text-[#D9A05B] border-[#D9A05B]/10 bg-[#D9A05B]/5" },
+        ].map((c) => (
+          <div
+            key={c.id}
+            onClick={() => tapCard(c.id)}
+            className={`rounded-xl border p-2.5 flex flex-col justify-between cursor-pointer transition-transform duration-150 ${c.tone}`}
+            style={{ transform: tappedCard === c.id ? "scale(0.95)" : "scale(1)" }}
+          >
+            <span className="text-[8px] font-mono tracking-wider opacity-70 uppercase leading-none">{c.label}</span>
+            <span className="text-sm font-black tracking-tight leading-none mt-1">{c.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart & Activities */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr] gap-3">
+        {/* SVG Graph */}
+        <div
+          onClick={() => tapCard("vector")}
+          className="rounded-xl border border-border bg-card/20 p-3 flex flex-col justify-between min-h-[120px] cursor-pointer transition-transform duration-150"
+          style={{ transform: tappedCard === "vector" ? "scale(0.98)" : "scale(1)" }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[8px] font-mono tracking-wider text-muted-foreground uppercase leading-none">Trajectory Vector</span>
+            <span className="text-[8px] font-bold text-pb-green leading-none">Optimal Path</span>
+          </div>
+
+          <div className="flex-1 w-full relative h-[60px] flex items-end">
+            <svg className="w-full h-[60px] overflow-visible" viewBox="0 0 300 100" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="chartGradSide" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#C27D56" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="#C27D56" stopOpacity="0.0" />
+                </linearGradient>
+                <linearGradient id="lineGradSide" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#22c55e" />
+                  <stop offset="55%" stopColor="#D9A05B" />
+                  <stop offset="100%" stopColor="#C27D56" />
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="20" x2="300" y2="20" stroke="var(--border)" strokeWidth="0.5" strokeDasharray="3 3" />
+              <line x1="0" y1="50" x2="300" y2="50" stroke="var(--border)" strokeWidth="0.5" strokeDasharray="3 3" />
+              <line x1="0" y1="80" x2="300" y2="80" stroke="var(--border)" strokeWidth="0.5" strokeDasharray="3 3" />
+
+              <path d="M 0,20 Q 55,25 100,50 T 200,60 T 300,90 L 300,100 L 0,100 Z" fill="url(#chartGradSide)" />
+              <path d="M 0,20 Q 55,25 100,50 T 200,60 T 300,90" fill="none" stroke="url(#lineGradSide)" strokeWidth="2" strokeLinecap="round" />
+
+              <circle cx="200" cy="60" r="3.5" fill="#D9A05B" />
+              <circle cx="200" cy="60" r="7" stroke="#D9A05B" strokeWidth="1" fill="none" className="animate-ping" style={{ transformOrigin: "200px 60px" }} />
+            </svg>
+          </div>
+
+          <div className="flex justify-between items-center mt-2 pt-1.5 border-t border-border/40 text-[7px] font-mono text-muted-foreground uppercase leading-none">
+            <span>Start</span>
+            <span>Midpoint</span>
+            <span>End</span>
+          </div>
+        </div>
+
+        {/* Signals */}
+        <div className="rounded-xl border border-border bg-card/20 p-3 flex flex-col justify-between">
+          <div className="text-[8px] font-mono tracking-wider text-muted-foreground uppercase leading-none mb-2.5">Live Feeds</div>
+          <div className="space-y-2">
+            {[
+              { id: "feed1", label: "Campus Cafe", value: "-45", desc: "Food", icon: Utensils, tone: "text-[#C27D56]" },
+              { id: "feed2", label: "Music renewal", value: "Tomorrow", desc: "Subscription", icon: CalendarCheck, tone: "text-muted-foreground" },
+              { id: "feed3", label: "Grocery pool", value: "Active", desc: "Shared Cart", icon: ShoppingCart, tone: "text-pb-green" },
+            ].map((act) => {
+              const ActIcon = act.icon;
+              return (
+                <div
+                  key={act.id}
+                  onClick={() => tapCard(act.id)}
+                  className="flex items-center justify-between gap-2 text-[10px] leading-none cursor-pointer p-1 rounded hover:bg-card/35 transition-all animate-[fadeIn_0.2s_ease-out]"
+                  style={{ transform: tappedCard === act.id ? "scale(0.97)" : "scale(1)" }}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="w-6 h-6 rounded bg-background border border-border/80 flex items-center justify-center shrink-0">
+                      <ActIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-foreground truncate leading-none">{act.label}</div>
+                      <div className="text-[7px] text-muted-foreground mt-0.5 leading-none">{act.desc}</div>
+                    </div>
+                  </div>
+                  <span className={`font-black shrink-0 ${act.tone}`}>{act.value}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderHistory = () => (
+    <div className="rounded-xl border border-border bg-card/20 p-4 space-y-3 animate-[fadeIn_0.25s_ease-out]">
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] font-mono tracking-wider text-muted-foreground uppercase leading-none">Past Transactions</span>
+        <span className="text-[8px] font-bold text-pb-green leading-none">Auto-Linked via SMS</span>
+      </div>
+      <div className="divide-y divide-border/60">
+        {[
+          { id: "tx1", label: "Campus Dining Hall", cat: "Food & Drinks", date: "Today, 12:45 PM", amount: "-45", positive: false },
+          { id: "tx2", label: "Online Grocery Delivery", cat: "Supplies", date: "Yesterday, 6:30 PM", amount: "-234", positive: false },
+          { id: "tx3", label: "Shared Transit Pool", cat: "Travel", date: "Jun 14, 2:10 PM", amount: "-80", positive: false },
+          { id: "tx4", label: "Monthly Streaming", cat: "Subscription", date: "Jun 12, 9:00 AM", amount: "-119", positive: false },
+          { id: "tx5", label: "Settlement from Wing Pool", cat: "Reimbursement", date: "Jun 10, 8:45 PM", amount: "+65", positive: true }
+        ].map((tx) => (
+          <div
+            key={tx.id}
+            onClick={() => tapCard(tx.id)}
+            className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0 text-xs cursor-pointer transition-all hover:bg-card/20 px-1.5 rounded"
+            style={{ transform: tappedCard === tx.id ? "scale(0.99)" : "scale(1)" }}
+          >
+            <div className="space-y-0.5">
+              <div className="font-bold text-foreground">{tx.label}</div>
+              <div className="text-[9px] text-muted-foreground flex items-center gap-1.5">
+                <span>{tx.cat}</span>
+                <span className="w-1 h-1 rounded-full bg-border" />
+                <span>{tx.date}</span>
+              </div>
+            </div>
+            <span className={`font-black tracking-tight ${tx.positive ? "text-pb-green" : "text-foreground"}`}>
+              {tx.amount}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderWingPools = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-[fadeIn_0.25s_ease-out]">
+      {[
+        { id: "pool1", title: "Blinkit Quick Groceries", progress: "165 / 199", percent: 83, members: 4, initiator: "Aryan M.", color: "from-[#F7EC13] to-amber-500", items: ["Maggi ×3", "Chips ×2", "Cold Brew ×1"] },
+        { id: "pool2", title: "Zepto Late-Night Supplies", progress: "89 / 149", percent: 60, members: 2, initiator: "Vikram S.", color: "from-purple-500 to-[#7C3AED]", items: ["Bread ×1", "Eggs ×2", "Instant Coffee ×1"] },
+      ].map((pool) => (
+        <div
+          key={pool.id}
+          onClick={() => tapCard(pool.id)}
+          className="rounded-xl border border-border bg-card/25 p-3 flex flex-col justify-between gap-3 cursor-pointer transition-transform duration-150"
+          style={{ transform: tappedCard === pool.id ? "scale(0.97)" : "scale(1)" }}
+        >
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-mono tracking-wider text-[#D9A05B] uppercase leading-none font-bold">Active Cart</span>
+              <span className="text-[8px] bg-pb-green/10 text-pb-green border border-pb-green/20 px-1.5 py-0.5 rounded-full font-bold">Split Open</span>
+            </div>
+            <h3 className="font-bold text-xs text-foreground truncate">{pool.title}</h3>
+            <p className="text-[9px] text-muted-foreground">Initiator: {pool.initiator} · {pool.members} members</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center text-[9px] font-bold">
+              <span className="text-muted-foreground">Progress to Free Delivery</span>
+              <span className="text-foreground">{pool.progress}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-border/40 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r transition-all duration-500" style={{ width: `${pool.percent}%`, backgroundImage: `linear-gradient(to right, var(--color-pb-amber, #D9A05B), #22c55e)` }} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1 mt-1">
+            {pool.items.map((item, itemIdx) => (
+              <span key={itemIdx} className="text-[8px] px-1.5 py-0.5 rounded bg-background/50 border border-border/60 text-muted-foreground">{item}</span>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div
+        onClick={() => tapCard("create_pool")}
+        className="rounded-xl border border-dashed border-border/80 bg-card/5 hover:bg-card/10 transition-all cursor-pointer flex flex-col items-center justify-center p-4 min-h-[120px] text-center gap-2"
+        style={{ transform: tappedCard === "create_pool" ? "scale(0.97)" : "scale(1)" }}
+      >
+        <ShoppingCart className="w-5 h-5 text-muted-foreground" />
+        <div>
+          <h4 className="text-xs font-bold text-foreground">Create Shared Wing Pool</h4>
+          <p className="text-[9px] text-muted-foreground mt-0.5">Combine cart with peers to save delivery charges</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTravelSaver = () => (
+    <div className="space-y-3 animate-[fadeIn_0.25s_ease-out]">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        {[
+          { label: "Travel Saved", value: "1,240", sub: "This Month" },
+          { label: "Optimal Trips", value: "14", sub: "Trips Logged" },
+          { label: "Avg Route Saving", value: "89", sub: "Per Trip Saved" }
+        ].map((st, idx) => (
+          <div key={idx} className="rounded-xl border border-border bg-card/20 p-2.5">
+            <span className="text-[8px] font-mono tracking-wider text-muted-foreground uppercase leading-none block">{st.label}</span>
+            <span className="text-sm font-black text-foreground mt-1 block leading-none">{st.value}</span>
+            <span className="text-[8px] text-muted-foreground mt-0.5 block leading-none">{st.sub}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-border bg-card/25 p-3 space-y-2.5">
+        <span className="text-[9px] font-mono tracking-wider text-muted-foreground uppercase leading-none block">Optimal Route Recommendations</span>
+        <div className="space-y-2">
+          {[
+            { id: "route1", from: "Campus Main Gate", to: "Metro Transit Station", cost: "10 (Campus Shuttle)", vs: "80 (Solo Auto-Rickshaw)", saved: "70 Saved", icon: Bus },
+            { id: "route2", from: "Boys Dorm Wing 4", to: "Central Academic Block", cost: "Free (Pedestrian Route)", vs: "30 (Shuttle/Transit)", saved: "30 Saved", icon: Footprints }
+          ].map((route) => {
+            const RouteIcon = route.icon;
+            return (
+              <div
+                key={route.id}
+                onClick={() => tapCard(route.id)}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-background/40 border border-border/60 text-xs cursor-pointer transition-transform duration-150"
+                style={{ transform: tappedCard === route.id ? "scale(0.98)" : "scale(1)" }}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-card border border-border flex items-center justify-center shrink-0">
+                    <RouteIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-foreground">{route.from} ↔ {route.to}</div>
+                    <div className="text-[9px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                      <span>Eco-Route: {route.cost}</span>
+                      <span className="w-1 h-1 rounded-full bg-border" />
+                      <span className="line-through">Standard: {route.vs}</span>
+                    </div>
+                  </div>
+                </div>
+                <span className="w-fit shrink-0 font-bold text-pb-green bg-pb-green/10 border border-pb-green/20 px-2 py-0.5 rounded text-[10px] text-right">
+                  {route.saved}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderSettings = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-[fadeIn_0.25s_ease-out]">
+      {/* Cloud Status Card */}
+      <div className="rounded-xl border border-border bg-card/25 p-3.5 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-pb-green animate-pulse" />
+          <h3 className="text-xs font-bold text-foreground tracking-wide uppercase">AWS Cloud Connectivity</h3>
+        </div>
+        <div className="space-y-2 text-[10px]">
+          <div className="flex justify-between border-b border-border/40 pb-1.5">
+            <span className="text-muted-foreground">Environment Node</span>
+            <span className="font-mono text-foreground font-semibold">AWS Production Cluster</span>
+          </div>
+          <div className="flex justify-between border-b border-border/40 pb-1.5">
+            <span className="text-muted-foreground">API Origin Host</span>
+            <span className="font-mono text-foreground font-semibold">pocketbuddy.app</span>
+          </div>
+          <div className="flex justify-between border-b border-border/40 pb-1.5">
+            <span className="text-muted-foreground">FastAPI Engine</span>
+            <span className="text-pb-green font-bold">Active & Synced</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Database Sync</span>
+            <span className="text-foreground font-bold">MongoDB Atlas Live</span>
+          </div>
+        </div>
+        <div className="text-[9px] text-muted-foreground leading-relaxed bg-background/50 border border-border/40 p-2 rounded-lg">
+          The companion app coordinates automatically through production AWS endpoints. Device notification captures are routed directly to the database.
+        </div>
+      </div>
+
+      {/* Sync Credentials Device */}
+      <div className="rounded-xl border border-border bg-card/25 p-3.5 flex flex-col justify-between gap-3">
+        <div className="space-y-1.5">
+          <span className="text-[9px] font-mono tracking-wider text-[#C27D56] uppercase leading-none font-bold">Linked Device</span>
+          <h3 className="font-bold text-xs text-foreground">PocketBuddy Android Connector</h3>
+          <p className="text-[9px] text-muted-foreground">Connected Device: Pixel 7 Pro (Active Sync)</p>
+        </div>
+
+        <div className="space-y-1">
+          <div className="text-[8px] font-mono tracking-wider text-muted-foreground uppercase">Pairing Sync Key</div>
+          <div className="bg-background border border-border/80 rounded px-2.5 py-1 text-xs font-mono font-bold flex items-center justify-between">
+            <span>PB-X94B</span>
+            <span className="text-[8px] uppercase text-pb-green bg-pb-green/10 px-1 rounded">Active</span>
+          </div>
+        </div>
+
+        <div className="text-[9px] text-muted-foreground flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-pb-green animate-ping" />
+          <span>Last notification parsed: 2m ago</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="relative w-full max-w-[860px] mx-auto rounded-2xl border border-border/80 bg-card/25 backdrop-blur-lg shadow-2xl shadow-black/50 overflow-hidden select-none transition-all duration-700 ease-out"
+      style={{
+        opacity: inView ? 1 : 0,
+        transform: inView ? "translateY(0) scale(1)" : "translateY(30px) scale(0.96)",
+      }}
+    >
+      {/* Glare effect */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.08] pointer-events-none z-10" />
+
+      {/* Browser chrome header */}
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-border bg-card/65 backdrop-blur">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] border border-[#ff5f56]/10" />
+          <span className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] border border-[#ffbd2e]/10" />
+          <span className="w-3.5 h-3.5 rounded-full bg-[#27c93f] border border-[#27c93f]/10" />
+        </div>
+        <div className="flex-1 max-w-[380px] mx-2 sm:mx-4 min-w-0">
+          <div className="w-full bg-background/40 border border-border/60 rounded-lg py-1 px-1.5 sm:px-3 text-[10px] font-semibold text-muted-foreground text-center flex items-center justify-center gap-1 min-w-0">
+            <Lock className="w-2.5 h-2.5 text-pb-green shrink-0" />
+            <span className="truncate">pocketbuddy.app/dashboard</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="w-2 h-2 rounded-full bg-pb-green animate-pulse" />
+          <span className="text-[9px] font-mono font-black text-pb-green uppercase tracking-widest hidden sm:inline font-bold">Active</span>
+        </div>
+      </div>
+
+      {/* Viewport grid */}
+      <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] min-h-[360px] bg-background/25 text-left">
+        {/* Sidebar */}
+        <aside className="hidden md:flex flex-col justify-between p-4 border-r border-border bg-card/10">
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 px-1">
+              <svg viewBox="0 0 100 100" className="h-6 w-6 filter drop-shadow(0px 2px 4px rgba(255,107,0,0.1))" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <linearGradient id="logoSide" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#FF9F43" /><stop offset="100%" stopColor="#FF6B00" /></linearGradient>
+                <linearGradient id="logoBase" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#D97706" /><stop offset="100%" stopColor="#B45309" /></linearGradient>
+                <path d="M20 38 L50 56 L20 72 Z" fill="url(#logoBase)" opacity="0.85" />
+                <path d="M80 38 L50 56 L80 72 Z" fill="url(#logoBase)" opacity="0.7" />
+                <path d="M50 56 L80 72 L50 85 L20 72 Z" fill="url(#logoSide)" />
+              </svg>
+              <span className="font-black text-xs tracking-tight text-foreground">PocketBuddy</span>
+            </div>
+
+            <nav className="space-y-1">
+              {[
+                { label: "Overview", icon: LayoutDashboard },
+                { label: "History", icon: List },
+                { label: "Wing Pools", icon: ShoppingCart },
+                { label: "Travel Saver", icon: Compass },
+                { label: "Settings", icon: Settings },
+              ].map((item, idx) => {
+                const Icon = item.icon;
+                const isActive = activeTab === idx;
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => setActiveTab(idx)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border-none outline-none text-left ${isActive ? "bg-foreground text-background font-black" : "bg-transparent text-muted-foreground hover:text-foreground hover:bg-card/30"}`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          <div className="p-2.5 bg-card/20 border border-border rounded-xl">
+            <div className="text-[8px] font-mono text-muted-foreground uppercase tracking-wider mb-0.5">Status</div>
+            <div className="text-[9px] font-bold text-foreground flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-pb-green" />
+              <span>Syncing Active</span>
+            </div>
+          </div>
+        </aside>
+
+        {/* Dashboard Main Panel */}
+        <main className="p-4 sm:p-5 flex flex-col justify-between gap-4">
+          {/* Mobile Tab Nav */}
+          <div className="flex md:hidden items-center gap-1.5 overflow-x-auto pb-2 border-b border-border/50 no-scrollbar">
+            {[
+              { label: "Overview", icon: LayoutDashboard },
+              { label: "History", icon: List },
+              { label: "Wing Pools", icon: ShoppingCart },
+              { label: "Travel Saver", icon: Compass },
+              { label: "Settings", icon: Settings },
+            ].map((item, idx) => {
+              const Icon = item.icon;
+              const isActive = activeTab === idx;
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => setActiveTab(idx)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all shrink-0 cursor-pointer border-none outline-none ${isActive ? "bg-foreground text-background font-black" : "text-muted-foreground bg-card/20"}`}
+                >
+                  <Icon className="w-3 h-3" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <p className="text-[8px] font-mono font-bold tracking-[0.2em] text-[#C27D56] uppercase leading-none">
+                {activeTab === 0 && "Allowance Runway"}
+                {activeTab === 1 && "Transaction Ledger"}
+                {activeTab === 2 && "Peer Groups"}
+                {activeTab === 3 && "Transit Routes"}
+                {activeTab === 4 && "System Settings"}
+              </p>
+              <h2 className="text-base font-black text-foreground mt-0.5 tracking-tight uppercase">
+                {activeTab === 0 && "Your month, translated into today."}
+                {activeTab === 1 && "Complete sync record & categories."}
+                {activeTab === 2 && "Combine checkout, bypass delivery fees."}
+                {activeTab === 3 && "Optimized coordinated campus travel."}
+                {activeTab === 4 && "Production AWS cluster controls."}
+              </h2>
+            </div>
+            <span className="w-fit rounded-full border border-pb-green/30 bg-pb-green/10 px-2.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-pb-green">
+              {activeTab === 4 ? "live atlas connection" : "synced 2m ago"}
+            </span>
+          </div>
+
+          {/* Render active screen */}
+          {activeTab === 0 && renderOverview()}
+          {activeTab === 1 && renderHistory()}
+          {activeTab === 2 && renderWingPools()}
+          {activeTab === 3 && renderTravelSaver()}
+          {activeTab === 4 && renderSettings()}
+        </main>
+      </div>
+      <div className="mx-auto h-3 w-[72%] rounded-b-2xl border-x border-b border-border bg-card shadow-lg shadow-black/10" />
+      <div className="mx-auto h-2 w-[36%] rounded-b-full bg-border/80" />
+    </div>
+  );
 }
 
 // ── Dashboard mockup (phone) ───────────────────────────────────────────────
@@ -452,7 +907,7 @@ function DashboardMockup() {
       {[
         { icon: Smartphone, label: "Android Companion", sub: "Paired · Synced 2m ago", dot: "#22c55e" },
         { icon: Wallet, label: "Monthly Allowance", sub: "₹10,000 · Resets 1st" },
-        { icon: Calendar, label: "Exam Period", sub: "Jun 20 – Jul 5, 2025" },
+        { icon: Calendar, label: "Exam Period", sub: "Jun 20 - Jul 5" },
         { icon: Lock, label: "Privacy & Security", sub: "No bank access, ever" },
       ].map((s, i) => {
         const ItemIcon = s.icon;
@@ -658,7 +1113,7 @@ function LandingPage() {
     { q: "Does PocketBuddy access my bank account or UPI password?", a: "Absolutely not. PocketBuddy only reads push notification strings from UPI apps ── it never connects to your bank, never stores credentials, and never initiates transactions. Think of it as a smart clipboard that reads your phone's notification panel." },
     { q: "What if I don't have the Android companion app?", a: "You can still use PocketBuddy in full manual mode ── log transactions in one tap, get AI food suggestions, join Wing Cart Pools, and track subscriptions. The companion just makes it passive and offline-syncing." },
     { q: "How does the crowdsourced merchant mapping work?", a: "When a new merchant string appears (e.g. SHREE_BALAJI_ENT), you get a 1-tap prompt to classify it. Once classified, it's immediately resolved for every student on your campus ── your 10 seconds of effort saves hundreds of others the same friction." },
-    { q: "Is this only for IIT/NIT students?", a: "No ── PocketBuddy works for any residential campus. The campus food database is seeded per-college and grows via crowdsourcing. Any university can onboard by seeding their initial food menu." },
+    { q: "Is this only for one campus?", a: "No. PocketBuddy works for any residential campus. The campus food database is seeded per college and grows through crowdsourcing, so each university can start with its own menus and routes." },
     { q: "How is the Burnout Risk Score calculated?", a: "It's derived from four real signals: food gap hours (time since last food transaction), exam period overlap, spending velocity spike vs. prior week, and late-night transaction patterns. No subjective surveys ── it's entirely data-driven." },
   ];
 
@@ -675,16 +1130,16 @@ function LandingPage() {
   ];
 
   const problems = [
-    { icon: Banknote, stat: "₹800", sub: "avg wasted monthly on delivery surge fees by hostel students", color: "#FC8019" },
+    { icon: Banknote, stat: "120", sub: "avg units wasted monthly on delivery surge fees by dorm students", color: "#FC8019" },
     { icon: Utensils, stat: "3 in 5", sub: "students skip a meal during exam week due to financial anxiety", color: "#ef4444" },
     { icon: Smartphone, stat: "94%", sub: "of students abandon manual finance apps within 2 weeks", color: "#f59e0b" },
-    { icon: Moon, stat: "₹450", sub: "spent late-night per month on impulse delivery orders", color: "#5E17EB" },
+    { icon: Moon, stat: "80", sub: "spent late-night per month on impulse delivery orders", color: "#5E17EB" },
   ];
 
   const testimonials = [
-    { quote: "This is exactly what I needed in my first year. I had no idea I was spending ₹900/month just on delivery fees until PocketBuddy showed me.", name: "Aryan M.", role: "2nd Year, CSE · IIT Bombay (Beta User)" },
-    { quote: "The Wing Pool feature saved us ₹200 in one week. We started a Zepto pool for the whole floor every night. Game changer.", name: "Sneha K.", role: "3rd Year, ECE · BITS Pilani (Beta User)" },
-    { quote: "During JEE Advanced prep I was skipping meals without realizing. The burnout detector actually made me eat. Sounds silly but it worked.", name: "Rahul S.", role: "Final Year, Mech · NIT Trichy (Beta User)" },
+    { quote: "This is exactly what I needed in my first year. I had no idea I was spending so much per month just on delivery fees until PocketBuddy showed me.", name: "Aryan M.", role: "Second-year computer science student" },
+    { quote: "The Wing Pool feature saved our floor money in one week. We started a shared grocery pool every night. Game changer.", name: "Sneha K.", role: "Third-year electronics student" },
+    { quote: "During exam prep I was skipping meals without realizing. The check-in actually made me eat. Sounds simple, but it worked.", name: "Rahul S.", role: "Final-year student" },
   ];
 
   return (
@@ -717,7 +1172,7 @@ function LandingPage() {
                   <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.25" />
                 </filter>
               </defs>
-              
+
               {/* Origami Pocket Base */}
               <path d="M20 38 L50 56 L20 72 Z" fill="url(#pocketSidesNav)" opacity="0.85" />
               <path d="M80 38 L50 56 L80 72 Z" fill="url(#pocketSidesNav)" opacity="0.7" />
@@ -726,7 +1181,7 @@ function LandingPage() {
 
               {/* Floating coin */}
               <circle cx="50" cy="52" r="14" fill="url(#coinGradNav)" stroke="#FF6B00" strokeWidth="1.5" filter="url(#coinShadowNav)" />
-              
+
               {/* Standard Rupee symbol inside coin */}
               <path d="M44 47H56" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
               <path d="M44 50H53" stroke="#0F1219" strokeWidth="1.8" strokeLinecap="round" />
@@ -754,7 +1209,7 @@ function LandingPage() {
               </button>
               <Link to="/login" className="hidden sm:inline-block px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-bold text-muted-foreground hover:text-foreground transition-colors text-decoration-none whitespace-nowrap">Sign In</Link>
               <Link to="/login" className="px-3 sm:px-4 py-1.5 rounded-full text-xs font-extrabold text-[#0A0A0A] bg-gradient-to-br from-primary to-[#D9A05B] hover:scale-[1.03] active:scale-[0.97] transition-all shadow-md shadow-primary/10 text-decoration-none whitespace-nowrap">Get Started</Link>
-              
+
               {/* Mobile menu toggle */}
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
@@ -786,32 +1241,32 @@ function LandingPage() {
         <div className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] sm:w-[700px] h-[320px] sm:h-[500px] rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(140,120,83,0.1) 0%, transparent 70%)" }} />
         <div className="absolute inset-0 pointer-events-none mask-image-radial" style={{ backgroundImage: "linear-gradient(color-mix(in srgb, var(--border) 18%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--border) 18%, transparent) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
 
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-[9px] font-bold text-[#C27D56] tracking-[0.16em] mb-8 animate-fade-in font-mono uppercase">
-          <span className="w-1.5 h-1.5 rounded-full bg-pb-green shadow-[0_0_8px_var(--pb-green)] pulse-dot flex-shrink-0" />
-          POWERED BY AMAZON BEDROCK&nbsp;&nbsp;·&nbsp;&nbsp;AWS HACKATHON 2025
-        </div>
 
         <h1 className="text-3xl sm:text-5xl md:text-7xl font-black leading-[1.05] tracking-tight mb-6 max-w-[940px] uppercase text-center" style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? "translateY(0)" : "translateY(30px)", transition: "all 0.9s cubic-bezier(0.16,1,0.3,1) 0.2s" }}>
-          <span className="block text-foreground mb-1">YOUR CAMPUS MONEY,</span>
+          <span className="block text-foreground mb-1">Know What's Safe</span>
           <span className="block bg-gradient-to-r from-[#8C7853] via-[#D9A05B] to-[#C27D56] bg-clip-text text-transparent">
-            FINALLY WATCHING OVER YOU.
+            Before You Spend.
           </span>
         </h1>
 
         {/* Subheading */}
-        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-[540px] mb-10 font-mono tracking-wide uppercase" style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? "translateY(0)" : "translateY(20px)", transition: "all 0.9s cubic-bezier(0.16,1,0.3,1) 0.35s" }}>
-          Passive UPI tracking · AI burnout detection<br />Wing cart pools · Campus meal intelligence
+        <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-[620px] mb-8 font-medium" style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? "translateY(0)" : "translateY(20px)", transition: "all 0.9s cubic-bezier(0.16,1,0.3,1) 0.35s" }}>
+          PocketBuddy turns daily payments, shared carts, meals, subscriptions, and travel into a live runway so students can plan the month without opening a spreadsheet.
         </p>
 
-        <div className="flex gap-3 flex-wrap justify-center" style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? "translateY(0)" : "translateY(20px)", transition: "all 0.9s cubic-bezier(0.16,1,0.3,1) 0.5s" }}>
+        <div className="flex gap-3 flex-wrap justify-center mb-16" style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? "translateY(0)" : "translateY(20px)", transition: "all 0.9s cubic-bezier(0.16,1,0.3,1) 0.5s" }}>
           <Link to="/login" className="px-7 py-3.5 rounded-full text-xs font-black text-[#0A0A0A] bg-gradient-to-br from-primary to-pb-amber hover:scale-[1.03] active:scale-[0.97] transition-all shadow-lg shadow-primary/15 text-decoration-none">
-            Start Tracking Free →
+            Open PocketBuddy
           </Link>
-          <a href="#features" className="px-7 py-3.5 rounded-full text-xs font-bold text-muted-foreground bg-surface-raised hover:bg-surface-interactive border border-border hover:scale-[1.02] active:scale-[0.98] transition-all text-decoration-none">See How It Works</a>
+          <a href="#features" className="px-7 py-3.5 rounded-full text-xs font-bold text-muted-foreground bg-surface-raised hover:bg-surface-interactive border border-border hover:scale-[1.02] active:scale-[0.98] transition-all text-decoration-none">Explore Features</a>
         </div>
 
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 cursor-pointer opacity-40 hover:opacity-85 transition-opacity" style={{ animation: "bounce 2.2s infinite" }}>
+        {/* Dynamic Glassmorphic Browser Mockup */}
+        <div className="w-full max-w-[860px] mb-12 animate-fade-in" style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? "translateY(0)" : "translateY(20px)", transition: "all 0.9s cubic-bezier(0.16,1,0.3,1) 0.55s" }}>
+          <HeroBrowserMockup />
+        </div>
+
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 cursor-pointer opacity-40 hover:opacity-85 transition-opacity" style={{ animation: "bounce 2.2s infinite" }}>
           <div className="text-[9px] tracking-widest text-muted-foreground font-mono">SCROLL</div>
           <div className="w-[1px] h-8 bg-gradient-to-b from-border to-transparent" />
         </div>
@@ -823,7 +1278,7 @@ function LandingPage() {
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
             <SectionLabel text="The Problem We Solve" />
-            <SectionHeading>Indian hostel students are financially<br /><span className="text-muted-foreground/60">flying blind, every single month.</span></SectionHeading>
+            <SectionHeading>Campus and dorm students are financially<br /><span className="text-muted-foreground/60">flying blind, every single month.</span></SectionHeading>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {problems.map(({ icon: Icon, stat, sub, color }) => {
@@ -841,7 +1296,7 @@ function LandingPage() {
             <p className="text-sm sm:text-base text-foreground leading-relaxed font-medium italic">
               "Existing apps demand active manual entry or complex bank PDF parsing. Students try them for 3 days and abandon them. Meanwhile, they keep running out of money mid-month ── right when exam pressure peaks ── and respond by skipping meals."
             </p>
-            <p className="text-[10px] text-[#C27D56] mt-4 font-black tracking-widest uppercase font-mono">— PocketBuddy Research Report, 2025</p>
+            <p className="text-[10px] text-[#C27D56] mt-4 font-black tracking-widest uppercase font-mono">PocketBuddy Campus Research Snapshot</p>
           </div>
         </div>
       </section>
@@ -870,7 +1325,7 @@ function LandingPage() {
       <section ref={statsRef} className="py-14 px-4 sm:px-6 bg-gradient-to-b from-transparent to-primary/2 via-transparent border-t border-b border-border">
         <div className="max-w-[960px] mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10">
           {[
-            { value: "₹0", label: "MANUAL ENTRIES NEEDED" },
+            { value: "0", label: "MANUAL ENTRIES NEEDED" },
             { value: "16+h", label: "BURNOUT DETECTION THRESHOLD" },
             { value: "75%", label: "TOKEN COST REDUCTION VIA RAG" },
             { value: "∞", label: "CAMPUS MERCHANTS MAPPABLE" },
@@ -888,9 +1343,9 @@ function LandingPage() {
         <div className="text-center mb-14">
           <SectionLabel text="Why PocketBuddy Wins" />
           <SectionHeading>We built what the others<br /><span className="text-muted-foreground/60">forgot to build.</span></SectionHeading>
-          <p className="text-xs sm:text-sm text-muted-foreground max-w-[500px] mx-auto mt-4 leading-relaxed">Every competitor app requires either your bank credentials, manual input, or ignores the Indian UPI ecosystem entirely. PocketBuddy solves all three.</p>
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-[500px] mx-auto mt-4 leading-relaxed">Most finance apps require bank credentials, constant manual entry, or miss how students actually spend. PocketBuddy keeps the tracking passive, campus-aware, and useful from day one.</p>
         </div>
-        
+
         {/* Comparison table wrapper */}
         <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
           <table className="w-full min-w-[640px] border-collapse text-left text-[11px] sm:text-xs">
@@ -1092,7 +1547,7 @@ function LandingPage() {
             {[
               { icon: Lock, label: "No bank access" },
               { icon: WifiOff, label: "Works offline" },
-              { icon: GraduationCap, label: "Built for India" },
+              { icon: GraduationCap, label: "Campus-ready" },
               { icon: Zap, label: "Setup in 60s" },
             ].map(({ icon: Icon, label }) => (
               <span key={label} className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted-foreground font-semibold font-mono">
@@ -1106,12 +1561,17 @@ function LandingPage() {
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
       <footer className="border-t border-border py-8 px-4 sm:px-6 max-w-[1100px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-[#D9A05B] flex items-center justify-center">
-            <span className="font-black text-[10px] text-[#0A0A0A]">P</span>
-          </div>
-          <span className="text-xs font-extrabold text-muted-foreground">PocketBuddy</span>
+          <img
+            src="/icon-192.svg"
+            alt="PocketBuddy logo"
+            className="h-7 w-7 shrink-0 rounded-md"
+            loading="lazy"
+          />
+          <span className="text-xs font-extrabold text-muted-foreground">
+            PocketBuddy<span className="text-primary">.</span>
+          </span>
         </div>
-        <div className="text-[10px] text-muted-foreground opacity-75 font-mono">CAMPUS FINANCIAL GUARD · AWS HACKATHON 2025 · THEME 4: AI FOR CAMPUS</div>
+        <div className="text-[10px] text-muted-foreground opacity-75 font-mono">CAMPUS FINANCIAL WELLNESS PLATFORM</div>
         <Link to="/login" className="text-xs font-bold text-[#C27D56] hover:text-[#b45309] transition-colors text-decoration-none">Sign In →</Link>
       </footer>
 

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
@@ -22,6 +22,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import {
   rupees,
@@ -184,15 +185,25 @@ function SurviveCountdown({ runwayMs }: { runwayMs: number }) {
   const mins = Math.floor((remaining % 3600000) / 60000);
   const secs = Math.floor((remaining % 60000) / 1000);
   const pad = (n: number) => String(n).padStart(2, "0");
+  const parts = [
+    ...(days > 0 ? [{ value: String(days), label: "d" }] : []),
+    { value: pad(hrs), label: "h" },
+    { value: pad(mins), label: "m" },
+    { value: pad(secs), label: "s", pulse: true },
+  ];
   return (
-    <div className="flex items-end gap-1 tnum">
-      {days > 0 && <><span className="text-[22px] font-black leading-none text-foreground">{days}</span><span className="text-[9px] text-zinc-500 font-bold mb-1">d</span></>}
-      <span className="text-[22px] font-black leading-none text-foreground">{pad(hrs)}</span>
-      <span className="text-[9px] text-zinc-500 font-bold mb-1">h</span>
-      <span className="text-[22px] font-black leading-none text-foreground">{pad(mins)}</span>
-      <span className="text-[9px] text-zinc-500 font-bold mb-1">m</span>
-      <span className="text-[22px] font-black leading-none text-foreground transition-opacity duration-300" style={{ opacity: secs % 2 === 0 ? 1 : 0.5 }}>{pad(secs)}</span>
-      <span className="text-[9px] text-zinc-500 font-bold mb-1">s</span>
+    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 tnum">
+      {parts.map((part) => (
+        <span key={part.label} className="inline-flex items-baseline gap-1 whitespace-nowrap">
+          <span
+            className="text-[23px] font-black leading-none text-foreground transition-opacity duration-300"
+            style={{ opacity: part.pulse && secs % 2 !== 0 ? 0.68 : 1 }}
+          >
+            {part.value}
+          </span>
+          <span className="text-[11px] text-zinc-400 font-black leading-none">{part.label}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -269,10 +280,172 @@ function NudgeCard({
   );
 }
 
+function ResponsiveFoodPanel({
+  open,
+  onOpenChange,
+  isMobile,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  isMobile: boolean;
+  children: ReactNode;
+}) {
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-auto bg-background text-foreground border-t border-border">
+          {children}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent id="dialog-campus-dining-hub" className="max-h-[85vh] max-w-4xl overflow-y-auto bg-background text-foreground border border-border">
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SpendingSmartCheck({ calc }: { calc: any }) {
+  const [selectedPlan, setSelectedPlan] = useState<null | "delivery" | "mess" | "maggi">(null);
+  const safeDaily = calc?.safeDailyLimit ?? 200;
+
+  if (selectedPlan === "delivery") {
+    const isAboveLimit = 250 > safeDaily;
+    const gap = 250 - safeDaily;
+    return (
+      <Card className="bg-surface border-border p-5 relative overflow-hidden transition-all duration-300">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(239,68,68,0.05), transparent 65%)" }} />
+        <h4 className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase mb-2">Food Plan: Delivery</h4>
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+            {isAboveLimit ? (
+              <>
+                A typical Swiggy/Zomato delivery order (~₹250) is <span className="text-pb-red font-bold">₹{gap} above</span> your safe daily spend limit of <span className="font-bold text-foreground">₹{safeDaily}</span>. Doing this daily will slash your runway early!
+              </>
+            ) : (
+              <>
+                A typical Swiggy/Zomato order (~₹250) fits within your current safe limit of <span className="font-bold text-foreground">₹{safeDaily}</span>. However, you can save more by pooling orders.
+              </>
+            )}
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <Link to="/pool" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+              Join Swiggy Pool
+            </Link>
+            <Link to="/runway" className="h-8 rounded-lg bg-surface border border-border text-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-surface-raised transition-all">
+              Runway Sandbox
+            </Link>
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+              Change
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (selectedPlan === "mess") {
+    return (
+      <Card className="bg-surface border-border p-5 relative overflow-hidden transition-all duration-300">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(34,197,94,0.05), transparent 65%)" }} />
+        <h4 className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase mb-2">Food Plan: Hostel Mess</h4>
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+            Awesome! You've already prepaid for the hostel mess. Eating at the mess today saves ₹250 of discretionary money, helping extend your runway length.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+              Track Projections
+            </Link>
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+              Change
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (selectedPlan === "maggi") {
+    return (
+      <Card className="bg-surface border-border p-5 relative overflow-hidden transition-all duration-300">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(245,158,11,0.05), transparent 65%)" }} />
+        <h4 className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase mb-2">Food Plan: Maggi / Tapri</h4>
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+            Budget saver! Spending only ~₹40 for tea or late night Maggi helps you stay well below your daily pace, building a safe buffer for unexpected campus expenses.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+              Check Runway
+            </Link>
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+              Change
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.03), transparent 65%)" }} />
+      <div className="flex items-center gap-2 mb-3">
+        <Compass className="h-4.5 w-4.5 text-primary" />
+        <p className="text-xs font-bold tracking-[0.15em] text-zinc-500 uppercase">Interactive Runway Check</p>
+      </div>
+      <p className="text-xs text-zinc-300 leading-relaxed font-medium mb-4">
+        What's your plan for dinner tonight? Choose an option to see how it affects your Runway countdown.
+      </p>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={() => setSelectedPlan("delivery")}
+          className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-surface-raised hover:bg-surface hover:border-primary/40 transition-all text-xs font-semibold text-foreground cursor-pointer group"
+        >
+          <span className="flex items-center gap-2">
+            <ShoppingBag className="h-4 w-4 text-pb-red" />
+            <span>Order Swiggy / Zomato Delivery</span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+        </button>
+
+        <button
+          onClick={() => setSelectedPlan("mess")}
+          className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-surface-raised hover:bg-surface hover:border-primary/40 transition-all text-xs font-semibold text-foreground cursor-pointer group"
+        >
+          <span className="flex items-center gap-2">
+            <Utensils className="h-4 w-4 text-pb-green" />
+            <span>Eat at Campus Hostel Mess</span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+        </button>
+
+        <button
+          onClick={() => setSelectedPlan("maggi")}
+          className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-surface-raised hover:bg-surface hover:border-primary/40 transition-all text-xs font-semibold text-foreground cursor-pointer group"
+        >
+          <span className="flex items-center gap-2">
+            <Timer className="h-4 w-4 text-pb-amber" />
+            <span>Late Night Maggi / Tapri (₹40)</span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 function Dashboard() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const nav = useNavigate();
+  const isMobile = useIsMobile();
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -1033,21 +1206,21 @@ function Dashboard() {
                       </h2>
                       <span className="text-[16px] md:text-[20px] font-bold tracking-widest text-zinc-500 uppercase">Days</span>
                     </div>
-                    <p className="mt-3 text-xs md:text-sm text-zinc-400 font-semibold leading-relaxed">
+                    <p className="mt-3 max-w-full text-[13px] md:text-sm text-zinc-400 font-medium leading-6 tracking-normal">
                       Remaining allowance until <span className="text-foreground font-bold">{rupees(calc.totalAllowance * 100)}</span> resets on <span className="text-foreground font-bold">{shortDate(calc.cycleEnd)}</span>
                     </p>
 
-                    <div className="mt-8 grid grid-cols-3 gap-3 md:gap-6 border-t border-border pt-6">
-                      <div className="flex flex-col gap-1">
-                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Balance</p>
+                    <div className="mt-8 grid grid-cols-3 gap-2 md:gap-6 border-t border-border pt-6">
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Balance</p>
                         <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.remaining * 100)}</p>
                       </div>
-                      <div className="flex flex-col gap-1 border-l border-border pl-4 md:pl-6">
-                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Safe Limit</p>
+                      <div className="flex min-w-0 flex-col gap-1 border-l border-border pl-3 md:pl-6">
+                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Safe limit</p>
                         <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.safeDailyLimit * 100)}</p>
                       </div>
-                      <div className="flex flex-col gap-1 border-l border-border pl-4 md:pl-6">
-                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Today</p>
+                      <div className="flex min-w-0 flex-col gap-1 border-l border-border pl-3 md:pl-6">
+                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Today</p>
                         <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.spentToday * 100)}</p>
                       </div>
                     </div>
@@ -1072,6 +1245,8 @@ function Dashboard() {
                 )}
               </div>
             </div>
+
+            {calc && <SpendingSmartCheck calc={calc} />}
 
             {/* ── Behaviour Analytics Row ─────────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1249,25 +1424,28 @@ function Dashboard() {
           <div className="md:col-span-5 lg:col-span-4 space-y-5">
 
             {/* ── Survive Until Broke Card ─────────────────── */}
-            <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">
-              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.05), transparent 65%)" }} />
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Survive Until Broke</p>
-                <span className="text-xs font-black px-2 py-0.5 rounded-full border text-primary border-primary/30 bg-primary/5">
-                  LIVE COUNTDOWN
-                </span>
+            <Link to="/runway" className="block group">
+              <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden transition-all duration-300 hover:border-primary/40 hover:scale-[1.01] active:scale-[0.99] cursor-pointer">
+                <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.05), transparent 65%)" }} />
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase group-hover:text-primary transition-colors">Survive Until Broke</p>
+                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full border text-primary border-primary/30 bg-primary/5 flex items-center gap-1">
+                    LIVE COUNTDOWN
+                    <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {surviveUntilMs > 0 ? (
+                    <SurviveCountdown runwayMs={surviveUntilMs} />
+                  ) : (
+                    <p className="text-[13px] font-black text-zinc-400">—</p>
+                  )}
+                  <p className="text-xs text-zinc-400 leading-relaxed mt-2">
+                    Estimated exact date your allowance will run out. Click to view detailed forecasts.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-3">
-                {surviveUntilMs > 0 ? (
-                  <SurviveCountdown runwayMs={surviveUntilMs} />
-                ) : (
-                  <p className="text-[13px] font-black text-zinc-400">—</p>
-                )}
-                <p className="text-xs text-zinc-400 leading-relaxed mt-2">
-                  Estimated exact date and time your allowance will run out based on your 7-day spending pace.
-                </p>
-              </div>
-            </div>
+            </Link>
 
             {/* ── AI Campus Intelligence (Bedrock) ──────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">
@@ -1588,8 +1766,7 @@ function Dashboard() {
         </Dialog>
 
         {/* Food options */}
-        <Sheet open={showFoodSheet} onOpenChange={setShowFoodSheet}>
-          <SheetContent side="bottom" className="max-h-[85vh] overflow-auto bg-background text-foreground border-t border-border">
+        <ResponsiveFoodPanel open={showFoodSheet} onOpenChange={setShowFoodSheet} isMobile={isMobile}>
             <SheetHeader>
               <SheetTitle className="text-sm font-black uppercase tracking-wider text-foreground">Campus Dining Hub</SheetTitle>
               <div className="flex border-b border-border mt-2">
@@ -1761,8 +1938,7 @@ function Dashboard() {
                 )}
               </div>
             )}
-          </SheetContent>
-        </Sheet>
+        </ResponsiveFoodPanel>
 
         {/* Check-in dialog */}
         <Dialog open={showCheckIn} onOpenChange={() => { /* not dismissible */ }}>

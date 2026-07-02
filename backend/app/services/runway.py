@@ -1,0 +1,527 @@
+"""Deterministic, explainable runway and multi-horizon forecasting.
+
+Money values are integer paise. Dates are naive UTC to match the existing MongoDB
+documents. Bedrock is deliberately not involved in any calculation in this module.
+"""
+
+from __future__ import annotations
+
+import calendar
+import datetime as dt
+import math
+import re
+from collections import defaultdict
+from statistics import NormalDist, pstdev
+from typing import Any, Iterable, Optional
+
+
+DAY = dt.timedelta(days=1)
+INCOME_CATEGORIES = {"income", "salary", "stipend", "scholarship", "refund", "cashback"}
+PRIMARY_ALLOWANCE_WORDS = {"allowance", "stipend", "scholarship"}
+REFUND_WORDS = {"refund", "cashback", "reimbursement", "reversal"}
+INVALID_STATUSES = {"duplicate", "refunded", "reversed", "cancelled", "failed", "rejected"}
+MESS_WORDS = {"mess", "hostel dining", "meal plan"}
+
+
+def _utc_naive(value: Any) -> Optional[dt.datetime]:
+    if isinstance(value, dt.datetime):
+        if value.tzinfo is not None:
+            return value.astimezone(dt.timezone.utc).replace(tzinfo=None)
+        return value
+    if isinstance(value, dt.date):
+        return dt.datetime.combine(value, dt.time.min)
+    if isinstance(value, str) and value:
+        try:
+            parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                parsed = parsed.astimezone(dt.timezone.utc).replace(tzinfo=None)
+            return parsed
+        except ValueError:
+            return None
+    return None
+
+
+def _date(value: Any) -> Optional[dt.date]:
+    parsed = _utc_naive(value)
+    return parsed.date() if parsed else None
+
+
+def _month_day(year: int, month: int, day: int) -> dt.datetime:
+    last_day = calendar.monthrange(year, month)[1]
+    return dt.datetime(year, month, min(max(day, 1), last_day))
+
+
+def add_months(value: dt.datetime, months: int) -> dt.datetime:
+    month_index = value.year * 12 + value.month - 1 + months
+    year, month_zero = divmod(month_index, 12)
+    month = month_zero + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return value.replace(year=year, month=month, day=min(value.day, last_day))
+
+
+def cycle_bounds(cycle_start_day: int, now: dt.datetime) -> tuple[dt.datetime, dt.datetime]:
+    cycle_start_day = min(max(int(cycle_start_day or 1), 1), 31)
+    candidate = _month_day(now.year, now.month, cycle_start_day)
+    start = candidate if now >= candidate else add_months(candidate, -1)
+    return start, add_months(start, 1)
+
+
+def _label(txn: dict) -> str:
+    return " ".join(
+        str(txn.get(key) or "")
+        for key in ("category", "mapped_merchant_name", "raw_merchant_string")
+    ).casefold()
+
+
+def _valid_amount(item: dict) -> int:
+    amount = item.get("amount", 0)
+    return amount if isinstance(amount, int) and not isinstance(amount, bool) and amount > 0 else 0
+
+
+def _is_ignored(txn: dict) -> bool:
+    status = str(txn.get("status") or txn.get("parse_status") or "").casefold()
+    return bool(
+        txn.get("is_duplicate")
+        or txn.get("duplicate_of")
+        or txn.get("is_refunded")
+        or status in INVALID_STATUSES
+        or not _valid_amount(txn)
+        or not _utc_naive(txn.get("created_at"))
+    )
+
+
+def _is_income(txn: dict) -> bool:
+    direction = str(txn.get("direction") or "").casefold()
+    if direction == "credit":
+        return True
+    if direction == "debit":
+        return False
+    return str(txn.get("category") or "").casefold() in INCOME_CATEGORIES
+
+
+def _is_committed_expense(txn: dict) -> bool:
+    label = _label(txn)
+    return str(txn.get("category") or "").casefold() == "subscription" or any(
+        word in label for word in MESS_WORDS
+    ) or bool(txn.get("is_committed"))
+
+
+def _billing_interval(subscription: dict) -> tuple[str, int]:
+    cycle = str(subscription.get("billing_cycle") or "monthly").casefold().replace("-", "_")
+    if cycle == "weekly":
+        return "days", 7
+    if cycle in {"biweekly", "fortnightly"}:
+        return "days", 14
+    if cycle == "quarterly":
+        return "months", 3
+    if cycle in {"half_yearly", "semiannual", "semi_annual"}:
+        return "months", 6
+    if cycle in {"yearly", "annual"}:
+        return "months", 12
+    observed = subscription.get("observed_interval_days")
+    if isinstance(observed, int) and observed > 0 and cycle not in {"monthly", "month"}:
+        return "days", observed
+    return "months", 1
+
+
+def _advance(value: dt.datetime, interval: tuple[str, int]) -> dt.datetime:
+    unit, count = interval
+    return value + dt.timedelta(days=count) if unit == "days" else add_months(value, count)
+
+
+def _subscription_dates(subscription: dict, start: dt.datetime, end: dt.datetime) -> list[dt.datetime]:
+    interval = _billing_interval(subscription)
+    due = _utc_naive(subscription.get("next_debit_date")) or start
+    guard = 0
+    while due < start and guard < 500:
+        due = _advance(due, interval)
+        guard += 1
+    dates: list[dt.datetime] = []
+    while due < end and guard < 500:
+        dates.append(due)
+        due = _advance(due, interval)
+        guard += 1
+    return dates
+
+
+def _monthly_subscription_cost(subscription: dict) -> float:
+    amount = _valid_amount(subscription)
+    unit, count = _billing_interval(subscription)
+    if unit == "days":
+        return amount * 30.4375 / count
+    return amount / count
+
+
+def _profile_amount(profile: dict, key: str) -> int:
+    value = profile.get(key, 0)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def _exam_overlap(profile: dict, start: dt.datetime, end: dt.datetime) -> int:
+    exam_start = _date(profile.get("exam_start_date"))
+    exam_end = _date(profile.get("exam_end_date"))
+    if not exam_start or not exam_end or exam_end < exam_start:
+        return 0
+    overlap_start = max(start.date(), exam_start)
+    overlap_end = min((end - dt.timedelta(microseconds=1)).date(), exam_end)
+    return max(0, (overlap_end - overlap_start).days + 1)
+
+
+def derive_pool_obligations(
+    pools: Iterable[dict],
+    items: Iterable[dict],
+    *,
+    user_id: str,
+    user_name: str,
+    now: Optional[dt.datetime] = None,
+) -> list[dict]:
+    """Return unpaid/estimated shares owned by the current user."""
+    now = now or dt.datetime.utcnow()
+    item_map: dict[str, list[dict]] = defaultdict(list)
+    for item in items:
+        item_map[str(item.get("pool_id") or "")].append(item)
+
+    def name_key(value: Any) -> str:
+        return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+    obligations: list[dict] = []
+    for pool in pools:
+        pool_id = str(pool.get("_id") or pool.get("id") or "")
+        status = str(pool.get("status") or "").casefold()
+        if status not in {"open", "closed", "completed"}:
+            continue
+        pool_items = [item for item in item_map.get(pool_id, []) if item.get("is_purchased", True)]
+        effective_name = user_name
+        if str(pool.get("host_id") or "") == user_id and not effective_name:
+            effective_name = str(pool.get("created_by_name") or "")
+        mine = [item for item in pool_items if name_key(item.get("added_by_name")) == name_key(effective_name)]
+        if not mine:
+            continue
+
+        payments = pool.get("payments") or []
+        payment = next((p for p in payments if name_key(p.get("name")) == name_key(effective_name)), None)
+        if status == "completed" and payment and str(payment.get("status") or "") in {
+            "verified", "auto_verified", "manual_verified"
+        }:
+            continue
+        # The host share is already written to transactions when checkout completes.
+        if status == "completed" and str(pool.get("host_id") or "") == user_id:
+            continue
+
+        participants = {name_key(item.get("added_by_name")) for item in pool_items}
+        participant_count = max(1, len(participants))
+        item_total = sum(_valid_amount({"amount": item.get("estimated_price")}) for item in mine)
+        if status == "completed":
+            overhead = int(pool.get("final_overhead") or 0) - int(pool.get("final_discount") or 0)
+        else:
+            overhead = int(pool.get("delivery_fee") or 0)
+        amount = max(0, item_total + round(overhead / participant_count))
+        if amount <= 0:
+            continue
+        due = _utc_naive(pool.get("expires_at")) or now
+        obligations.append({
+            "pool_id": pool_id,
+            "label": f"{str(pool.get('platform_display_label') or pool.get('platform') or 'Cart').replace('_', ' ').title()} pool",
+            "amount": amount,
+            "due_at": due,
+            "status": "pending" if status == "completed" else "estimated",
+        })
+    return obligations
+
+
+def _pace_model(expenses: list[dict], now: dt.datetime) -> dict:
+    history_start = (now - dt.timedelta(days=56)).date()
+    complete_end = now.date() - dt.timedelta(days=1)
+    by_day: dict[dt.date, int] = defaultdict(int)
+    for txn in expenses:
+        created = _utc_naive(txn.get("created_at"))
+        if created and history_start <= created.date() <= complete_end and not _is_committed_expense(txn):
+            by_day[created.date()] += _valid_amount(txn)
+
+    dates = [history_start + dt.timedelta(days=i) for i in range(max(0, (complete_end - history_start).days + 1))]
+    recent_dates = dates[-28:]
+    values = [by_day[day] for day in recent_dates]
+    active_days = sum(1 for value in values if value > 0)
+
+    ewma = 0.0
+    alpha = 0.24
+    for value in values:
+        ewma = value if ewma == 0 and value > 0 else alpha * value + (1 - alpha) * ewma
+    if not values or ewma == 0:
+        today_total = sum(
+            _valid_amount(txn)
+            for txn in expenses
+            if (_utc_naive(txn.get("created_at")) or dt.datetime.min).date() == now.date()
+            and not _is_committed_expense(txn)
+        )
+        ewma = float(today_total)
+
+    global_mean = sum(by_day[day] for day in dates) / max(1, len(dates))
+    weekday_values: dict[int, list[int]] = defaultdict(list)
+    for day in dates:
+        weekday_values[day.weekday()].append(by_day[day])
+    factors: dict[int, float] = {}
+    for weekday in range(7):
+        samples = weekday_values.get(weekday, [])
+        weekday_mean = sum(samples) / max(1, len(samples))
+        raw = weekday_mean / global_mean if global_mean > 0 else 1.0
+        # Shrink sparse weekday estimates toward one and cap outliers.
+        weight = min(1.0, len(samples) / 8)
+        factors[weekday] = min(1.6, max(0.6, 1 + (raw - 1) * weight))
+
+    residuals = [value - ewma * factors[day.weekday()] for day, value in zip(recent_dates, values)]
+    daily_std = pstdev(residuals) if len(residuals) > 1 else 0.0
+    if daily_std <= 0 and ewma > 0:
+        daily_std = ewma * 0.45
+    return {
+        "ewma_daily": ewma,
+        "weekday_factors": factors,
+        "daily_std": daily_std,
+        "history_days": len(dates),
+        "active_days": active_days,
+        "observed_total": sum(values),
+    }
+
+
+def _confidence(pace: dict, subscriptions: list[dict], profile: dict) -> dict:
+    score = min(40, round(pace["history_days"] / 42 * 40))
+    score += min(25, round(pace["active_days"] / 14 * 25))
+    score += 10 if subscriptions else 0
+    score += 10 if profile.get("monthly_allowance") else 0
+    score += 10 if profile.get("mess_billing_model") else 0
+    volatility = pace["daily_std"] / pace["ewma_daily"] if pace["ewma_daily"] else 1.0
+    score += 5 if volatility <= 0.75 else 2 if volatility <= 1.25 else 0
+    score = min(100, score)
+    level = "high" if score >= 75 else "medium" if score >= 45 else "low"
+    reason = (
+        "Enough recent activity and recurring-cost context for a stable estimate."
+        if level == "high"
+        else "The range stays wider until more daily spending history is available."
+        if level == "medium"
+        else "Early estimate: add transactions and configure fixed costs to improve it."
+    )
+    return {"score": score, "level": level, "reason": reason, "history_days": pace["history_days"], "active_days": pace["active_days"]}
+
+
+def _round_ask_home(shortfall_paise: float) -> int:
+    # Round up to a practical Rs 100 request.
+    return int(math.ceil(max(0.0, shortfall_paise) / 10_000) * 10_000)
+
+
+def build_runway_forecast(
+    *,
+    profile: dict,
+    transactions: Iterable[dict],
+    subscriptions: Iterable[dict],
+    pool_obligations: Iterable[dict] = (),
+    now: Optional[dt.datetime] = None,
+) -> dict:
+    now = _utc_naive(now) or dt.datetime.utcnow()
+    cycle_start, cycle_end = cycle_bounds(int(profile.get("cycle_start_day") or 1), now)
+    allowance = _profile_amount(profile, "monthly_allowance")
+
+    valid = [txn for txn in transactions if not _is_ignored(txn)]
+    expenses = [txn for txn in valid if not _is_income(txn)]
+    credits = [txn for txn in valid if _is_income(txn)]
+    cycle_expenses = [txn for txn in expenses if cycle_start <= _utc_naive(txn.get("created_at")) < cycle_end]
+    cycle_credits = [txn for txn in credits if cycle_start <= _utc_naive(txn.get("created_at")) < cycle_end]
+
+    additional_income = 0
+    allowance_credits = 0
+    for txn in cycle_credits:
+        label = _label(txn)
+        amount = _valid_amount(txn)
+        if any(word in label for word in REFUND_WORDS):
+            additional_income += amount
+        elif any(word in label for word in PRIMARY_ALLOWANCE_WORDS):
+            allowance_credits += amount
+        else:
+            additional_income += amount
+    # A recorded allowance transfer is evidence of the configured budget, not a second allowance.
+    funding = max(allowance, allowance_credits) + additional_income
+    spent = sum(_valid_amount(txn) for txn in cycle_expenses)
+    committed_spent = sum(_valid_amount(txn) for txn in cycle_expenses if _is_committed_expense(txn))
+    discretionary_spent = spent - committed_spent
+    remaining = funding - spent
+
+    active_subscriptions = [sub for sub in subscriptions if sub.get("is_active", True) and _valid_amount(sub)]
+    commitments: list[dict] = []
+    for sub in active_subscriptions:
+        for due in _subscription_dates(sub, now, cycle_end):
+            commitments.append({
+                "kind": "subscription",
+                "label": str(sub.get("service_name") or sub.get("name") or "Subscription"),
+                "amount": _valid_amount(sub),
+                "due_at": due,
+                "status": "scheduled",
+            })
+
+    mess_model = str(profile.get("mess_billing_model") or ("included" if profile.get("mess_enrolled") else "none")).casefold()
+    days_left = max(0, (cycle_end.date() - now.date()).days)
+    already_paid_mess = any(any(word in _label(txn) for word in MESS_WORDS) for txn in cycle_expenses)
+    if profile.get("mess_enrolled") and mess_model == "monthly" and not already_paid_mess:
+        mess_amount = _profile_amount(profile, "mess_monthly_cost")
+        if mess_amount:
+            commitments.append({"kind": "mess", "label": "Monthly mess bill", "amount": mess_amount, "due_at": cycle_end - DAY, "status": "scheduled"})
+    elif profile.get("mess_enrolled") and mess_model == "per_meal":
+        per_meal = _profile_amount(profile, "mess_per_meal_cost")
+        meals_per_day = min(max(int(profile.get("mess_meals_per_day") or 2), 1), 4)
+        if per_meal and days_left:
+            commitments.append({"kind": "mess", "label": "Expected mess meals", "amount": per_meal * meals_per_day * days_left, "due_at": now, "status": "estimated"})
+
+    exam_days = _exam_overlap(profile, now, cycle_end)
+    configured_exam_buffer = _profile_amount(profile, "exam_safety_buffer")
+    exam_buffer = configured_exam_buffer if configured_exam_buffer and exam_days else exam_days * 10_000
+    if exam_buffer:
+        commitments.append({
+            "kind": "exam_buffer",
+            "label": "Exam safety fund",
+            "amount": exam_buffer,
+            "due_at": now,
+            "status": "reserved" if configured_exam_buffer else "recommended",
+        })
+
+    for obligation in pool_obligations:
+        amount = _valid_amount(obligation)
+        due = _utc_naive(obligation.get("due_at")) or now
+        if amount and due < cycle_end:
+            commitments.append({
+                "kind": "pool",
+                "label": str(obligation.get("label") or "Cart pool share"),
+                "amount": amount,
+                "due_at": max(now, due),
+                "status": str(obligation.get("status") or "estimated"),
+            })
+
+    commitment_total = sum(item["amount"] for item in commitments)
+    pace = _pace_model(expenses, now)
+    projected_days = [now.date() + dt.timedelta(days=i) for i in range(days_left)]
+    daily_projection = [pace["ewma_daily"] * pace["weekday_factors"][day.weekday()] for day in projected_days]
+    projected_discretionary = sum(daily_projection)
+    projection_std = pace["daily_std"] * math.sqrt(max(1, days_left))
+    z80 = 1.2815515655446004
+    discretionary_low = max(0, projected_discretionary - z80 * projection_std)
+    discretionary_high = projected_discretionary + z80 * projection_std
+    end_balance = remaining - commitment_total - projected_discretionary
+    end_balance_low = remaining - commitment_total - discretionary_high
+    end_balance_high = remaining - commitment_total - discretionary_low
+
+    available_for_discretionary = remaining - commitment_total
+    if projection_std > 0:
+        shortfall_probability = 1 - NormalDist().cdf((available_for_discretionary - projected_discretionary) / projection_std)
+    else:
+        shortfall_probability = 1.0 if projected_discretionary > available_for_discretionary else 0.0
+    shortfall_probability = round(min(1.0, max(0.0, shortfall_probability)), 4)
+    safe_daily = max(0, math.floor(available_for_discretionary / max(1, days_left)))
+
+    # Simulate depletion with dated commitments and the projected weekday pace.
+    balance = remaining
+    commitments_by_day: dict[dt.date, int] = defaultdict(int)
+    for item in commitments:
+        commitments_by_day[_utc_naive(item["due_at"]).date()] += item["amount"]
+    broke_at: Optional[dt.datetime] = None
+    for index, day in enumerate(projected_days):
+        balance -= commitments_by_day.get(day, 0)
+        balance -= daily_projection[index]
+        if balance < 0:
+            broke_at = dt.datetime.combine(day, dt.time(23, 59, 59))
+            break
+    runway_days = max(0, (broke_at.date() - now.date()).days) if broke_at else days_left
+
+    ask_home = _round_ask_home(-end_balance_low) if end_balance < 0 else 0
+    projected_daily = round(projected_discretionary / max(1, days_left))
+    if ask_home:
+        action = {"type": "ask_home", "title": f"Plan for Rs {ask_home // 100:,}", "detail": "This covers the forecast shortfall plus the high-spend side of the confidence range."}
+    elif shortfall_probability >= 0.35:
+        action = {"type": "slow_down", "title": f"Hold flexible spend near Rs {safe_daily // 100:,}/day", "detail": "The base forecast survives, but the high-spend range can still end below zero."}
+    elif commitment_total and safe_daily < projected_daily:
+        action = {"type": "review_commitments", "title": "Review the next fixed debit", "detail": "Known subscriptions, mess, exam reserve, or pool shares are reducing today's flexible limit."}
+    else:
+        action = {"type": "on_track", "title": "Keep the current pace", "detail": "The current forecast reaches reset with a non-negative balance."}
+
+    monthly_discretionary = pace["ewma_daily"] * 30.4375
+    monthly_subscriptions = sum(_monthly_subscription_cost(sub) for sub in active_subscriptions)
+    if profile.get("mess_enrolled") and mess_model == "monthly":
+        monthly_mess = _profile_amount(profile, "mess_monthly_cost")
+    elif profile.get("mess_enrolled") and mess_model == "per_meal":
+        monthly_mess = _profile_amount(profile, "mess_per_meal_cost") * min(max(int(profile.get("mess_meals_per_day") or 2), 1), 4) * 30.4375
+    else:
+        monthly_mess = 0
+    monthly_spend = monthly_discretionary + monthly_subscriptions + monthly_mess
+    horizon_defs = (("next_month", "Next month", 1), ("quarter", "3 months", 3), ("half_year", "6 months", 6), ("year", "1 year", 12))
+    horizons = []
+    for key, label, months in horizon_defs:
+        horizon_days = months * 30.4375
+        horizon_std = pace["daily_std"] * math.sqrt(max(1, horizon_days))
+        expected_spend = monthly_spend * months
+        expected_funding = allowance * months
+        balance_mid = expected_funding - expected_spend
+        horizons.append({
+            "key": key,
+            "label": label,
+            "months": months,
+            "projected_spend": round(expected_spend),
+            "projected_funding": round(expected_funding),
+            "projected_balance": round(balance_mid),
+            "balance_low": round(balance_mid - z80 * horizon_std),
+            "balance_high": round(balance_mid + z80 * horizon_std),
+            "monthly_shortfall": round(max(0, -balance_mid) / months),
+        })
+
+    confidence = _confidence(pace, active_subscriptions, profile)
+    commitment_by_kind: dict[str, int] = defaultdict(int)
+    for item in commitments:
+        commitment_by_kind[item["kind"]] += item["amount"]
+    status = "shortfall" if end_balance < 0 else "watch" if shortfall_probability >= 0.35 else "healthy"
+
+    return {
+        "generated_at": now.isoformat() + "Z",
+        "status": status,
+        "current_cycle": {
+            "start": cycle_start.isoformat() + "Z",
+            "end": cycle_end.isoformat() + "Z",
+            "days_left": days_left,
+            "monthly_allowance": allowance,
+            "additional_income": additional_income,
+            "available_funding": funding,
+            "spent": spent,
+            "committed_spent": committed_spent,
+            "discretionary_spent": discretionary_spent,
+            "remaining": remaining,
+        },
+        "commitments": {
+            "total": commitment_total,
+            "by_kind": dict(commitment_by_kind),
+            "items": [{**item, "due_at": _utc_naive(item["due_at"]).isoformat() + "Z"} for item in sorted(commitments, key=lambda entry: entry["due_at"])],
+        },
+        "projection": {
+            "days_until_broke": runway_days,
+            "broke_at": broke_at.isoformat() + "Z" if broke_at else None,
+            "safe_daily_spend": safe_daily,
+            "projected_daily_spend": projected_daily,
+            "projected_discretionary": round(projected_discretionary),
+            "forecast_end_balance": round(end_balance),
+            "balance_low": round(end_balance_low),
+            "balance_high": round(end_balance_high),
+            "shortfall_probability": shortfall_probability,
+            "ask_home_amount": ask_home,
+        },
+        "spend_split": {
+            "committed": committed_spent + commitment_total,
+            "flexible": discretionary_spent + round(projected_discretionary),
+        },
+        "action": action,
+        "confidence": confidence,
+        "horizons": horizons,
+        "methodology": {
+            "model": "weekday_adjusted_ewma",
+            "lookback_days": 56,
+            "ewma_alpha": 0.24,
+            "range": "80_percent",
+            "notes": [
+                "Calculations are deterministic; AI does not decide financial values.",
+                "Duplicates, failed/reversed events, credits, and committed historical spend are excluded from flexible-spend pace.",
+                "The ask-home amount is shown only when the base forecast is negative and is rounded up to Rs 100.",
+            ],
+        },
+    }

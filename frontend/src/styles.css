@@ -44,8 +44,8 @@
   --color-accent-copper: var(--accent-copper);
   --color-accent-amber: var(--accent-amber);
   /* Fonts */
-  --font-sans: "DM Sans", system-ui, sans-serif;
-  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Inter", "DM Sans", system-ui, sans-serif;
+  --font-display: "Inter", "Space Grotesk", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
@@ -60,7 +60,7 @@
   --card-foreground: #09090b;
   --popover: #ffffff;
   --popover-foreground: #09090b;
-  --primary: #ff6b00;
+  --primary: #e86f51;
   --primary-foreground: #ffffff;
   --secondary: #f4f4f5;
   --secondary-foreground: #09090b;
@@ -72,31 +72,31 @@
   --destructive-foreground: #ffffff;
   --border: #e4e4e7;
   --input: #e4e4e7;
-  --ring: #ff6b00;
+  --ring: #e86f51;
 
   /* Status tokens (guard pattern) */
-  --pb-blue: #ff6b00;     /* alias to primary for now */
-  --pb-purple: #ff6b00;   /* alias to primary for now */
+  --pb-blue: #e86f51;     /* alias to primary for now */
+  --pb-purple: #e86f51;   /* alias to primary for now */
   --pb-green: #16a34a;
-  --pb-amber: #d97706;
+  --pb-amber: #d59b52;
   --pb-red: #dc2626;
 
   /* Backward compat (primary pages still use these TW classes) */
   --accent-bronze: #8C7853;
-  --accent-copper: #C27D56;
-  --accent-amber: #D9A05B;
+  --accent-copper: #b86f56;
+  --accent-amber: #d59b52;
 
   --success: #16a34a;
-  --warning: #d97706;
+  --warning: #c98735;
 
   --sidebar: #ffffff;
   --sidebar-foreground: #09090b;
-  --sidebar-primary: #ff6b00;
+  --sidebar-primary: #e86f51;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f4f4f5;
   --sidebar-accent-foreground: #09090b;
   --sidebar-border: #e4e4e7;
-  --sidebar-ring: #ff6b00;
+  --sidebar-ring: #e86f51;
 }
 
 .dark {
@@ -109,7 +109,7 @@
   --card-foreground: #f4f4f5;
   --popover: #121214;
   --popover-foreground: #f4f4f5;
-  --primary: #ff6b00;
+  --primary: #f08a68;
   --primary-foreground: #0a0a0a;
   --secondary: #18181b;
   --secondary-foreground: #f4f4f5;
@@ -121,31 +121,31 @@
   --destructive-foreground: #f4f4f5;
   --border: #1f1f22;
   --input: #1f1f22;
-  --ring: #ff6b00;
+  --ring: #f08a68;
 
   /* Status tokens (guard pattern) */
-  --pb-blue: #ff6b00;
-  --pb-purple: #ff6b00;
+  --pb-blue: #f08a68;
+  --pb-purple: #f08a68;
   --pb-green: #22c55e;
-  --pb-amber: #f59e0b;
+  --pb-amber: #d9a05b;
   --pb-red: #ef4444;
 
   /* Backward compat (primary pages still use these TW classes) */
   --accent-bronze: #8C7853;
-  --accent-copper: #C27D56;
-  --accent-amber: #D9A05B;
+  --accent-copper: #b86f56;
+  --accent-amber: #d9a05b;
 
   --success: #22c55e;
-  --warning: #f59e0b;
+  --warning: #d9a05b;
 
   --sidebar: #0d0d0d;
   --sidebar-foreground: #f4f4f5;
-  --sidebar-primary: #ff6b00;
+  --sidebar-primary: #f08a68;
   --sidebar-primary-foreground: #0a0a0a;
   --sidebar-accent: #18181b;
   --sidebar-accent-foreground: #f4f4f5;
   --sidebar-border: #1f1f22;
-  --sidebar-ring: #ff6b00;
+  --sidebar-ring: #f08a68;
 }
 
 html { font-size: 17px; }
@@ -159,11 +159,11 @@ html.dark { color-scheme: dark; }
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    letter-spacing: -0.011em;
+    letter-spacing: 0;
   }
 
   /* Headings use display font */
-  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.015em; }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: 0; }
 
   /* Utility classes from guard */
   .font-display { font-family: var(--font-display); }

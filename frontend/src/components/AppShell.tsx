@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   LayoutDashboard, 
   List, 
@@ -14,9 +15,11 @@ import {
   Moon,
   LogOut,
   Compass,
-  BarChart3
+  BarChart3,
+  Activity
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { getProfile } from "@/lib/api/db.functions";
 import { BottomNav } from "./BottomNav";
 
 type Ctx = { 
@@ -33,6 +36,7 @@ const tabs = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
   { to: "/transactions", label: "History", icon: List, id: "nav-transactions" },
   { to: "/stats", label: "Stats", icon: BarChart3, id: "nav-stats" },
+  { to: "/runway", label: "Runway", icon: Activity, id: "nav-runway" },
   { to: "/pool", label: "Pool", icon: ShoppingCart, id: "nav-pool" },
   { to: "/travel", label: "Travel", icon: Compass, id: "nav-travel" },
   { to: "/settings", label: "Settings", icon: Settings, id: "nav-settings" },
@@ -43,7 +47,28 @@ function SidebarBody({ onNavigate, isMobile = false }: { onNavigate?: () => void
   const ctx = useContext(SidebarCtx)!;
   const collapsed = isMobile ? false : ctx.collapsed;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const qc = useQueryClient();
   const { user, logout } = useAuth();
+  const { data: profile } = useQuery({
+    queryKey: ["profile", user?.id],
+    enabled: !!user,
+    queryFn: () => getProfile(),
+    staleTime: 30_000,
+  });
+  const companionConnected = Boolean(profile?.companion_paired);
+  const syncLabel = companionConnected ? "Companion Linked" : "Companion Off";
+  const syncDescription = companionConnected
+    ? "Last sync shown in Companion"
+    : "Pair Android companion";
+
+  async function handleSignOut() {
+    await qc.cancelQueries();
+    qc.clear();
+    await logout();
+    if (onNavigate) onNavigate();
+    navigate({ to: "/login", replace: true });
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -166,22 +191,30 @@ function SidebarBody({ onNavigate, isMobile = false }: { onNavigate?: () => void
         </nav>
       </div>
 
-      {/* Footer: User profile + Sync Active + Theme */}
+      {/* Footer: User profile + companion sync status + theme */}
       <div className="border-t border-border p-3 space-y-3 bg-surface">
-        {/* Sync active */}
+        {/* Companion sync status */}
         {!collapsed ? (
           <div className="rounded-lg border border-border bg-surface-raised/50 p-3">
             <div className="flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-pb-green pulse-dot" />
-              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Sync Active</span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  companionConnected ? "bg-pb-green pulse-dot" : "bg-muted-foreground/50"
+                }`}
+              />
+              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{syncLabel}</span>
             </div>
             <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
-              Auto-tracking on companion
+              {syncDescription}
             </p>
           </div>
         ) : (
-          <div className="grid place-items-center py-2" title="Sync active">
-            <span className="h-2 w-2 rounded-full bg-pb-green pulse-dot" />
+          <div className="grid place-items-center py-2" title={syncLabel}>
+            <span
+              className={`h-2 w-2 rounded-full ${
+                companionConnected ? "bg-pb-green pulse-dot" : "bg-muted-foreground/50"
+              }`}
+            />
           </div>
         )}
 
@@ -201,27 +234,33 @@ function SidebarBody({ onNavigate, isMobile = false }: { onNavigate?: () => void
                     <p className="text-[11px] text-muted-foreground truncate">{user.email || ""}</p>
                   </div>
                 </Link>
-                {isMobile && (
-                  <button
-                    onClick={() => {
-                      logout();
-                      if (onNavigate) onNavigate();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <LogOut className="h-4 w-4 shrink-0" />
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Sign Out</span>
-                  </button>
-                )}
+                <button
+                  id={isMobile ? "drawer-btn-sign-out" : "btn-sign-out"}
+                  onClick={handleSignOut}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4 shrink-0" />
+                  <span className="font-semibold uppercase tracking-wider text-[10px]">Sign Out</span>
+                </button>
               </div>
             ) : (
-              <Link to="/settings" onClick={onNavigate} title="Settings" className="flex justify-center py-2">
-                <div className="w-8 h-8 rounded-full bg-surface-raised flex items-center justify-center border border-border shadow-inner">
-                  <span className="text-xs text-foreground font-bold font-display">
-                    {user.email ? user.email.charAt(0).toUpperCase() : "U"}
-                  </span>
-                </div>
-              </Link>
+              <div className="flex flex-col items-center gap-2 py-2">
+                <Link to="/settings" onClick={onNavigate} title="Settings" className="flex justify-center">
+                  <div className="w-8 h-8 rounded-full bg-surface-raised flex items-center justify-center border border-border shadow-inner">
+                    <span className="text-xs text-foreground font-bold font-display">
+                      {user.email ? user.email.charAt(0).toUpperCase() : "U"}
+                    </span>
+                  </div>
+                </Link>
+                <button
+                  id="btn-sign-out-collapsed"
+                  onClick={handleSignOut}
+                  title="Sign out"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
             )}
           </div>
         )}

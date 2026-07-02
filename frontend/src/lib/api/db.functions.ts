@@ -184,6 +184,14 @@ export async function getCampusIntel() {
   return apiRequest("/api/rag/campus-intel");
 }
 
+export async function getRunwayForecast() {
+  return apiRequest("/api/insights/forecast");
+}
+
+export async function getRunwayIntel() {
+  return apiRequest("/api/rag/runway-intel");
+}
+
 export async function getWingFeed() {
   return apiRequest("/api/insights/wing-feed");
 }

@@ -186,16 +186,18 @@ function TxnsPage() {
               key={t.key}
               onClick={() => { setViewTab(t.key); setSelectedDay(null); }}
               id={`tab-txn-${t.key}`}
-              className={`flex-1 py-2.5 text-center text-xs font-bold uppercase tracking-wider transition-all cursor-pointer relative ${
+              className={`flex-1 py-2.5 text-center text-xs font-bold uppercase tracking-[0.08em] transition-all cursor-pointer ${
                 viewTab === t.key
                   ? "text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t.label}
-              {viewTab === t.key && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
-              )}
+              <span className="relative inline-flex justify-center px-1 pb-2">
+                {t.label}
+                {viewTab === t.key && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary" />
+                )}
+              </span>
             </button>
           ))}
         </div>

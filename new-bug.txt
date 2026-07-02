@@ -1,0 +1,276 @@
+1. in the pool feature, there is some bug, index-CAk2NIkP.js:9 Error: Minified React error #310; visit https://react.dev/errors/310 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at H (index-CAk2NIkP.js:8:48846)
+    at ls (index-CAk2NIkP.js:8:55298)
+    at Object.ds [as useEffect] (index-CAk2NIkP.js:8:55522)
+    at e.useEffect (index-CAk2NIkP.js:1:8060)
+    at sh (index-CAk2NIkP.js:77:8434)
+    at wo (index-CAk2NIkP.js:8:47569)
+    at gc (index-CAk2NIkP.js:8:70153)
+    at jc (index-CAk2NIkP.js:8:80429)
+    at Fu (index-CAk2NIkP.js:8:116001)
+    at Mu (index-CAk2NIkP.js:8:115048)
+Yo @ index-CAk2NIkP.js:9
+wo @ index-CAk2NIkP.js:8
+gc @ index-CAk2NIkP.js:8
+jc @ index-CAk2NIkP.js:8
+Fu @ index-CAk2NIkP.js:8
+Mu @ index-CAk2NIkP.js:8
+ju @ index-CAk2NIkP.js:8
+yu @ index-CAk2NIkP.js:8
+pd @ index-CAk2NIkP.js:8
+cd @ index-CAk2NIkP.js:8
+ud @ index-CAk2NIkP.js:8
+(anonymous) @ index-CAk2NIkP.js:8
+setTimeout
+Jr @ index-CAk2NIkP.js:9
+o @ index-CAk2NIkP.js:9
+batch @ index-CAk2NIkP.js:9
+#l @ index-CAk2NIkP.js:9
+setData @ index-CAk2NIkP.js:9
+fetch @ index-CAk2NIkP.js:9
+await in fetch
+#h @ index-CAk2NIkP.js:9
+onSubscribe @ index-CAk2NIkP.js:9
+subscribe @ index-CAk2NIkP.js:9
+(anonymous) @ index-CAk2NIkP.js:9
+Uo @ index-CAk2NIkP.js:8
+Vc @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Ku @ index-CAk2NIkP.js:8
+Gu @ index-CAk2NIkP.js:8
+Uu @ index-CAk2NIkP.js:8
+Bu @ index-CAk2NIkP.js:8
+bu @ index-CAk2NIkP.js:8
+yu @ index-CAk2NIkP.js:8
+pd @ index-CAk2NIkP.js:8
+cd @ index-CAk2NIkP.js:8
+ud @ index-CAk2NIkP.js:8
+(anonymous) @ index-CAk2NIkP.js:8
+index-CAk2NIkP.js:9 Error: Minified React error #310; visit https://react.dev/errors/310 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at H (index-CAk2NIkP.js:8:48846)
+    at ls (index-CAk2NIkP.js:8:55298)
+    at Object.ds [as useEffect] (index-CAk2NIkP.js:8:55522)
+    at e.useEffect (index-CAk2NIkP.js:1:8060)
+    at sh (index-CAk2NIkP.js:77:8434)
+    at wo (index-CAk2NIkP.js:8:47569)
+    at gc (index-CAk2NIkP.js:8:70153)
+    at jc (index-CAk2NIkP.js:8:80429)
+    at Fu (index-CAk2NIkP.js:8:116001)
+    at Mu (index-CAk2NIkP.js:8:115048)
+Yo @ index-CAk2NIkP.js:9
+wo @ index-CAk2NIkP.js:8
+gc @ index-CAk2NIkP.js:8
+jc @ index-CAk2NIkP.js:8
+Fu @ index-CAk2NIkP.js:8
+Mu @ index-CAk2NIkP.js:8
+ju @ index-CAk2NIkP.js:8
+yu @ index-CAk2NIkP.js:8
+pd @ index-CAk2NIkP.js:8
+cd @ index-CAk2NIkP.js:8
+ud @ index-CAk2NIkP.js:8
+(anonymous) @ index-CAk2NIkP.js:8
+setTimeout
+Jr @ index-CAk2NIkP.js:9
+o @ index-CAk2NIkP.js:9
+batch @ index-CAk2NIkP.js:9
+#l @ index-CAk2NIkP.js:9
+setData @ index-CAk2NIkP.js:9
+fetch @ index-CAk2NIkP.js:9
+await in fetch
+#h @ index-CAk2NIkP.js:9
+onSubscribe @ index-CAk2NIkP.js:9
+subscribe @ index-CAk2NIkP.js:9
+(anonymous) @ index-CAk2NIkP.js:9
+Uo @ index-CAk2NIkP.js:8
+Vc @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Cl @ index-CAk2NIkP.js:8
+wl @ index-CAk2NIkP.js:8
+Ku @ index-CAk2NIkP.js:8
+Gu @ index-CAk2NIkP.js:8
+Uu @ index-CAk2NIkP.js:8
+Bu @ index-CAk2NIkP.js:8
+bu @ index-CAk2NIkP.js:8
+yu @ index-CAk2NIkP.js:8
+pd @ index-CAk2NIkP.js:8
+cd @ index-CAk2NIkP.js:8
+ud @ index-CAk2NIkP.js:8
+(anonymous) @ index-CAk2NIkP.js:8
+index-CAk2NIkP.js:8 Error: Minified React error #310; visit https://react.dev/errors/310 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at H (index-CAk2NIkP.js:8:48846)
+    at ls (index-CAk2NIkP.js:8:55298)
+    at Object.ds [as useEffect] (index-CAk2NIkP.js:8:55522)
+    at e.useEffect (index-CAk2NIkP.js:1:8060)
+    at sh (index-CAk2NIkP.js:77:8434)
+    at wo (index-CAk2NIkP.js:8:47569)
+    at gc (index-CAk2NIkP.js:8:70153)
+    at jc (index-CAk2NIkP.js:8:80429)
+    at Fu (index-CAk2NIkP.js:8:116001)
+    at Mu (index-CAk2NIkP.js:8:115048)
+
+2. IN Runway Warning in the dashboard, it has to same issue for the dashboard whichj i said for the dialog box inthe pool. mobile view is fine but in desktop view, it is coming from the bottom, it should be a dialog box in the desktop view
+3. in the companion, when the phoen disconnects then the history also gets erased i think or somethign like that so for the same device that is connected to a account, the sync log hsa to be persist i think (i dont know it's a bug or intentional)
+
+4. there is not sign out button in the side bar.

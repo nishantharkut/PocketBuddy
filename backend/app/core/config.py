@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_WHATSAPP_FROM: str = ""  # e.g. whatsapp:+14155238886
 
+    # Frontend base URL (change to deployed URL in production)
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+
     class Config:
         env_file = ".env"
 

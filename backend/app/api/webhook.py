@@ -73,8 +73,16 @@ def parse_merchant(text: str) -> Optional[str]:
 
 def parse_transaction_id(text: str) -> Optional[str]:
     patterns = [
-        r"(?:upi\s*ref(?:erence)?\s*(?:no\.?|number)?|upi\s*txn(?:\s*id)?|upi\s*transaction(?:\s*id)?|utr|txn\s*id)\s*[:.\-]?\s*([A-Z0-9]{6,})",
+        # Standard UPI references
+        r"(?:upi\s*ref(?:erence)?\s*(?:no\.?|number)?|upi\s*txn(?:\s*id)?|upi\s*transaction(?:\s*id)?|utr|txn\s*id)\s*[:.\\-]?\s*([A-Z0-9]{6,})",
+        # UPI/NNNNN style (NPCI format)
         r"UPI/([A-Z0-9_\-]{6,})",
+        # IMPS / NEFT / RTGS ref
+        r"(?:imps|neft|rtgs)\s*ref(?:erence)?\s*(?:no\.?|number?)?\s*[:.\\-]?\s*([A-Z0-9]{6,})",
+        # Generic "Ref No" / "Reference No"
+        r"ref(?:erence)?\s*(?:no\.?|number?|#)\s*[:.\\-]?\s*([A-Z0-9]{8,})",
+        # Fallback — any standalone 12-digit number (standard UTR length)
+        r"\b(\d{12})\b",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)

@@ -921,10 +921,9 @@ async def nudge_roommate_api(pool_id: str, req: NudgeReq, user_id: str = Depends
     owed_amount = details.get("total", 0)
     formatted_amount = f"{owed_amount / 100:.2f}"
     
-    pool_url = f"https://pocketbuddy.net/pool/{pool_id}"
-    message_text = f"Hey {roommate_name}, please settle your {platform} split of INR {formatted_amount} for our cart pool. Pay the host and verify here: {pool_url}"
-
     from app.core.config import settings
+    pool_url = f"{settings.FRONTEND_BASE_URL}/pool/{pool_id}"
+    message_text = f"Hey {roommate_name}, please settle your {platform} split of INR {formatted_amount} for our cart pool. Pay the host and verify here: {pool_url}"
     
     clean_phone = "".join(filter(str.isdigit, phone))
     if len(clean_phone) == 10:
@@ -1024,7 +1023,7 @@ async def cron_auto_nudge():
              
         p = await enrich_pool_document(db, pool)
         platform = p.get("platform", "delivery").replace("_", " ").title()
-        pool_url = f"https://pocketbuddy.net/pool/{pool_id}"
+        pool_url = f"{settings.FRONTEND_BASE_URL}/pool/{pool_id}"
         
         for rName, details in p.get("split_breakdown", {}).items():
             is_host = rName.lower() == "you" or name_key(rName) == name_key(p.get("created_by_name"))

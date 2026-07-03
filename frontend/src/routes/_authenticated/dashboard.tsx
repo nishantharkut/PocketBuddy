@@ -311,6 +311,137 @@ function ResponsiveFoodPanel({
   );
 }
 
+function SpendingSmartCheck({ calc }: { calc: any }) {
+  const [selectedPlan, setSelectedPlan] = useState<null | "delivery" | "mess" | "maggi">(null);
+  const safeDaily = calc?.safeDailyLimit ?? 200;
+
+  if (selectedPlan === "delivery") {
+    const isAboveLimit = 250 > safeDaily;
+    const gap = 250 - safeDaily;
+    return (
+      <Card className="bg-surface border-border p-5 relative overflow-hidden transition-all duration-300">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(239,68,68,0.05), transparent 65%)" }} />
+        <h4 className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase mb-2">Food Plan: Delivery</h4>
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+            {isAboveLimit ? (
+              <>
+                A typical Swiggy/Zomato delivery order (~₹250) is <span className="text-pb-red font-bold">₹{gap} above</span> your safe daily spend limit of <span className="font-bold text-foreground">₹{safeDaily}</span>. Doing this daily will slash your runway early!
+              </>
+            ) : (
+              <>
+                A typical Swiggy/Zomato order (~₹250) fits within your current safe limit of <span className="font-bold text-foreground">₹{safeDaily}</span>. However, you can save more by pooling orders.
+              </>
+            )}
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <Link to="/pool" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+              Join Swiggy Pool
+            </Link>
+            <Link to="/runway" className="h-8 rounded-lg bg-surface border border-border text-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-surface-raised transition-all">
+              Runway Sandbox
+            </Link>
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+              Change
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (selectedPlan === "mess") {
+    return (
+      <Card className="bg-surface border-border p-5 relative overflow-hidden transition-all duration-300">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(34,197,94,0.05), transparent 65%)" }} />
+        <h4 className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase mb-2">Food Plan: Hostel Mess</h4>
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+            Awesome! You've already prepaid for the hostel mess. Eating at the mess today saves ₹250 of discretionary money, helping extend your runway length.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+              Track Projections
+            </Link>
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+              Change
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (selectedPlan === "maggi") {
+    return (
+      <Card className="bg-surface border-border p-5 relative overflow-hidden transition-all duration-300">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(245,158,11,0.05), transparent 65%)" }} />
+        <h4 className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase mb-2">Food Plan: Maggi / Tapri</h4>
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+            Budget saver! Spending only ~₹40 for tea or late night Maggi helps you stay well below your daily pace, building a safe buffer for unexpected campus expenses.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+              Check Runway
+            </Link>
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+              Change
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.03), transparent 65%)" }} />
+      <div className="flex items-center gap-2 mb-3">
+        <Compass className="h-4.5 w-4.5 text-primary" />
+        <p className="text-xs font-bold tracking-[0.15em] text-zinc-500 uppercase">Interactive Runway Check</p>
+      </div>
+      <p className="text-xs text-zinc-300 leading-relaxed font-medium mb-4">
+        What's your plan for dinner tonight? Choose an option to see how it affects your Runway countdown.
+      </p>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={() => setSelectedPlan("delivery")}
+          className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-surface-raised hover:bg-surface hover:border-primary/40 transition-all text-xs font-semibold text-foreground cursor-pointer group"
+        >
+          <span className="flex items-center gap-2">
+            <ShoppingBag className="h-4 w-4 text-pb-red" />
+            <span>Order Swiggy / Zomato Delivery</span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+        </button>
+
+        <button
+          onClick={() => setSelectedPlan("mess")}
+          className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-surface-raised hover:bg-surface hover:border-primary/40 transition-all text-xs font-semibold text-foreground cursor-pointer group"
+        >
+          <span className="flex items-center gap-2">
+            <Utensils className="h-4 w-4 text-pb-green" />
+            <span>Eat at Campus Hostel Mess</span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+        </button>
+
+        <button
+          onClick={() => setSelectedPlan("maggi")}
+          className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-surface-raised hover:bg-surface hover:border-primary/40 transition-all text-xs font-semibold text-foreground cursor-pointer group"
+        >
+          <span className="flex items-center gap-2">
+            <Timer className="h-4 w-4 text-pb-amber" />
+            <span>Late Night Maggi / Tapri (₹40)</span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 function Dashboard() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -1129,6 +1260,8 @@ function Dashboard() {
               </div>
             </div>
 
+            {calc && <SpendingSmartCheck calc={calc} />}
+
             {/* ── Behaviour Analytics Row ─────────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -1366,25 +1499,28 @@ function Dashboard() {
             )}
 
             {/* ── Survive Until Broke Card ─────────────────── */}
-            <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">
-              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.05), transparent 65%)" }} />
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase">Survive Until Broke</p>
-                <span className="text-[11px] font-black px-2.5 py-1 rounded-full border text-primary border-primary/30 bg-primary/5">
-                  LIVE COUNTDOWN
-                </span>
+            <Link to="/runway" className="block group">
+              <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden transition-all duration-300 hover:border-primary/40 hover:scale-[1.01] active:scale-[0.99] cursor-pointer">
+                <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.05), transparent 65%)" }} />
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase group-hover:text-primary transition-colors">Survive Until Broke</p>
+                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full border text-primary border-primary/30 bg-primary/5 flex items-center gap-1">
+                    LIVE COUNTDOWN
+                    <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {surviveUntilMs > 0 ? (
+                    <SurviveCountdown runwayMs={surviveUntilMs} />
+                  ) : (
+                    <p className="text-[13px] font-black text-zinc-400">—</p>
+                  )}
+                  <p className="text-xs text-zinc-400 leading-relaxed mt-2">
+                    Estimated exact date your allowance will run out. Click to view detailed forecasts.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-3">
-                {surviveUntilMs > 0 ? (
-                  <SurviveCountdown runwayMs={surviveUntilMs} />
-                ) : (
-                  <p className="text-[13px] font-black text-zinc-400">—</p>
-                )}
-                <p className="text-xs text-zinc-400 leading-relaxed mt-2">
-                  Estimated exact date and time your allowance will run out based on your 7-day spending pace.
-                </p>
-              </div>
-            </div>
+            </Link>
 
             {/* ── AI Campus Intelligence (Bedrock) ──────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">

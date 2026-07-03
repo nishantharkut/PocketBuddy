@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, Query
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.services.runway import build_runway_forecast, derive_pool_obligations
+from app.services.subscriptions import detect_recurring_subscriptions
 import datetime
 import calendar
+import re
 
 router = APIRouter()
 
@@ -284,6 +287,60 @@ def get_cycle_start(cycle_start_day: int, now: datetime.datetime) -> datetime.da
 
 def get_cycle_end(cycle_start: datetime.datetime) -> datetime.datetime:
     return cycle_start + datetime.timedelta(days=30)
+
+
+@router.get("/forecast")
+async def get_runway_forecast(user_id: str = Depends(get_current_user)):
+    """Return the deterministic Runway Engine V2 forecast for the current user."""
+    db = get_db()
+    now = datetime.datetime.utcnow()
+    profile = await db.profiles.find_one({"_id": user_id}) or {}
+
+    # Recurrence detection is server-owned and runs before the forecast reads
+    # active subscriptions. This keeps forecasts consistent across web clients.
+    await detect_recurring_subscriptions(db, user_id)
+
+    history_start = now - datetime.timedelta(days=120)
+    transactions = await db.transactions.find(
+        {"user_id": user_id, "created_at": {"$gte": history_start}}
+    ).sort("created_at", 1).to_list(length=5000)
+    subscriptions = await db.subscriptions.find(
+        {"user_id": user_id, "is_active": {"$ne": False}}
+    ).to_list(length=250)
+
+    user = await db.users.find_one({"_id": user_id}) or {}
+    full_name = str(user.get("full_name") or "").strip()
+    pool_ids: set[str] = set()
+    if full_name:
+        name_regex = re.compile(f"^{re.escape(full_name)}$", re.IGNORECASE)
+        user_items = await db.cart_pool_items.find({"added_by_name": name_regex}).to_list(length=1000)
+        pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
+
+    hosted = await db.cart_pools.find(
+        {"host_id": user_id, "status": {"$in": ["open", "closed", "completed"]}}
+    ).to_list(length=250)
+    pool_ids.update(str(pool.get("_id")) for pool in hosted)
+
+    pools = []
+    pool_items = []
+    if pool_ids:
+        pools = await db.cart_pools.find({"_id": {"$in": list(pool_ids)}}).to_list(length=500)
+        pool_items = await db.cart_pool_items.find({"pool_id": {"$in": list(pool_ids)}}).to_list(length=2500)
+
+    obligations = derive_pool_obligations(
+        pools,
+        pool_items,
+        user_id=user_id,
+        user_name=full_name,
+        now=now,
+    )
+    return build_runway_forecast(
+        profile=profile,
+        transactions=transactions,
+        subscriptions=subscriptions,
+        pool_obligations=obligations,
+        now=now,
+    )
 
 
 @router.get("/wellness")

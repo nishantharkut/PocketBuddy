@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import Literal, Optional
 from app.core.database import get_db
 from app.core.security import get_current_user, map_doc
 
@@ -16,6 +16,11 @@ class ProfileUpdateReq(BaseModel):
     exam_start_date: Optional[str] = None
     exam_end_date: Optional[str] = None
     mess_enrolled: Optional[bool] = None
+    mess_billing_model: Optional[Literal["none", "included", "monthly", "per_meal"]] = None
+    mess_monthly_cost: Optional[int] = Field(default=None, ge=0, le=5_000_000)
+    mess_per_meal_cost: Optional[int] = Field(default=None, ge=0, le=100_000)
+    mess_meals_per_day: Optional[int] = Field(default=None, ge=1, le=4)
+    exam_safety_buffer: Optional[int] = Field(default=None, ge=0, le=5_000_000)
     meal_schedule: Optional[dict] = None
     upi_apps_used: Optional[list[str]] = None
     onboarding_completed: Optional[bool] = None

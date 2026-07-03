@@ -17,6 +17,7 @@ import { Route as AuthenticatedTravelRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
 import { Route as AuthenticatedStatsRouteImport } from './routes/_authenticated/stats'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedRunwayRouteImport } from './routes/_authenticated/runway'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCompanionRouteImport } from './routes/_authenticated/companion'
@@ -62,6 +63,11 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRunwayRoute = AuthenticatedRunwayRouteImport.update({
+  id: '/runway',
+  path: '/runway',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/companion': typeof AuthenticatedCompanionRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/runway': typeof AuthenticatedRunwayRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/stats': typeof AuthenticatedStatsRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/companion': typeof AuthenticatedCompanionRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/runway': typeof AuthenticatedRunwayRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/stats': typeof AuthenticatedStatsRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/_authenticated/companion': typeof AuthenticatedCompanionRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/_authenticated/runway': typeof AuthenticatedRunwayRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/stats': typeof AuthenticatedStatsRoute
   '/_authenticated/transactions': typeof AuthenticatedTransactionsRoute
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
     | '/companion'
     | '/dashboard'
     | '/onboarding'
+    | '/runway'
     | '/settings'
     | '/stats'
     | '/transactions'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
     | '/companion'
     | '/dashboard'
     | '/onboarding'
+    | '/runway'
     | '/settings'
     | '/stats'
     | '/transactions'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '/_authenticated/companion'
     | '/_authenticated/dashboard'
     | '/_authenticated/onboarding'
+    | '/_authenticated/runway'
     | '/_authenticated/settings'
     | '/_authenticated/stats'
     | '/_authenticated/transactions'
@@ -232,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/runway': {
+      id: '/_authenticated/runway'
+      path: '/runway'
+      fullPath: '/runway'
+      preLoaderRoute: typeof AuthenticatedRunwayRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/onboarding': {
       id: '/_authenticated/onboarding'
       path: '/onboarding'
@@ -267,6 +286,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCompanionRoute: typeof AuthenticatedCompanionRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
+  AuthenticatedRunwayRoute: typeof AuthenticatedRunwayRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStatsRoute: typeof AuthenticatedStatsRoute
   AuthenticatedTransactionsRoute: typeof AuthenticatedTransactionsRoute
@@ -278,6 +298,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCompanionRoute: AuthenticatedCompanionRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
+  AuthenticatedRunwayRoute: AuthenticatedRunwayRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStatsRoute: AuthenticatedStatsRoute,
   AuthenticatedTransactionsRoute: AuthenticatedTransactionsRoute,

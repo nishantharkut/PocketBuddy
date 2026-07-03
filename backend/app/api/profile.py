@@ -80,7 +80,17 @@ async def delete_account(user_id: str = Depends(get_current_user)):
     await db.parser_corrections.delete_many({"user_id": user_id})
     await db.checkin_logs.delete_many({"user_id": user_id})
     await db.travel_savings.delete_many({"user_id": user_id})
+    await db.travel_reports.delete_many({"user_id": user_id})
+    await db.travel_pools.delete_many({"host_id": user_id})
+    
+    # Clean up cart items from pools hosted by this user
+    user_pools_cursor = db.cart_pools.find({"host_id": user_id}, {"_id": 1})
+    user_pools = await user_pools_cursor.to_list(length=1000)
+    user_pool_ids = [p["_id"] for p in user_pools]
+    if user_pool_ids:
+        await db.cart_pool_items.delete_many({"pool_id": {"$in": user_pool_ids}})
     await db.cart_pools.delete_many({"host_id": user_id})
+    
     await db.profiles.delete_one({"_id": user_id})
     await db.users.delete_one({"_id": user_id})
     

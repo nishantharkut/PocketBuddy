@@ -18,6 +18,7 @@ from app.api import (
     transactions,
     webhook,
     travel,
+    wellness,
 )
 
 app = FastAPI(title="PocketBuddy API")
@@ -43,6 +44,7 @@ app.include_router(campus_food.router, prefix="/api/campus-food", tags=["campus-
 app.include_router(seed.router, prefix="/api/seed", tags=["seed"])
 app.include_router(insights.router, prefix="/api/insights", tags=["insights"])
 app.include_router(travel.router, prefix="/api/travel", tags=["travel"])
+app.include_router(wellness.router, prefix="/api/wellness", tags=["wellness"])
 app.include_router(webhook.router, prefix="/api/ingest", tags=["ingest"])
 app.include_router(webhook.router, prefix="/webhook", tags=["webhook"])
 

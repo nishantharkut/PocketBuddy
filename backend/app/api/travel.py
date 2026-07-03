@@ -389,34 +389,7 @@ async def get_routes(college: Optional[str] = Query(None), user_id: str = Depend
         reports_cursor = db.travel_reports.find({"route_id": route_id}).sort("created_at", -1)
         r_reports = await reports_cursor.to_list(length=10)
         
-        if r_reports:
-            latest = r_reports[0]
-            latest_time = latest.get("created_at")
-            if latest_time:
-                if isinstance(latest_time, str):
-                    try:
-                        latest_time = datetime.datetime.fromisoformat(latest_time)
-                    except ValueError:
-                        latest_time = datetime.datetime.utcnow()
-                age_days = (datetime.datetime.utcnow() - latest_time).days
-                if age_days > 30:
-                    route_dict["source"] = "stale"
-                elif age_days <= 14:
-                    route_dict["source"] = "recent student report"
-                else:
-                    if len(r_reports) >= 3:
-                        route_dict["source"] = "community median"
-                    else:
-                        route_dict["source"] = "recent student report"
-        else:
-            if route_dict.get("source") == "seeded":
-                route_dict["source"] = "official"
-
-        # Determine confidence:
-        # - high: official + recent community reports, or community median with >=3 reports and recent report
-        # - medium: community only (without recent report, or official without recent report)
-        # - low: stale or sparse reports
-        resolved_source = route_dict.get("source", "")
+        age_days = None
         has_recent = False
         if r_reports:
             latest = r_reports[0]
@@ -427,9 +400,34 @@ async def get_routes(college: Optional[str] = Query(None), user_id: str = Depend
                         latest_time = datetime.datetime.fromisoformat(latest_time)
                     except ValueError:
                         latest_time = datetime.datetime.utcnow()
+                
+                # Make timezone-naive if it's timezone-aware to prevent comparison TypeErrors
+                if latest_time.tzinfo is not None:
+                    latest_time = latest_time.replace(tzinfo=None)
+                    
                 age_days = (datetime.datetime.utcnow() - latest_time).days
                 if age_days <= 14:
                     has_recent = True
+        
+        if age_days is not None:
+            if age_days > 30:
+                route_dict["source"] = "stale"
+            elif age_days <= 14:
+                route_dict["source"] = "recent student report"
+            else:
+                if len(r_reports) >= 3:
+                    route_dict["source"] = "community median"
+                else:
+                    route_dict["source"] = "recent student report"
+        else:
+            if route_dict.get("source") == "seeded":
+                route_dict["source"] = "official"
+
+        # Determine confidence:
+        # - high: official + recent community reports, or community median with >=3 reports and recent report
+        # - medium: community only (without recent report, or official without recent report)
+        # - low: stale or sparse reports
+        resolved_source = route_dict.get("source", "")
 
         if resolved_source == "stale":
             route_dict["confidence"] = "low"

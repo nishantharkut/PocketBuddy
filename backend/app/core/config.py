@@ -31,7 +31,4 @@ class Settings(BaseSettings):
 
     # Frontend base URL (change to deployed URL in production)
     FRONTEND_BASE_URL: str = "http://localhost:5173"
-
-    class Config:
-        env_file = ".env"
 settings = Settings()

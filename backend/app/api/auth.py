@@ -38,6 +38,11 @@ async def signup(req: AuthReq):
         "email": req.email,
         "monthly_allowance": 1000000,
         "cycle_start_day": 1,
+        "mess_billing_model": "none",
+        "mess_monthly_cost": 0,
+        "mess_per_meal_cost": 0,
+        "mess_meals_per_day": 2,
+        "exam_safety_buffer": 0,
         "companion_paired": False,
         "created_at": datetime.datetime.utcnow()
     })
@@ -101,6 +106,11 @@ async def login_phone(req: PhoneAuthReq):
             "phone_number": req.phone,
             "monthly_allowance": 1000000,
             "cycle_start_day": 1,
+            "mess_billing_model": "none",
+            "mess_monthly_cost": 0,
+            "mess_per_meal_cost": 0,
+            "mess_meals_per_day": 2,
+            "exam_safety_buffer": 0,
             "companion_paired": False,
             "created_at": datetime.datetime.utcnow()
         })

@@ -254,52 +254,6 @@ function CompanionPage() {
               </details>
             </Card>
 
-            <div>
-              <h3 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground">
-                RECENT SYNC ACTIVITY
-              </h3>
-              <div id="list-sync-log" className="mt-2 space-y-1.5">
-                {syncLogs.length === 0 && (
-                  <p className="text-[12px] text-muted-foreground py-4 text-center">
-                    No sync activity yet.
-                  </p>
-                )}
-                {syncLogs.map((l) => {
-                  const isOpen = expandedLogId === l.id;
-                  return (
-                    <div key={l.id} className="rounded-md bg-surface p-2.5">
-                      <button
-                        type="button"
-                        className="flex w-full items-start justify-between gap-3 text-left"
-                        onClick={() => setExpandedLogId(isOpen ? null : l.id)}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            {isOpen ? (
-                              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            )}
-                            <p className="truncate text-[13px]">{l.notification_source || "notification"}</p>
-                          </div>
-                          <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">
-                            {l.notification_preview ?? "Structured event received"}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <StatusBadge status={l.processing_status} />
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            {relativeTime(l.created_at)}
-                          </p>
-                        </div>
-                      </button>
-
-                      {isOpen && <SyncLogDetails log={l} />}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
 
             <div className="space-y-2">
               <Button
@@ -381,6 +335,53 @@ function CompanionPage() {
             </Button>
           </>
         )}
+
+        <div className="pt-4 border-t border-border/30 mt-6">
+          <h3 className="text-xs font-semibold tracking-[0.15em] text-muted-foreground">
+            RECENT SYNC ACTIVITY
+          </h3>
+          <div id="list-sync-log" className="mt-2 space-y-1.5">
+            {syncLogs.length === 0 && (
+              <p className="text-[12px] text-muted-foreground py-4 text-center">
+                No sync activity yet.
+              </p>
+            )}
+            {syncLogs.map((l) => {
+              const isOpen = expandedLogId === l.id;
+              return (
+                <div key={l.id} className="rounded-md bg-surface p-2.5">
+                  <button
+                    type="button"
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                    onClick={() => setExpandedLogId(isOpen ? null : l.id)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        {isOpen ? (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        )}
+                        <p className="truncate text-[13px]">{l.notification_source || "notification"}</p>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">
+                        {l.notification_preview ?? "Structured event received"}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <StatusBadge status={l.processing_status} />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {relativeTime(l.created_at)}
+                      </p>
+                    </div>
+                  </button>
+
+                  {isOpen && <SyncLogDetails log={l} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </AppShell>
   );

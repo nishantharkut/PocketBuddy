@@ -53,6 +53,7 @@ function Onboarding() {
   const [hostel, setHostel] = useState("");
   const [wing, setWing] = useState("");
   const [room, setRoom] = useState("");
+  const [phone, setPhone] = useState("");
 
   // College search/add
   const [collegeSearch, setCollegeSearch] = useState("");
@@ -122,6 +123,7 @@ function Onboarding() {
         if (data.hostel_block) setHostel(data.hostel_block);
         if (data.wing_label) setWing(data.wing_label);
         if (data.room_number) setRoom(data.room_number);
+        if (data.phone) setPhone(data.phone);
       })
       .catch((err) => console.error("Onboarding profile load error:", err));
   }, [user]);
@@ -160,8 +162,13 @@ function Onboarding() {
 
   async function saveStep1() {
     if (!user) return;
-    if (!allowance || !college) {
-      toast.error("Please enter your monthly allowance and select your college");
+    if (!allowance || !college || !phone) {
+      toast.error("Please enter monthly allowance, college, and phone number");
+      return;
+    }
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      toast.error("Please enter a valid 10-digit phone number");
       return;
     }
     setBusy(true);
@@ -174,6 +181,7 @@ function Onboarding() {
           hostel_block: hostel || null,
           wing_label: wing || null,
           room_number: room || null,
+          phone: cleanPhone,
         },
       });
       setStep(2);
@@ -383,6 +391,19 @@ function Onboarding() {
                 />
               </Field>
             </div>
+
+            <Field
+              label="WhatsApp Phone Number *"
+              helper="Used for automated split alerts and pool coordination"
+            >
+              <Input
+                id="input-ob-phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. 9876543210"
+                className="h-10"
+              />
+            </Field>
 
             <Field
               label="Wing / Corridor"

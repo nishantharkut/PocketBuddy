@@ -43,6 +43,14 @@ export function PlatformIcon({ platform, name, className = "h-5 w-5" }: { platfo
     );
   }
 
+  if (normalized === "amazon_now" || normalized === "amazon now" || normalized.includes("amazon")) {
+    return (
+      <div className={`flex items-center justify-center rounded-full bg-[#FF9900] text-black shrink-0 shadow-[0_2px_8px_rgba(255,153,0,0.45)] ${className}`}>
+        <ShoppingBag className="h-3 w-3 stroke-[2.5]" />
+      </div>
+    );
+  }
+
   // Fallback for custom platforms - generate a beautiful initials badge with deterministic gradient
   const displayName = name || platform || "Custom";
   const initial = displayName.trim().charAt(0).toUpperCase() || "?";

@@ -4,15 +4,26 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { getProfile, updateProfile, getCatalog, addCatalogItem } from "@/lib/api/db.functions.js";
+import { Smartphone } from "lucide-react";
+
+const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification";
+
+function getCompanionWebhookUrl() {
+  if (typeof window === "undefined") return LOCAL_WEBHOOK_URL;
+  const { hostname, origin } = window.location;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+  return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification`;
+}
+
+function randomPairingCode() {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let s = "PB-";
+  for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   ssr: false,
@@ -45,6 +56,40 @@ function Onboarding() {
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [busy, setBusy] = useState(false);
+
+  const isAndroid = typeof window !== "undefined" && /android/i.test(window.navigator.userAgent);
+
+  async function launchAutoConfigure() {
+    if (!user) return;
+    setBusy(true);
+    try {
+      const code = randomPairingCode();
+      await updateProfile({
+        data: {
+          pairing_code: code,
+          onboarding_completed: true,
+          setup_completed: true,
+          companion_paired: false,
+          companion_device_name: null,
+          companion_last_sync: null,
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["profile"] });
+      
+      const webhookUrl = getCompanionWebhookUrl();
+      const deepLinkUrl = `pocketbuddy://configure?webhook_url=${encodeURIComponent(webhookUrl)}&user_id=${encodeURIComponent(user.id)}&webhook_token=${encodeURIComponent(code)}&account_email=${encodeURIComponent(user.email)}`;
+      
+      toast.success("Redirecting to auto-configure...");
+      setTimeout(() => {
+        window.location.href = deepLinkUrl;
+        nav({ to: "/companion", replace: true });
+      }, 800);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start auto configure");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // Step 1 — starts empty (no prefilled demo data)
   const [allowance, setAllowance] = useState("");
@@ -629,6 +674,30 @@ function Onboarding() {
             </div>
 
             <div className="space-y-3 pt-2">
+              {/* One-Tap Auto Configure */}
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-primary shrink-0" />
+                  <p className="text-[13px] font-bold text-foreground">One-Tap Auto Configure</p>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  If you're on Android, tap the button below to instantly launch the connector app and apply all config fields automatically — no copy-paste needed.
+                </p>
+                {isAndroid ? (
+                  <Button
+                    onClick={launchAutoConfigure}
+                    disabled={busy}
+                    className="w-full h-10 bg-primary text-primary-foreground font-black uppercase tracking-wider text-xs"
+                  >
+                    One-Tap Auto Configure
+                  </Button>
+                ) : (
+                  <div className="rounded-lg bg-card border border-border p-3 text-[11px] text-muted-foreground leading-normal">
+                    💡 <b>On Desktop?</b> Log in to PocketBuddy on your Android phone's browser, come back to this step, and tap this button to auto-configure.
+                  </div>
+                )}
+              </div>
+
               <Button
                 id="btn-ob-continue-companion"
                 onClick={() => finish(true)}

@@ -32,6 +32,7 @@ import com.pocketbuddy.connector.PocketBuddyNotificationListener
 import com.pocketbuddy.connector.R
 import com.pocketbuddy.connector.config.ConnectorConfigStore
 import com.pocketbuddy.connector.identity.DeviceIdentityStore
+import com.pocketbuddy.connector.network.WebhookClient
 import com.pocketbuddy.connector.retry.WebhookRetryQueue
 
 class SetupActivity : Activity() {
@@ -44,14 +45,113 @@ class SetupActivity : Activity() {
     private lateinit var configStore: ConnectorConfigStore
     private lateinit var identityStore: DeviceIdentityStore
     private lateinit var retryQueue: WebhookRetryQueue
+    private lateinit var accountEmailText: TextView
+    private lateinit var connectionBannerText: TextView
+    private lateinit var connectionBannerContainer: LinearLayout
+    private var currentAccountEmail: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configStore = ConnectorConfigStore(applicationContext)
         identityStore = DeviceIdentityStore(applicationContext)
         retryQueue = WebhookRetryQueue(applicationContext)
+        currentAccountEmail = configStore.accountEmail()
         applySystemBarTheme()
         setContentView(buildContentView())
+        handleDeepLinkIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLinkIntent(intent)
+    }
+
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        val data: Uri = intent?.data ?: return
+        if (data.scheme == "pocketbuddy" && data.host == "configure") {
+            val webhookUrl = data.getQueryParameter("webhook_url")?.trim()?.removeSuffix("\\")
+            val userId = data.getQueryParameter("user_id")?.trim()?.removeSuffix("\\")
+            val webhookToken = data.getQueryParameter("webhook_token")?.trim()?.removeSuffix("\\")
+            val accountEmail = data.getQueryParameter("account_email")?.trim()?.removeSuffix("\\")
+
+            if (!webhookUrl.isNullOrBlank() && !userId.isNullOrBlank()) {
+                currentAccountEmail = accountEmail
+                configStore.save(
+                    webhookUrl = webhookUrl,
+                    userId = userId,
+                    webhookToken = webhookToken.orEmpty(),
+                    accountEmail = accountEmail
+                )
+                if (::webhookUrlInput.isInitialized) {
+                    webhookUrlInput.setText(webhookUrl)
+                }
+                if (::userIdInput.isInitialized) {
+                    userIdInput.setText(userId)
+                }
+                if (::webhookTokenInput.isInitialized) {
+                    webhookTokenInput.setText(webhookToken.orEmpty())
+                }
+                showPairingSuccessDialog(accountEmail ?: "PocketBuddy User")
+                refreshStatus()
+            }
+        }
+    }
+
+    private fun showPairingSuccessDialog(email: String) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                try {
+                    android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+                        .setTitle("Pairing Successful! 🎉")
+                        .setMessage("PocketBuddy Connector is now successfully linked to your account:\n\n$email\n\nIt will securely sync supported UPI notifications. Please ensure Notification Access is enabled.")
+                        .setPositiveButton("Awesome", null)
+                        .setCancelable(false)
+                        .show()
+                } catch (e: Exception) {
+                    // Fallback to simpler platform dialog if style resource is missing
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("Pairing Successful! 🎉")
+                        .setMessage("PocketBuddy Connector is now linked to:\n\n$email")
+                        .setPositiveButton("Awesome", null)
+                        .show()
+                }
+            }
+        }
+    }
+
+    private fun connectionBannerView(): LinearLayout {
+        connectionBannerText = TextView(this).apply {
+            textSize = 14f
+            setTextColor(Color.rgb(21, 128, 61)) // green
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        connectionBannerContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            background = rounded(Color.rgb(240, 253, 244), dp(12), Color.rgb(220, 252, 231))
+            val lp = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, dp(16))
+            }
+            layoutParams = lp
+            visibility = View.GONE
+
+            val icon = TextView(context).apply {
+                text = "✓"
+                textSize = 18f
+                setTextColor(Color.rgb(21, 128, 61))
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, 0, dp(10), 0)
+            }
+            addView(icon)
+            addView(connectionBannerText)
+        }
+        return connectionBannerContainer
     }
 
     override fun onResume() {
@@ -70,6 +170,7 @@ class SetupActivity : Activity() {
             )
             addView(headerView())
             addView(bodyText("Securely link this phone to sync UPI payment alerts from SMS and payment apps."))
+            addView(connectionBannerView())
             addView(statusCard())
             addView(configCard())
             addView(permissionCard())
@@ -121,11 +222,19 @@ class SetupActivity : Activity() {
             setTextColor(Color.rgb(113, 113, 122))
             setPadding(0, dp(6), 0, 0)
         }
+        accountEmailText = TextView(this).apply {
+            textSize = 14f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            setTextColor(Color.rgb(255, 107, 0)) // brand primary color
+            setPadding(0, dp(8), 0, 0)
+            visibility = View.GONE
+        }
 
         return sectionCard().apply {
             addView(sectionKicker("Sync status"))
             addView(statusText)
             addView(statusDetailText)
+            addView(accountEmailText)
         }
     }
 
@@ -287,6 +396,7 @@ class SetupActivity : Activity() {
         val appNotificationsEnabled = areAppNotificationsUsable()
         val userId = identityStore.userId()
         val ready = notificationAccessEnabled && !userId.isNullOrBlank()
+        val accountEmail = configStore.accountEmail()
 
         statusText.text = if (ready) "Ready to sync" else "Setup needed"
         statusText.setTextColor(if (ready) Color.rgb(22, 101, 52) else Color.rgb(146, 64, 14))
@@ -295,11 +405,24 @@ class SetupActivity : Activity() {
             userId.isNullOrBlank() -> "Next step: paste and save the user ID from PocketBuddy web."
             else -> "This phone can now send payment events to PocketBuddy."
         }
+
+        val hasConfig = !userId.isNullOrBlank()
+        if (hasConfig && !accountEmail.isNullOrBlank()) {
+            accountEmailText.text = "Connected Account: $accountEmail"
+            accountEmailText.visibility = View.VISIBLE
+            connectionBannerText.text = "Linked to $accountEmail"
+            connectionBannerContainer.visibility = View.VISIBLE
+        } else {
+            accountEmailText.visibility = View.GONE
+            connectionBannerContainer.visibility = View.GONE
+        }
+
         diagnosticsText.text = buildString {
             appendLine("Notification access: ${if (notificationAccessEnabled) "enabled" else "disabled"}")
             appendLine("App notifications: ${if (appNotificationsEnabled) "enabled" else "disabled"}")
             appendLine("Queued retries: ${retryQueue.size()}")
             appendLine("User ID: ${userId ?: "not set"}")
+            appendLine("Connected Account: ${accountEmail ?: "not set"}")
             appendLine("Device ID: ${identityStore.deviceId()}")
             appendLine("Webhook: ${configStore.webhookUrl()}")
             appendLine("Build default: ${BuildConfig.POCKETBUDDY_WEBHOOK_URL}")
@@ -307,9 +430,9 @@ class SetupActivity : Activity() {
     }
 
     private fun saveConnectorConfig() {
-        val webhookUrl = webhookUrlInput.text.toString().trim()
-        val userId = userIdInput.text.toString().trim()
-        val webhookToken = webhookTokenInput.text.toString().trim()
+        val webhookUrl = webhookUrlInput.text.toString().trim().removeSuffix("\\")
+        val userId = userIdInput.text.toString().trim().removeSuffix("\\")
+        val webhookToken = webhookTokenInput.text.toString().trim().removeSuffix("\\")
 
         if (!webhookUrl.startsWith("http://") && !webhookUrl.startsWith("https://")) {
             webhookUrlInput.error = "Use a full http:// or https:// URL"
@@ -330,8 +453,9 @@ class SetupActivity : Activity() {
             webhookUrl = webhookUrl,
             userId = userId,
             webhookToken = webhookToken,
+            accountEmail = currentAccountEmail
         )
-        Toast.makeText(this, "Saved. Now enable Notification Access.", Toast.LENGTH_LONG).show()
+        showPairingSuccessDialog(currentAccountEmail ?: "PocketBuddy User")
         refreshStatus()
     }
 
@@ -373,6 +497,9 @@ class SetupActivity : Activity() {
         } ?: run {
             if (filled) webhookTokenInput.setText("")
         }
+        values["POCKETBUDDY_ACCOUNT_EMAIL"]?.takeIf { it.isNotBlank() }?.let {
+            currentAccountEmail = it
+        }
 
         if (filled) {
             Toast.makeText(this, "Config pasted. Review and tap Save.", Toast.LENGTH_LONG).show()
@@ -382,7 +509,15 @@ class SetupActivity : Activity() {
     }
 
     private fun resetConnectorConfig() {
+        val userId = configStore.userId()
+        val deviceId = identityStore.deviceId()
+        if (!userId.isNullOrBlank()) {
+            val client = WebhookClient(applicationContext)
+            client.unpair(deviceId, userId)
+        }
+
         configStore.clearRuntimeConfig()
+        currentAccountEmail = null
         webhookUrlInput.setText(configStore.webhookUrl())
         userIdInput.setText(configStore.userId().orEmpty())
         webhookTokenInput.setText(configStore.webhookToken().orEmpty())

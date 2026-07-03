@@ -6,7 +6,9 @@ import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import {
   Plus, ChevronRight, AlertTriangle, Users, Utensils, ShoppingBag,
-  Bus, Receipt, MoreHorizontal, Wallet, Timer, MessageSquare, Phone, Mail, MapPin, ExternalLink, Compass, TrendingDown
+  Bus, Receipt, MoreHorizontal, Wallet, Timer, MessageSquare, Phone, Mail, MapPin, ExternalLink, Compass, TrendingDown,
+  Sparkles, Flame, Coffee, GraduationCap, Check, ArrowRight,
+  Smile, Meh, Frown, HeartPulse, Wind, ShieldCheck, Loader2, Moon
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,7 +48,10 @@ import {
   getDashboardInsights,
   getCampusIntel,
   getWingFeed,
-  getWellnessInsights,
+  getWellnessCheckin,
+  getWellnessCoach,
+  getWellnessCarePlan,
+  submitWellnessCheckin,
   updateTransaction,
   getCatalog,
   addCatalogItem,
@@ -57,6 +62,587 @@ import {
   getWingNettedBalances,
 } from "@/lib/api/db.functions";
 
+
+const RESET_ICONS: Record<string, React.ComponentType<any>> = {
+  utensils: Utensils,
+  wallet: Wallet,
+  users: Users,
+  compass: Compass,
+  coffee: Coffee,
+};
+
+const MOODS = [
+  { key: "good", label: "Good", Icon: Smile },
+  { key: "okay", label: "Okay", Icon: Meh },
+  { key: "stretched", label: "Stretched", Icon: Frown },
+] as const;
+
+// ── Guided box-breathing (4-4-4-4) — an interactive, calming reset ──────────
+const BREATH_PHASES = [
+  { key: "in", label: "Breathe in" },
+  { key: "hold1", label: "Hold" },
+  { key: "out", label: "Breathe out" },
+  { key: "hold2", label: "Hold" },
+] as const;
+
+function BreathingExercise() {
+  const [active, setActive] = useState(false);
+  const [phaseIdx, setPhaseIdx] = useState(0);
+  const [count, setCount] = useState(4);
+  const [cycles, setCycles] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => {
+      setCount((c) => {
+        if (c > 1) return c - 1;
+        setPhaseIdx((p) => {
+          const next = (p + 1) % BREATH_PHASES.length;
+          if (next === 0) setCycles((n) => n + 1);
+          return next;
+        });
+        return 4;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [active]);
+
+  const phase = BREATH_PHASES[phaseIdx];
+  const scale = phase.key === "in" || phase.key === "hold1" ? 1 : 0.62;
+
+  function toggle() {
+    if (active) {
+      setActive(false);
+    } else {
+      setPhaseIdx(0);
+      setCount(4);
+      setCycles(0);
+      setActive(true);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center py-2">
+      <div className="relative grid place-items-center h-36 w-36">
+        <div
+          className="absolute h-full w-full rounded-full bg-primary/15 border border-primary/30 transition-transform ease-in-out"
+          style={{ transitionDuration: "3800ms", transform: `scale(${active ? scale : 0.7})` }}
+        />
+        <div className="relative text-center">
+          <p className="text-sm font-bold text-foreground">{active ? phase.label : "Ready?"}</p>
+          {active && <p className="text-3xl font-black text-primary tnum leading-tight">{count}</p>}
+        </div>
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-2">
+        {active ? `Cycle ${cycles + 1} · box breathing 4-4-4-4` : "A one-minute calm reset — follow the circle"}
+      </p>
+      <button
+        onClick={toggle}
+        className="mt-3 rounded-xl border border-border bg-surface-raised/40 hover:bg-surface-raised px-5 py-2 text-xs font-bold uppercase tracking-wider text-foreground transition-colors cursor-pointer"
+      >
+        {active ? "Stop" : "Start breathing"}
+      </button>
+    </div>
+  );
+}
+
+function WellnessCarePlanDialog({
+  open,
+  onOpenChange,
+  plan,
+  loading,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  plan: any;
+  loading: boolean;
+}) {
+  const [done, setDone] = useState<Set<number>>(new Set());
+  const toggleStep = (i: number) =>
+    setDone((s) => {
+      const n = new Set(s);
+      n.has(i) ? n.delete(i) : n.add(i);
+      return n;
+    });
+
+  const tips = plan
+    ? [
+        { Icon: Utensils, label: "Meals", text: plan.meal_tip },
+        { Icon: Moon, label: "Rest", text: plan.rest_tip },
+        { Icon: Wallet, label: "Money", text: plan.money_tip },
+      ].filter((t) => t.text)
+    : [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg bg-background border border-border text-foreground max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-wider font-display text-foreground">
+            <HeartPulse className="h-4 w-4 text-primary" />
+            AI Care Plan
+            {plan?.source === "bedrock" && (
+              <Badge variant="outline" className="gap-1 text-[10px] font-bold border-primary/30 text-primary bg-primary/5">
+                <Sparkles className="h-3 w-3" /> AI
+              </Badge>
+            )}
+          </DialogTitle>
+          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
+            <ShieldCheck className="h-3 w-3 text-pb-green shrink-0" />
+            Supportive guidance from your own patterns — not medical advice.
+          </p>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="space-y-3 py-2">
+            <Skeleton className="h-14 w-full bg-white/5 rounded-xl" />
+            <Skeleton className="h-24 w-full bg-white/5 rounded-xl" />
+            <Skeleton className="h-32 w-full bg-white/5 rounded-xl" />
+          </div>
+        ) : plan ? (
+          <div className="space-y-5 py-1">
+            {/* Affirmation */}
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <p className="text-sm text-foreground font-medium leading-relaxed">{plan.affirmation}</p>
+            </div>
+
+            {/* Today's focus */}
+            {plan.focus && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Today's focus</p>
+                <p className="text-sm text-foreground leading-relaxed">{plan.focus}</p>
+              </div>
+            )}
+
+            {/* Interactive micro-steps */}
+            {plan.steps?.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Three small steps</p>
+                <div className="space-y-2">
+                  {plan.steps.map((s: string, i: number) => (
+                    <button
+                      key={i}
+                      onClick={() => toggleStep(i)}
+                      className="w-full flex items-start gap-3 rounded-xl border border-border bg-surface-raised/30 hover:bg-surface-raised/60 p-3 text-left transition-colors cursor-pointer"
+                    >
+                      <span
+                        className={`grid place-items-center h-5 w-5 rounded-md border shrink-0 mt-0.5 transition-colors ${
+                          done.has(i) ? "bg-primary border-primary text-primary-foreground" : "border-border text-transparent"
+                        }`}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                      <span className={`text-xs leading-relaxed ${done.has(i) ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                        {s}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tips */}
+            {tips.length > 0 && (
+              <div className="grid gap-2">
+                {tips.map((t, i) => (
+                  <div key={i} className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3">
+                    <div className="grid place-items-center h-8 w-8 rounded-lg bg-surface-raised text-primary shrink-0">
+                      <t.Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t.label}</p>
+                      <p className="text-xs text-foreground leading-relaxed mt-0.5">{t.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Guided breathing */}
+            <div className="rounded-xl border border-border bg-surface p-4">
+              <p className="flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+                <Wind className="h-3.5 w-3.5 text-primary" /> Quick calm
+              </p>
+              <BreathingExercise />
+            </div>
+
+            {/* Talk to someone */}
+            {plan.show_support && (
+              <div className="rounded-xl border p-4 flex items-center gap-3" style={{ borderColor: "rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.04)" }}>
+                <div className="grid place-items-center h-9 w-9 rounded-lg bg-surface border border-border shrink-0 text-primary">
+                  <Phone className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-foreground">Tele-MANAS · free & confidential</p>
+                  <p className="text-[10px] text-muted-foreground">24x7 national student mental-health support</p>
+                </div>
+                <a href="tel:14416" className="shrink-0 rounded-lg bg-primary/10 text-primary px-3 py-1.5 text-xs font-black tracking-wide hover:bg-primary/20 transition-colors">
+                  14416
+                </a>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="py-6 text-center text-sm text-muted-foreground">Couldn't load your plan. Please try again.</p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Wellness Weather Icon ─────────────────────────────────────────────────
+function WellnessWeatherIcon({ weather, size = 32 }: { weather: string; size?: number }) {
+  if (weather === "stormy") return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <path d="M24 13a6 6 0 0 0-6-6 5.99 5.99 0 0 0-5.66 4A4 4 0 1 0 13 19h10a4 4 0 0 0 1-7.83z"
+        fill="rgba(239,68,68,0.25)" stroke="#ef4444" strokeWidth="1" />
+      <path d="M15 21l-2 4h3l-1 3 5-6h-3.5l.5-1z" fill="#ef4444" />
+    </svg>
+  );
+  if (weather === "cloudy") return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <circle cx="16" cy="13" r="5" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" strokeWidth="1" />
+      <path d="M8 8l1.5 1.5M24 8l-1.5 1.5M16 4v2M4 13h2M26 13h2" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
+      <path d="M22 20a5 5 0 0 0-5-5 4.99 4.99 0 0 0-4.72 3.34A3 3 0 1 0 13 24h8a3 3 0 0 0 1-5.83z"
+        fill="rgba(245,158,11,0.3)" stroke="#f59e0b" strokeWidth="1" />
+    </svg>
+  );
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <circle cx="16" cy="16" r="6" fill="rgba(74,222,128,0.25)" stroke="#4ade80" strokeWidth="1.5" />
+      <path d="M16 5v3M16 24v3M5 16h3M24 16h3M8.87 8.87l2.12 2.12M20.88 20.88l2.12 2.12M8.87 23.13l2.12-2.12M20.88 11.12l2.12-2.12"
+        stroke="#4ade80" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ── Support Resources Panel (expandable, inside Wellness Sheet only) ───────
+function SupportResourcesPanel({
+  resources, redCheckinText, setRedCheckinText, redCheckinSubmitting, handleRedCheckinSubmit,
+}: {
+  resources: any[];
+  redCheckinText: string;
+  setRedCheckinText: (v: string) => void;
+  redCheckinSubmitting: boolean;
+  handleRedCheckinSubmit: (e: any) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="space-y-4">
+      <form onSubmit={handleRedCheckinSubmit} className="space-y-2.5">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Share How You're Feeling</p>
+        <textarea
+          value={redCheckinText}
+          onChange={(e) => setRedCheckinText(e.target.value)}
+          placeholder="Write anything — feelings, stressors, or what's on your mind..."
+          className="w-full min-h-[80px] bg-background/50 border border-border rounded-xl p-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 resize-none text-foreground placeholder:text-muted-foreground/50 leading-relaxed transition-all"
+          disabled={redCheckinSubmitting}
+        />
+        <button
+          type="submit"
+          disabled={redCheckinSubmitting || !redCheckinText.trim()}
+          className="w-full h-10 rounded-xl bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider transition-all hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+        >
+          {redCheckinSubmitting ? "Submitting..." : "Submit Check-in"}
+        </button>
+      </form>
+      <div className="rounded-xl border border-red-500/20 bg-red-500/5 overflow-hidden">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between p-3.5 text-left cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <Phone className="h-3.5 w-3.5 text-red-400 shrink-0" />
+            <span className="text-xs font-bold text-red-400 uppercase tracking-wider">Talk to Someone</span>
+            <span className="text-[10px] text-muted-foreground">Free &amp; confidential</span>
+          </div>
+          <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
+        </button>
+        {expanded && (
+          <div className="px-4 pb-4 space-y-2.5 border-t border-red-500/10 animate-[fadeIn_0.2s_ease-out]">
+            {resources?.map((r: any, i: number) => (
+              <div key={i} className="flex items-center gap-3 pt-2.5">
+                <div className="grid place-items-center h-8 w-8 rounded-lg bg-surface border border-border shrink-0 text-primary">
+                  {r.kind === "campus" ? <GraduationCap className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-foreground truncate">{r.name}</p>
+                  <p className="text-[10px] text-zinc-500 leading-snug">{r.detail}</p>
+                </div>
+                {r.contact && (
+                  <a
+                    href={`tel:${r.contact.replace(/[^0-9+]/g, "")}`}
+                    className="shrink-0 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-1.5 text-xs font-black tracking-wide hover:bg-red-500/20 transition-colors"
+                  >
+                    Call
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Wellness Detail Sheet (bottom drawer, all detail content) ─────────────
+function WellnessSheet({
+  open, onOpenChange, wellness, wellnessCoach, wellnessCoachLoading,
+  onCarePlan, handleResetAction, handleMoodCheckin,
+  selectedMood, moodResponse, redCheckinText, setRedCheckinText,
+  redCheckinSubmitting, handleRedCheckinSubmit, todayFocusDone, setTodayFocusDone,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void; wellness: any;
+  wellnessCoach: any; wellnessCoachLoading: boolean; onCarePlan: () => void;
+  handleResetAction: (a: any) => void; handleMoodCheckin: (mood: string) => void;
+  selectedMood: string | null; moodResponse: string | null;
+  redCheckinText: string; setRedCheckinText: (v: string) => void;
+  redCheckinSubmitting: boolean; handleRedCheckinSubmit: (e: any) => void;
+  todayFocusDone: boolean; setTodayFocusDone: (v: boolean) => void;
+}) {
+  if (!wellness) return null;
+  const topAction = wellness.reset_actions?.[0];
+  const otherActions = (wellness.reset_actions ?? []).slice(1, 4);
+
+  const getSignalPct = (sig: any) => {
+    if (sig.key === "runway") { const d = parseInt(sig.value) || 30; return Math.min(100, Math.max(5, ((30 - d) / 30) * 100)); }
+    if (sig.key === "exam") return sig.value === "Active" ? 95 : 5;
+    if (sig.key === "cart_pool") { const d = parseInt(sig.value) || 0; return Math.min(100, (d / 14) * 100); }
+    if (sig.key === "food_gap") { const h = parseFloat(sig.value) || 0; return Math.min(100, Math.max(5, (h / 16) * 100)); }
+    if (sig.key === "late_night") { const n = parseInt(sig.value) || 0; return Math.min(100, Math.max(5, (n / 5) * 100)); }
+    if (sig.key === "velocity") { const v = parseFloat(sig.value) || 1; return Math.min(100, Math.max(5, ((v - 1) / 1) * 100)); }
+    return 5;
+  };
+  const sigColor = (sev: string) => sev === "stressed" ? "#ef4444" : sev === "watch" ? "#f59e0b" : "#4ade80";
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="bg-background border-t border-border rounded-t-3xl max-h-[92vh] overflow-y-auto pb-10 px-0">
+        <SheetHeader className="px-5 pt-2 pb-4 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border/50">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="flex items-center gap-2.5 text-sm font-black uppercase tracking-wider text-foreground">
+              <WellnessWeatherIcon weather={wellness.weather ?? "calm"} size={22} />
+              <span>{wellness.headline ?? "Wellness Report"}</span>
+            </SheetTitle>
+            <div className="flex items-center gap-2">
+              {wellness.streak > 0 && (
+                <div className="flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-1">
+                  <Flame className="h-3 w-3 text-primary" />
+                  <span className="text-xs font-black text-primary tnum">{wellness.streak}</span>
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">streak</span>
+                </div>
+              )}
+              <Badge variant="outline" className="font-bold text-xs px-2 py-0.5" style={{
+                borderColor: wellness.status === "steady" ? "rgba(22,163,74,0.3)" : wellness.status === "watch" ? "rgba(217,119,6,0.3)" : "rgba(220,38,38,0.3)",
+                color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)",
+              }}>
+                {wellness.status?.toUpperCase()}
+              </Badge>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="px-5 space-y-5 pt-4">
+          {/* Score + Weather hero */}
+          <div className="flex items-center gap-4 p-4 rounded-2xl border border-border bg-surface-raised/30">
+            <WellnessWeatherIcon weather={wellness.weather ?? "calm"} size={52} />
+            <div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl font-black tracking-tighter tnum leading-none font-display" style={{
+                  color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)"
+                }}>{wellness.score}</span>
+                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">/ 100</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{wellness.total_checkins ?? 0} total check-ins logged</p>
+            </div>
+          </div>
+
+          {/* AI Coach */}
+          <div className="rounded-xl border border-border bg-surface-raised/30 p-4">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Sparkles className="h-3 w-3 text-primary" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
+                {wellnessCoach?.source === "bedrock" ? "AI Insight" : "Weekly Read"}
+              </span>
+            </div>
+            {wellnessCoachLoading ? (
+              <div className="space-y-1.5"><Skeleton className="h-3 w-full bg-white/5" /><Skeleton className="h-3 w-2/3 bg-white/5" /></div>
+            ) : (
+              <p className="text-sm text-foreground font-medium leading-relaxed">{wellnessCoach?.message || wellness.message}</p>
+            )}
+          </div>
+
+          {/* AI Care Plan CTA */}
+          <button
+            id="btn-open-care-plan"
+            onClick={() => { onCarePlan(); onOpenChange(false); }}
+            className="group w-full flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 px-4 py-3.5 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="grid place-items-center h-9 w-9 rounded-lg bg-primary/15 text-primary shrink-0">
+                <HeartPulse className="h-4 w-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-black text-primary uppercase tracking-wider">Open AI Care Plan</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Personalised steps for today</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-primary group-hover:translate-x-0.5 transition-transform shrink-0" />
+          </button>
+
+          {/* Driver Attribution */}
+          {(wellness.drivers?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">What's Driving This</p>
+              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-surface-raised gap-0.5">
+                {wellness.drivers.map((d: any) => (
+                  <div key={d.key} style={{ width: `${d.pct}%`, background: d.color }} className="transition-all duration-700" />
+                ))}
+              </div>
+              <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
+                {wellness.drivers.map((d: any) => (
+                  <div key={d.key} className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ background: d.color }} />
+                    <span className="text-[11px] font-medium text-zinc-400">{d.label} <span className="font-bold text-zinc-300">{d.pct}%</span></span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{wellness.driver_summary}</p>
+            </div>
+          )}
+
+          {/* Signal Progress Bars */}
+          {(wellness.signals?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Contributing Signals</p>
+              <div className="space-y-3">
+                {wellness.signals.map((sig: any) => {
+                  const pct = getSignalPct(sig);
+                  const col = sigColor(sig.severity);
+                  return (
+                    <div key={sig.key}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] text-muted-foreground font-medium">{sig.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-foreground tnum">{sig.value}</span>
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ background: col }} />
+                        </div>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-surface-raised overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${Math.max(4, pct)}%`, background: col, opacity: sig.severity === "ok" ? 0.45 : 0.9 }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Today's Focus — Gamified */}
+          {topAction && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">Today's Focus</p>
+              <div className={`relative rounded-xl border p-4 overflow-hidden transition-all ${todayFocusDone ? "border-success/30 bg-success/5" : "border-primary/25 bg-primary/5"}`}>
+                {todayFocusDone && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-[2px] rounded-xl">
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className="h-10 w-10 rounded-full bg-success/20 flex items-center justify-center">
+                        <Check className="h-5 w-5 text-success" />
+                      </div>
+                      <p className="text-xs font-bold text-success uppercase tracking-wider">Done for today!</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-start gap-3">
+                  <div className="grid place-items-center h-9 w-9 rounded-lg bg-primary/15 text-primary shrink-0">
+                    {(() => { const Icon = RESET_ICONS[topAction.icon] ?? Sparkles; return <Icon className="h-4 w-4" />; })()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-foreground">{topAction.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{topAction.body}</p>
+                  </div>
+                </div>
+                {!todayFocusDone && (
+                  <button
+                    onClick={() => { handleResetAction(topAction); setTodayFocusDone(true); }}
+                    className="mt-3.5 w-full rounded-lg bg-primary text-primary-foreground text-xs font-black uppercase tracking-wider h-9 hover:bg-primary/90 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="h-3.5 w-3.5" /> {topAction.cta}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* More Resets */}
+          {otherActions.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">More Resets</p>
+              <div className="space-y-2">
+                {otherActions.map((a: any) => {
+                  const Icon = RESET_ICONS[a.icon] ?? Sparkles;
+                  return (
+                    <button key={a.key} id={`btn-reset-${a.key}`} onClick={() => handleResetAction(a)}
+                      className="group w-full flex items-center gap-3 rounded-xl border border-border bg-surface-raised/30 hover:bg-surface-raised/60 hover:border-white/10 p-3 text-left transition-all cursor-pointer"
+                    >
+                      <div className="grid place-items-center h-8 w-8 rounded-lg bg-surface-raised text-muted-foreground group-hover:text-primary shrink-0 transition-colors">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-foreground truncate">{a.title}</p>
+                        <p className="text-[11px] text-muted-foreground leading-snug line-clamp-1">{a.body}</p>
+                      </div>
+                      <div className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors">
+                        {a.kind === "link" ? <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" /> : <Check className="h-4 w-4" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Mood Check-in */}
+          <div className="border-t border-border/60 pt-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">How Are You Feeling?</p>
+            <div className="grid grid-cols-3 gap-2">
+              {MOODS.map((m) => (
+                <button key={m.key} id={`btn-mood-sheet-${m.key}`} onClick={() => handleMoodCheckin(m.key)}
+                  className={`flex flex-col items-center gap-1.5 rounded-xl border py-3 transition-all cursor-pointer ${selectedMood === m.key ? "border-primary bg-primary/10" : "border-border bg-surface-raised/30 hover:border-white/15"}`}
+                >
+                  <m.Icon className={`h-5 w-5 ${selectedMood === m.key ? "text-primary" : "text-muted-foreground"}`} />
+                  <span className="text-[10px] font-bold text-foreground">{m.label}</span>
+                </button>
+              ))}
+            </div>
+            {moodResponse && (
+              <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5 animate-[fadeIn_0.25s_ease-out]">
+                <div className="flex items-start gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  <p className="text-xs text-foreground leading-relaxed">{moodResponse}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Support Resources — stressed only, collapsible, no raw numbers shown */}
+          {wellness.show_support && (
+            <div className="border-t border-border/60 pt-5">
+              <SupportResourcesPanel
+                resources={wellness.support_resources}
+                redCheckinText={redCheckinText}
+                setRedCheckinText={setRedCheckinText}
+                redCheckinSubmitting={redCheckinSubmitting}
+                handleRedCheckinSubmit={handleRedCheckinSubmit}
+              />
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
@@ -473,7 +1059,27 @@ function Dashboard() {
     queryKey: ["wellness-insights", user?.id],
     enabled: !!user,
     staleTime: 30_000,
-    queryFn: () => getWellnessInsights(),
+    queryFn: () => getWellnessCheckin(),
+  });
+
+  // AI-narrated supportive check-in line. Loaded separately (Bedrock) so it
+  // never blocks the card; falls back to the deterministic message on failure.
+  const { data: wellnessCoach, isLoading: wellnessCoachLoading } = useQuery({
+    queryKey: ["wellness-coach", user?.id],
+    enabled: !!user && !!wellness && !!wellness?.metrics?.has_data,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: () => getWellnessCoach(),
+  });
+
+  // AI Care Plan — loaded lazily only when the popup is opened.
+  const [carePlanOpen, setCarePlanOpen] = useState(false);
+  const { data: carePlan, isLoading: carePlanLoading } = useQuery({
+    queryKey: ["wellness-care-plan", user?.id],
+    enabled: !!user && carePlanOpen,
+    staleTime: 5 * 60_000,
+    retry: false,
+    queryFn: () => getWellnessCarePlan(),
   });
 
   const { data: campusIntel } = useQuery({
@@ -721,6 +1327,10 @@ function Dashboard() {
   // Red State Wellness Check-in
   const [redCheckinText, setRedCheckinText] = useState("");
   const [redCheckinSubmitting, setRedCheckinSubmitting] = useState(false);
+  const [selectedMood, setSelectedMood] = useState<string | null>(null);
+  const [wellnessSheetOpen, setWellnessSheetOpen] = useState(false);
+  const [moodResponse, setMoodResponse] = useState<string | null>(null);
+  const [todayFocusDone, setTodayFocusDone] = useState(false);
 
   useEffect(() => {
     if (checkinChecked.current || !profile || !txns) return;
@@ -964,6 +1574,74 @@ function Dashboard() {
     }
   }
 
+  function invalidateWellness() {
+    qc.invalidateQueries({ queryKey: ["wellness-insights"] });
+    qc.invalidateQueries({ queryKey: ["wellness-coach"] });
+    qc.invalidateQueries({ queryKey: ["insights"] });
+    qc.invalidateQueries({ queryKey: ["txns"] });
+    qc.invalidateQueries({ queryKey: ["wing-feed"] });
+  }
+
+  // Interactive AI Reset Plan — a tapped reset either logs a supportive
+  // check-in or routes the student straight to the feature that helps.
+  async function handleResetAction(action: any) {
+    if (!user) return;
+    if (action.kind === "link") {
+      nav({ to: action.to });
+      return;
+    }
+    try {
+      await submitWellnessCheckin({
+        data: {
+          response: action.checkin_response,
+          action: action.key,
+          score: wellness?.score,
+          food_gap_hours: wellness?.metrics?.current_food_gap_hours,
+        },
+      });
+      toast.success("Nice — logged. Small steps add up.");
+      invalidateWellness();
+    } catch {
+      toast.error("Failed to log that. Try again.");
+    }
+  }
+
+  async function handleMoodCheckin(mood: string) {
+    if (!user) return;
+    setSelectedMood(mood);
+    // Derive a contextual in-card response from current wellness data
+    let contextMsg = "";
+    if (wellness) {
+      if (mood === "good") {
+        contextMsg = wellness.score >= 70
+          ? "Great to hear! Your routine looks steady — keep the check-in streak going."
+          : `Glad you're feeling good despite the pressure. Your streak is at ${wellness.streak ?? 0} days — keep it up!`;
+      } else if (mood === "okay") {
+        const topAction = wellness.reset_actions?.[0];
+        contextMsg = topAction
+          ? `One step helps: ${topAction.title.toLowerCase()}. Open the full report for your personalised reset plan.`
+          : "One small reset can shift the day. Open the full report for personalised next steps.";
+      } else {
+        contextMsg = "It's okay to feel stretched. Your full wellness report has a personalised care plan with concrete steps for today.";
+        setWellnessSheetOpen(true);
+      }
+    }
+    setMoodResponse(contextMsg);
+    const msg =
+      mood === "good" ? "Love that. Keep the momentum going."
+      : mood === "okay" ? "Thanks for checking in. One small reset can help."
+      : "Thanks for being honest. Be gentle with yourself today.";
+    try {
+      await submitWellnessCheckin({
+        data: { mood, response: "wellness_mood", score: wellness?.score },
+      });
+      toast.success(msg);
+      invalidateWellness();
+    } catch {
+      toast.error("Failed to submit check-in");
+    }
+  }
+
   return (
     <AppShell>
       {/* Page Header */}
@@ -1003,22 +1681,19 @@ function Dashboard() {
           {/* ── Main Column ─────────────────────────────────────────────── */}
           <div className="md:col-span-7 lg:col-span-8 space-y-6 animate-[fadeIn_0.3s_ease-out]">
 
-            {/* Student Wellness Index Card */}
+            {/* Student Wellness Index Card — Compact */}
             <div id="card-wellness-index" className="bg-surface rounded-2xl border border-border relative overflow-hidden transition-all duration-300 hover:border-white/10">
               <div className="absolute top-0 left-0 w-full h-[2px]" style={{
-                background: wellness?.status === "steady" 
-                  ? "linear-gradient(to right, #10b981, #34d399)" 
-                  : wellness?.status === "watch" 
-                    ? "linear-gradient(to right, #f59e0b, #fbbf24)" 
+                background: wellness?.status === "steady"
+                  ? "linear-gradient(to right, #10b981, #34d399)"
+                  : wellness?.status === "watch"
+                    ? "linear-gradient(to right, #f59e0b, #fbbf24)"
                     : "linear-gradient(to right, #ef4444, #f87171)"
               }} />
-              
-              <div className="p-5 md:p-6">
+
+              <div className="p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase flex items-center gap-1.5 font-display">
-                    <span>Student Wellness Index</span>
-                  </p>
-                  
+                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase font-display">Student Wellness Index</p>
                   {wellness && (
                     <Badge variant="outline" className="font-bold text-xs px-2 py-0.5" style={{
                       borderColor: wellness.status === "steady" ? "rgba(22,163,74,0.3)" : wellness.status === "watch" ? "rgba(217,119,6,0.3)" : "rgba(220,38,38,0.3)",
@@ -1046,144 +1721,126 @@ function Dashboard() {
                     <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No Transaction History</p>
                     <p className="text-xs text-zinc-500 mt-1">Add a few spends to build your wellness pattern.</p>
                     <div className="mt-3">
-                      <Button
-                        variant="secondary"
-                        className="text-xs uppercase tracking-wider font-bold h-7 bg-surface-raised border-border"
-                        onClick={() => setAdding(true)}
-                      >
+                      <Button variant="secondary" className="text-xs uppercase tracking-wider font-bold h-7 bg-surface-raised border-border" onClick={() => setAdding(true)}>
                         Log Transaction
                       </Button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-3xl md:text-4xl font-black tracking-tighter text-foreground tnum leading-none font-display" style={{
-                        color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)"
-                      }}>
-                        {wellness.score}
+                    {/* Score + Weather icon + Streak */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <WellnessWeatherIcon weather={wellness.weather ?? "calm"} size={40} />
+                        <div>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-3xl font-black tracking-tighter tnum leading-none font-display" style={{
+                              color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)"
+                            }}>
+                              {wellness.score}
+                            </span>
+                            <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">/ 100</span>
+                          </div>
+                          {wellness.headline && <p className="text-[11px] text-muted-foreground mt-0.5">{wellness.headline}</p>}
+                        </div>
+                      </div>
+                      {wellness.streak > 0 && (
+                        <div className="flex items-center gap-1 rounded-full border border-border bg-surface-raised/50 px-2.5 py-1">
+                          <Flame className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-xs font-bold text-foreground tnum">{wellness.streak}</span>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">streak</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* AI check-in message — 2-line clamp */}
+                    <div className="rounded-xl border border-border bg-surface-raised/30 p-3.5 mb-4">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Sparkles className="h-3 w-3 text-primary" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
+                          {wellnessCoach?.source === "bedrock" ? "AI check-in" : "Your check-in"}
+                        </span>
+                      </div>
+                      {wellnessCoachLoading ? (
+                        <div className="space-y-1.5 py-0.5">
+                          <Skeleton className="h-3 w-full bg-white/5" />
+                          <Skeleton className="h-3 w-2/3 bg-white/5" />
+                        </div>
+                      ) : (
+                        <p className="text-xs md:text-sm text-foreground font-medium leading-relaxed line-clamp-2">
+                          {wellnessCoach?.message || wellness.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Quick mood pick — full detail goes in the sheet */}
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      {MOODS.map((m) => (
+                        <button
+                          key={m.key}
+                          id={`btn-mood-${m.key}`}
+                          onClick={() => handleMoodCheckin(m.key)}
+                          className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 transition-all cursor-pointer ${
+                            selectedMood === m.key ? "border-primary bg-primary/10" : "border-border bg-surface-raised/30 hover:border-white/15"
+                          }`}
+                        >
+                          <m.Icon className={`h-4 w-4 ${selectedMood === m.key ? "text-primary" : "text-muted-foreground"}`} />
+                          <span className="text-[10px] font-bold text-foreground">{m.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Mood contextual response (brief inline) */}
+                    {moodResponse && (
+                      <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-3 animate-[fadeIn_0.25s_ease-out]">
+                        <div className="flex items-start gap-2">
+                          <Sparkles className="h-3 w-3 text-primary mt-0.5 shrink-0" />
+                          <p className="text-xs text-foreground leading-relaxed">{moodResponse}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Full Report CTA */}
+                    <button
+                      onClick={() => setWellnessSheetOpen(true)}
+                      className="group w-full flex items-center justify-between rounded-xl border border-border bg-surface-raised/30 hover:bg-surface-raised/60 hover:border-white/10 px-4 py-3 transition-all cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2 text-xs font-bold text-foreground">
+                        <HeartPulse className="h-4 w-4 text-primary" />
+                        Full Wellness Report
                       </span>
-                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">/ 100 Wellness Score</span>
-                    </div>
-
-                    <p className="text-xs md:text-sm text-zinc-300 font-medium leading-relaxed mb-4">
-                      {wellness.status === "stressed" 
-                        ? "We noticed a stack of stressful signals today. Remember, your runway and meals don't define you. Taking it one step at a time is enough. You can do this." 
-                        : wellness.message}
-                    </p>
-
-                    {/* Contributing Signals */}
-                    <div className="border-t border-border pt-4 mt-2 mb-4">
-                      <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3 font-mono">Contributing Signals</p>
-                      
-                      <div className="flex flex-wrap gap-2">
-                        {wellness.signals?.map((sig: any) => (
-                          <div key={sig.key} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-surface-raised/40 text-xs font-medium" style={{
-                            borderColor: sig.severity === "stressed" 
-                              ? "rgba(239,68,68,0.25)" 
-                              : sig.severity === "watch" 
-                                ? "rgba(245,158,11,0.25)" 
-                                : "var(--border)"
-                          }}>
-                            <span className="text-zinc-400 font-medium">{sig.label}:</span>
-                            <span className="font-bold text-foreground">{sig.value}</span>
-                            <span className="w-1.5 h-1.5 rounded-full" style={{
-                              background: sig.severity === "stressed" 
-                                ? "var(--pb-red)" 
-                                : sig.severity === "watch" 
-                                  ? "var(--pb-amber)" 
-                                  : "var(--pb-green)"
-                            }} title={sig.detail} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Conditional layouts based on status */}
-                    {wellness.status === "watch" && (
-                      <div className="border-t border-border pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <span className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-1 sm:mb-0 sm:mr-2 font-mono">Quick Check-in:</span>
-                        <div className="flex flex-wrap gap-2 flex-1">
-                          <button
-                            id="btn-wellness-ate"
-                            onClick={() => handleWellnessAction("ate")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-success hover:text-success/90 bg-success/5 hover:bg-success/10 border border-success/20 hover:border-success/30 rounded-xl transition-all cursor-pointer"
-                          >
-                            I Ate Meal
-                          </button>
-                          <button
-                            id="btn-wellness-break"
-                            onClick={() => handleWellnessAction("break")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-warning hover:text-warning/90 bg-warning/5 hover:bg-warning/10 border border-warning/20 hover:border-warning/30 rounded-xl transition-all cursor-pointer"
-                          >
-                            I Need a Break
-                          </button>
-                          <button
-                            id="btn-wellness-spending"
-                            onClick={() => handleWellnessAction("spending")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-foreground hover:text-foreground/90 bg-white/5 hover:bg-white/10 border border-border hover:border-white/15 rounded-xl transition-all cursor-pointer"
-                          >
-                            I'll Plan Spending
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {wellness.status === "stressed" && (
-                      <div className="border-t border-border pt-4 mt-4 space-y-4">
-                        <form onSubmit={handleRedCheckinSubmit} className="space-y-3">
-                          <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase pl-1 font-mono">Submit Feedback Check-in</p>
-                          <textarea 
-                            value={redCheckinText} 
-                            onChange={(e) => setRedCheckinText(e.target.value)} 
-                            placeholder="How are you feeling today? Write down any notes, feelings or stress points..." 
-                            className="w-full min-h-[88px] bg-background/50 border border-border rounded-xl p-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 resize-none text-foreground placeholder:text-muted-foreground/50 leading-relaxed transition-all" 
-                            disabled={redCheckinSubmitting} 
-                          />
-                          <button 
-                            type="submit" 
-                            disabled={redCheckinSubmitting || !redCheckinText.trim()} 
-                            className="w-full min-h-[44px] rounded-xl bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-2"
-                          >
-                            {redCheckinSubmitting ? "Submitting..." : "Submit Check-in"}
-                          </button>
-                        </form>
-
-                        <div className="rounded-xl border border-red-950/40 bg-red-950/10 p-4 space-y-2.5">
-                          <p className="text-xs font-bold tracking-[0.15em] text-red-400 uppercase flex items-center gap-1.5 font-mono">
-                            <Phone className="h-3.5 w-3.5" />
-                            <span>Campus Counseling Services</span>
-                          </p>
-                          <p className="text-xs text-zinc-400 leading-relaxed">
-                            If you feel overwhelmed, please reach out to the campus support team. It is completely confidential, free, and designed for students.
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-500 font-medium pt-1">
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="h-3 w-3 shrink-0 text-zinc-600" />
-                              <span>Wellness Cell, Room 102, Admin Block</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Phone className="h-3 w-3 shrink-0 text-zinc-600" />
-                              <a href="tel:+911123456789" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
-                                +91 11 2345 6789
-                                <ExternalLink className="h-2 w-2" />
-                              </a>
-                            </div>
-                            <div className="flex items-center gap-1.5 col-span-full">
-                              <Mail className="h-3 w-3 shrink-0 text-zinc-600" />
-                              <a href="mailto:wellness@institute.edu" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
-                                wellness@institute.edu
-                                <ExternalLink className="h-2 w-2" />
-                              </a>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                    </button>
                   </>
                 )}
               </div>
             </div>
+
+            <WellnessCarePlanDialog
+              open={carePlanOpen}
+              onOpenChange={setCarePlanOpen}
+              plan={carePlan}
+              loading={carePlanLoading}
+            />
+
+            <WellnessSheet
+              open={wellnessSheetOpen}
+              onOpenChange={setWellnessSheetOpen}
+              wellness={wellness}
+              wellnessCoach={wellnessCoach}
+              wellnessCoachLoading={wellnessCoachLoading}
+              onCarePlan={() => setCarePlanOpen(true)}
+              handleResetAction={handleResetAction}
+              handleMoodCheckin={handleMoodCheckin}
+              selectedMood={selectedMood}
+              moodResponse={moodResponse}
+              redCheckinText={redCheckinText}
+              setRedCheckinText={setRedCheckinText}
+              redCheckinSubmitting={redCheckinSubmitting}
+              handleRedCheckinSubmit={handleRedCheckinSubmit}
+              todayFocusDone={todayFocusDone}
+              setTodayFocusDone={setTodayFocusDone}
+            />
 
             {/* Runway Hero */}
             <div id="card-runway-status" className="bg-surface rounded-2xl border border-border relative overflow-hidden">

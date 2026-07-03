@@ -1725,7 +1725,7 @@ async def complete_ride_pool(pool_id: str, req: RidePoolCompleteReq, user_id: st
     host_txn = {
         "_id": str(uuid.uuid4()),
         "user_id": user_id,
-        "amount": int(split_amount),
+        "amount": int(split_amount * 100),
         "raw_merchant_string": f"Travel Split - {route_name}",
         "mapped_merchant_name": "Travel Pool",
         "category": "travel",
@@ -1767,7 +1767,7 @@ async def settle_ride_pool(pool_id: str, req: RidePoolSettleReq, user_id: str = 
             passenger_txn = {
                 "_id": str(uuid.uuid4()),
                 "user_id": req.passenger_user_id,
-                "amount": int(split_amount),
+                "amount": int(split_amount * 100),
                 "raw_merchant_string": f"Travel Split - {route_name}",
                 "mapped_merchant_name": "Travel Pool",
                 "category": "travel",

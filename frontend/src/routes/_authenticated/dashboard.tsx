@@ -60,6 +60,15 @@ import {
 } from "@/lib/api/db.functions";
 
 
+const SOOTHING_QUOTES = [
+  "You are doing the best you can, and that is more than enough. 🌸",
+  "Take a slow breath. Your runway is just numbers, you are doing great. ☕",
+  "Allow yourself to rest. Resting is productive and essential. 🛋️",
+  "You are more than your grades or your wallet balance. ✨",
+  "Drop your shoulders, relax your jaw, and let go of the tension. 🍃",
+  "It is okay to have slow days. Small steps still count. 🐢"
+];
+
 // ── Guided Breathing Exercise (Box & 4-7-8 Calm) ───────────────────────────
 function BreathingExercise() {
   const [active, setActive] = useState(false);
@@ -381,20 +390,40 @@ function WellnessCarePlanDialog({
 
           {/* Interactive micro-steps */}
           {plan.steps?.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Three Small Steps</p>
+            <div className="space-y-4">
               <div className="space-y-2">
-                {plan.steps.map((s: string, i: number) => (
-                  <button key={i} onClick={() => toggleStep(i)}
-                    className="w-full flex items-start gap-3 rounded-xl border border-border bg-surface-raised/30 hover:bg-surface-raised/60 p-3 text-left transition-colors cursor-pointer">
-                    <span className={`grid place-items-center h-5 w-5 rounded-md border shrink-0 mt-0.5 transition-colors ${
-                      done.has(i) ? "bg-primary border-primary text-primary-foreground" : "border-border text-transparent"
-                    }`}>
-                      <Check className="h-3.5 w-3.5" />
-                    </span>
-                    <span className={`text-xs leading-relaxed ${done.has(i) ? "text-muted-foreground line-through" : "text-foreground"}`}>{s}</span>
-                  </button>
-                ))}
+                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <span>Self-Care Progress</span>
+                  <span className="text-primary font-bold">{done.size}/{plan.steps.length} Steps Done</span>
+                </div>
+                <div className="h-1.5 w-full bg-surface-raised border border-border rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-primary to-success transition-all duration-500 ease-out"
+                    style={{ width: `${Math.round((done.size / plan.steps.length) * 100)}%` }}
+                  />
+                </div>
+                {done.size === plan.steps.length && (
+                  <p className="text-[10px] text-success font-semibold flex items-center gap-1 animate-pulse">
+                    ✨ Perfect self-care day! Proud of you.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Three Small Steps</p>
+                <div className="space-y-2">
+                  {plan.steps.map((s: string, i: number) => (
+                    <button key={i} onClick={() => toggleStep(i)}
+                      className="w-full flex items-start gap-3 rounded-xl border border-border bg-surface-raised/30 hover:bg-surface-raised/60 p-3 text-left transition-colors cursor-pointer">
+                      <span className={`grid place-items-center h-5 w-5 rounded-md border shrink-0 mt-0.5 transition-colors ${
+                        done.has(i) ? "bg-primary border-primary text-primary-foreground" : "border-border text-transparent"
+                      }`}>
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                      <span className={`text-xs leading-relaxed ${done.has(i) ? "text-muted-foreground line-through" : "text-foreground"}`}>{s}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -451,6 +480,7 @@ function WellnessCarePlanDialog({
       )}
     </div>
   );
+
 
   if (isMobile) {
     return (
@@ -1160,6 +1190,7 @@ function Dashboard() {
   const [redCheckinText, setRedCheckinText] = useState("");
   const [redCheckinSubmitting, setRedCheckinSubmitting] = useState(false);
   const [inlineBreatherOpen, setInlineBreatherOpen] = useState(false);
+  const [showCounseling, setShowCounseling] = useState(false);
 
   useEffect(() => {
     if (checkinChecked.current || !profile || !txns) return;
@@ -1511,88 +1542,30 @@ function Dashboard() {
                         : wellness.message}
                     </p>
 
-                    {/* Conversational Observations (Interactive & Helpful Nudges instead of technical logs) */}
-                    <div className="border-t border-border pt-4 mt-2 mb-4 space-y-3.5">
-                      <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase font-mono">Campus Observations</p>
+                    {/* Contributing Signals */}
+                    <div className="border-t border-border pt-4 mt-2 mb-4">
+                      <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3 font-mono">Contributing Signals</p>
                       
-                      <div className="space-y-3">
-                        {wellness.signals?.map((sig: any) => {
-                          const isMealAlert = sig.key === "food_gap" && parseFloat(sig.value) >= 16;
-                          const isRunwayAlert = sig.key === "runway" && parseFloat(sig.value) < 10;
-                          const isExamStress = sig.key === "exam" && sig.severity !== "steady";
-                          
-                          return (
-                            <div key={sig.key} className="rounded-xl border border-border bg-surface-raised/20 p-3.5 flex flex-col gap-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full" style={{
-                                    background: sig.severity === "stressed" 
-                                      ? "var(--pb-red)" 
-                                      : sig.severity === "watch" 
-                                        ? "var(--pb-amber)" 
-                                        : "var(--pb-green)"
-                                  }} />
-                                  <span className="text-xs font-bold text-foreground capitalize">{sig.label}</span>
-                                </div>
-                                <span className="text-xs font-bold text-muted-foreground">{sig.value}</span>
-                              </div>
-                              
-                              <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-                                {sig.key === "food_gap" 
-                                  ? parseFloat(sig.value) >= 16 
-                                    ? "It's been a while since your last logged meal. Make sure to get some hot food to keep your energy up!" 
-                                    : "Your meal schedule looks stable and regular."
-                                  : sig.key === "runway" 
-                                    ? parseFloat(sig.value) < 10 
-                                      ? "Runway is getting narrow. Joining a shared transport pool or Swiggy discount group can save substantial daily cash." 
-                                      : "Your financial runway is in a safe margin."
-                                    : sig.key === "exam" 
-                                      ? sig.severity !== "steady" 
-                                        ? "Exam window is ongoing. Keep structural schedules, sleep at regular hours, and walk for breaks."
-                                        : "Standard academic schedules apply."
-                                      : sig.detail}
-                              </p>
-
-                              {/* Interactive Inline Resets */}
-                              {(isMealAlert || isRunwayAlert || isExamStress) && (
-                                <div className="flex flex-wrap gap-2 pt-0.5">
-                                  {isMealAlert && (
-                                    <>
-                                      <button 
-                                        onClick={() => handleWellnessAction("ate")}
-                                        className="h-8 rounded-lg bg-success/10 text-success border border-success/20 px-3 text-[10px] font-black uppercase tracking-wider hover:bg-success/20 transition-all cursor-pointer"
-                                      >
-                                        I Ate at Mess (₹0)
-                                      </button>
-                                      <button 
-                                        onClick={() => setShowFoodSheet(true)}
-                                        className="h-8 rounded-lg bg-surface border border-border text-foreground px-3 text-[10px] font-black uppercase tracking-wider hover:bg-surface-raised transition-all cursor-pointer"
-                                      >
-                                        Campus Dining Hub
-                                      </button>
-                                    </>
-                                  )}
-                                  {isRunwayAlert && (
-                                    <button 
-                                      onClick={() => nav({ to: "/pool" })}
-                                      className="h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 px-3 text-[10px] font-black uppercase tracking-wider hover:bg-primary/20 transition-all cursor-pointer"
-                                    >
-                                      Join a Cart Pool
-                                    </button>
-                                  )}
-                                  {isExamStress && (
-                                    <button 
-                                      onClick={() => setInlineBreatherOpen(!inlineBreatherOpen)}
-                                      className="h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 px-3 text-[10px] font-black uppercase tracking-wider hover:bg-primary/20 transition-all cursor-pointer"
-                                    >
-                                      {inlineBreatherOpen ? "Close Breather" : "Start 1-Min Breather"}
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                      <div className="flex flex-wrap gap-2">
+                        {wellness.signals?.map((sig: any) => (
+                          <div key={sig.key} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-surface-raised/40 text-xs font-medium" style={{
+                            borderColor: sig.severity === "stressed" 
+                              ? "rgba(239,68,68,0.25)" 
+                              : sig.severity === "watch" 
+                                ? "rgba(245,158,11,0.25)" 
+                                : "var(--border)"
+                          }}>
+                            <span className="text-zinc-400 font-medium">{sig.label}:</span>
+                            <span className="font-bold text-foreground">{sig.value}</span>
+                            <span className="w-1.5 h-1.5 rounded-full" style={{
+                              background: sig.severity === "stressed" 
+                                ? "var(--pb-red)" 
+                                : sig.severity === "watch" 
+                                  ? "var(--pb-amber)" 
+                                  : "var(--pb-green)"
+                            }} title={sig.detail} />
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -1622,10 +1595,13 @@ function Dashboard() {
                           </button>
                           <button
                             id="btn-wellness-break"
-                            onClick={() => handleWellnessAction("break")}
+                            onClick={() => {
+                              handleWellnessAction("break");
+                              setInlineBreatherOpen((v) => !v);
+                            }}
                             className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-warning hover:text-warning/90 bg-warning/5 hover:bg-warning/10 border border-warning/20 hover:border-warning/30 rounded-xl transition-all cursor-pointer"
                           >
-                            I Need a Break
+                            {inlineBreatherOpen ? "Close Breather" : "I Need a Break"}
                           </button>
                           <button
                             id="btn-wellness-spending"
@@ -1659,34 +1635,48 @@ function Dashboard() {
                           </button>
                         </form>
 
-                        <div className="rounded-xl border border-red-950/20 bg-red-950/5 p-4 space-y-2.5">
-                          <p className="text-xs font-bold tracking-[0.15em] text-red-400 uppercase flex items-center gap-1.5 font-mono">
-                            <Phone className="h-3.5 w-3.5 text-primary" />
-                            <span>Campus Counseling Services (Confidential)</span>
-                          </p>
-                          <p className="text-xs text-zinc-400 leading-relaxed">
-                            No pressure at all, but if things are feeling too heavy, the campus support team is a free and confidential space dedicated to helping students pace themselves.
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-500 font-medium pt-1">
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="h-3 w-3 shrink-0 text-zinc-600" />
-                              <span>Wellness Cell, Room 102, Admin Block</span>
+                        <div className="rounded-xl border border-border bg-surface-raised/40 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setShowCounseling(!showCounseling)}
+                            className="w-full flex items-center justify-between p-4 text-xs font-bold text-foreground hover:bg-surface-raised/60 transition-colors cursor-pointer"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-primary" />
+                              Campus Counseling Services (Confidential)
+                            </span>
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">
+                              {showCounseling ? "Hide info ▲" : "Show info ▼"}
+                            </span>
+                          </button>
+                          
+                          {showCounseling && (
+                            <div className="px-4 pb-4 pt-2 space-y-2.5 border-t border-border bg-red-950/5 animate-[fadeIn_0.2s_ease-out]">
+                              <p className="text-xs text-zinc-400 leading-relaxed font-medium">
+                                No pressure at all, but if things are feeling too heavy, the campus support team is a free and confidential space dedicated to helping students pace themselves.
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-500 font-medium pt-1">
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin className="h-3 w-3 shrink-0 text-zinc-600" />
+                                  <span>Wellness Cell, Room 102, Admin Block</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Phone className="h-3 w-3 shrink-0 text-zinc-600" />
+                                  <a href="tel:+911123456789" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
+                                    +91 11 2345 6789
+                                    <ExternalLink className="h-2 w-2" />
+                                  </a>
+                                </div>
+                                <div className="flex items-center gap-1.5 col-span-full">
+                                  <Mail className="h-3 w-3 shrink-0 text-zinc-600" />
+                                  <a href="mailto:wellness@institute.edu" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
+                                    wellness@institute.edu
+                                    <ExternalLink className="h-2 w-2" />
+                                  </a>
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <Phone className="h-3 w-3 shrink-0 text-zinc-600" />
-                              <a href="tel:+911123456789" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
-                                +91 11 2345 6789
-                                <ExternalLink className="h-2 w-2" />
-                              </a>
-                            </div>
-                            <div className="flex items-center gap-1.5 col-span-full">
-                              <Mail className="h-3 w-3 shrink-0 text-zinc-600" />
-                              <a href="mailto:wellness@institute.edu" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
-                                wellness@institute.edu
-                                <ExternalLink className="h-2 w-2" />
-                              </a>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     )}

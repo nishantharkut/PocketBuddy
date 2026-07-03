@@ -1159,6 +1159,7 @@ function Dashboard() {
   // Red State Wellness Check-in
   const [redCheckinText, setRedCheckinText] = useState("");
   const [redCheckinSubmitting, setRedCheckinSubmitting] = useState(false);
+  const [inlineBreatherOpen, setInlineBreatherOpen] = useState(false);
 
   useEffect(() => {
     if (checkinChecked.current || !profile || !txns) return;
@@ -1458,12 +1459,12 @@ function Dashboard() {
                   </p>
                   
                   {wellness && (
-                    <Badge variant="outline" className="font-bold text-xs px-2 py-0.5" style={{
+                    <Badge variant="outline" className="font-bold text-[10px] px-2.5 py-0.5 uppercase tracking-wider" style={{
                       borderColor: wellness.status === "steady" ? "rgba(22,163,74,0.3)" : wellness.status === "watch" ? "rgba(217,119,6,0.3)" : "rgba(220,38,38,0.3)",
                       color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)",
                       background: wellness.status === "steady" ? "rgba(22,163,74,0.05)" : wellness.status === "watch" ? "rgba(217,119,6,0.05)" : "rgba(220,38,38,0.05)"
                     }}>
-                      {wellness.status === "steady" ? "STEADY" : wellness.status === "watch" ? "WATCH" : "STRESSED"}
+                      {wellness.status === "steady" ? "🌲 Balanced Aura" : wellness.status === "watch" ? "🌤️ Mindful Pacing" : "🌧️ Gentle Recovery"}
                     </Badge>
                   )}
                 </div>
@@ -1506,41 +1507,111 @@ function Dashboard() {
 
                     <p className="text-xs md:text-sm text-zinc-300 font-medium leading-relaxed mb-4">
                       {wellness.status === "stressed" 
-                        ? "We noticed a stack of stressful signals today. Remember, your runway and meals don't define you. Taking it one step at a time is enough. You can do this." 
+                        ? "Take a gentle breath. You have a lot on your plate right now, but your budget is just numbers and you are doing your best. Let's look at small resets to help you balance." 
                         : wellness.message}
                     </p>
 
-                    {/* Contributing Signals */}
-                    <div className="border-t border-border pt-4 mt-2 mb-4">
-                      <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3 font-mono">Contributing Signals</p>
+                    {/* Conversational Observations (Interactive & Helpful Nudges instead of technical logs) */}
+                    <div className="border-t border-border pt-4 mt-2 mb-4 space-y-3.5">
+                      <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase font-mono">Campus Observations</p>
                       
-                      <div className="flex flex-wrap gap-2">
-                        {wellness.signals?.map((sig: any) => (
-                          <div key={sig.key} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-surface-raised/40 text-xs font-medium" style={{
-                            borderColor: sig.severity === "stressed" 
-                              ? "rgba(239,68,68,0.25)" 
-                              : sig.severity === "watch" 
-                                ? "rgba(245,158,11,0.25)" 
-                                : "var(--border)"
-                          }}>
-                            <span className="text-zinc-400 font-medium">{sig.label}:</span>
-                            <span className="font-bold text-foreground">{sig.value}</span>
-                            <span className="w-1.5 h-1.5 rounded-full" style={{
-                              background: sig.severity === "stressed" 
-                                ? "var(--pb-red)" 
-                                : sig.severity === "watch" 
-                                  ? "var(--pb-amber)" 
-                                  : "var(--pb-green)"
-                            }} title={sig.detail} />
-                          </div>
-                        ))}
+                      <div className="space-y-3">
+                        {wellness.signals?.map((sig: any) => {
+                          const isMealAlert = sig.key === "food_gap" && parseFloat(sig.value) >= 16;
+                          const isRunwayAlert = sig.key === "runway" && parseFloat(sig.value) < 10;
+                          const isExamStress = sig.key === "exam" && sig.severity !== "steady";
+                          
+                          return (
+                            <div key={sig.key} className="rounded-xl border border-border bg-surface-raised/20 p-3.5 flex flex-col gap-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full" style={{
+                                    background: sig.severity === "stressed" 
+                                      ? "var(--pb-red)" 
+                                      : sig.severity === "watch" 
+                                        ? "var(--pb-amber)" 
+                                        : "var(--pb-green)"
+                                  }} />
+                                  <span className="text-xs font-bold text-foreground capitalize">{sig.label}</span>
+                                </div>
+                                <span className="text-xs font-bold text-muted-foreground">{sig.value}</span>
+                              </div>
+                              
+                              <p className="text-xs text-zinc-400 leading-relaxed font-medium">
+                                {sig.key === "food_gap" 
+                                  ? parseFloat(sig.value) >= 16 
+                                    ? "It's been a while since your last logged meal. Make sure to get some hot food to keep your energy up!" 
+                                    : "Your meal schedule looks stable and regular."
+                                  : sig.key === "runway" 
+                                    ? parseFloat(sig.value) < 10 
+                                      ? "Runway is getting narrow. Joining a shared transport pool or Swiggy discount group can save substantial daily cash." 
+                                      : "Your financial runway is in a safe margin."
+                                    : sig.key === "exam" 
+                                      ? sig.severity !== "steady" 
+                                        ? "Exam window is ongoing. Keep structural schedules, sleep at regular hours, and walk for breaks."
+                                        : "Standard academic schedules apply."
+                                      : sig.detail}
+                              </p>
+
+                              {/* Interactive Inline Resets */}
+                              {(isMealAlert || isRunwayAlert || isExamStress) && (
+                                <div className="flex flex-wrap gap-2 pt-0.5">
+                                  {isMealAlert && (
+                                    <>
+                                      <button 
+                                        onClick={() => handleWellnessAction("ate")}
+                                        className="h-8 rounded-lg bg-success/10 text-success border border-success/20 px-3 text-[10px] font-black uppercase tracking-wider hover:bg-success/20 transition-all cursor-pointer"
+                                      >
+                                        I Ate at Mess (₹0)
+                                      </button>
+                                      <button 
+                                        onClick={() => setShowFoodSheet(true)}
+                                        className="h-8 rounded-lg bg-surface border border-border text-foreground px-3 text-[10px] font-black uppercase tracking-wider hover:bg-surface-raised transition-all cursor-pointer"
+                                      >
+                                        Campus Dining Hub
+                                      </button>
+                                    </>
+                                  )}
+                                  {isRunwayAlert && (
+                                    <button 
+                                      onClick={() => nav({ to: "/pool" })}
+                                      className="h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 px-3 text-[10px] font-black uppercase tracking-wider hover:bg-primary/20 transition-all cursor-pointer"
+                                    >
+                                      Join a Cart Pool
+                                    </button>
+                                  )}
+                                  {isExamStress && (
+                                    <button 
+                                      onClick={() => setInlineBreatherOpen(!inlineBreatherOpen)}
+                                      className="h-8 rounded-lg bg-primary/10 text-primary border border-primary/20 px-3 text-[10px] font-black uppercase tracking-wider hover:bg-primary/20 transition-all cursor-pointer"
+                                    >
+                                      {inlineBreatherOpen ? "Close Breather" : "Start 1-Min Breather"}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
-                    {/* Conditional layouts based on status */}
+                    {/* Inline Guided Breather Visualizer */}
+                    {inlineBreatherOpen && (
+                      <div className="border-t border-border pt-4 pb-2 animate-[fadeIn_0.3s_ease-out]">
+                        <div className="rounded-xl border border-border bg-surface-raised/20 p-4">
+                          <p className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5 font-display uppercase tracking-wider">
+                            <Wind className="h-4 w-4 text-primary" /> Active Breathing space
+                          </p>
+                          <BreathingExercise />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Watch Quick Action Nudges */}
                     {wellness.status === "watch" && (
                       <div className="border-t border-border pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <span className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-1 sm:mb-0 sm:mr-2 font-mono">Quick Check-in:</span>
+                        <span className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-1 sm:mb-0 sm:mr-2 font-mono">Routine Nudge:</span>
                         <div className="flex flex-wrap gap-2 flex-1">
                           <button
                             id="btn-wellness-ate"
@@ -1567,14 +1638,15 @@ function Dashboard() {
                       </div>
                     )}
 
+                    {/* Stressed Intervention Panel */}
                     {wellness.status === "stressed" && (
                       <div className="border-t border-border pt-4 mt-4 space-y-4">
                         <form onSubmit={handleRedCheckinSubmit} className="space-y-3">
-                          <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase pl-1 font-mono">Submit Feedback Check-in</p>
+                          <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase pl-1 font-mono">Confidential Self Check-in</p>
                           <textarea 
                             value={redCheckinText} 
                             onChange={(e) => setRedCheckinText(e.target.value)} 
-                            placeholder="How are you feeling today? Write down any notes, feelings or stress points..." 
+                            placeholder="Need to vent? Jot down any stress points, schedule issues, or thoughts here. Writing them down can help bring clarity." 
                             className="w-full min-h-[88px] bg-background/50 border border-border rounded-xl p-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 resize-none text-foreground placeholder:text-muted-foreground/50 leading-relaxed transition-all" 
                             disabled={redCheckinSubmitting} 
                           />
@@ -1583,17 +1655,17 @@ function Dashboard() {
                             disabled={redCheckinSubmitting || !redCheckinText.trim()} 
                             className="w-full min-h-[44px] rounded-xl bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-2"
                           >
-                            {redCheckinSubmitting ? "Submitting..." : "Submit Check-in"}
+                            {redCheckinSubmitting ? "Logging check-in..." : "Log Check-in"}
                           </button>
                         </form>
 
-                        <div className="rounded-xl border border-red-950/40 bg-red-950/10 p-4 space-y-2.5">
+                        <div className="rounded-xl border border-red-950/20 bg-red-950/5 p-4 space-y-2.5">
                           <p className="text-xs font-bold tracking-[0.15em] text-red-400 uppercase flex items-center gap-1.5 font-mono">
-                            <Phone className="h-3.5 w-3.5" />
-                            <span>Campus Counseling Services</span>
+                            <Phone className="h-3.5 w-3.5 text-primary" />
+                            <span>Campus Counseling Services (Confidential)</span>
                           </p>
                           <p className="text-xs text-zinc-400 leading-relaxed">
-                            If you feel overwhelmed, please reach out to the campus support team. It is completely confidential, free, and designed for students.
+                            No pressure at all, but if things are feeling too heavy, the campus support team is a free and confidential space dedicated to helping students pace themselves.
                           </p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-500 font-medium pt-1">
                             <div className="flex items-center gap-1.5">
@@ -1632,7 +1704,7 @@ function Dashboard() {
                           </div>
                           <div className="text-left">
                             <p className="text-xs font-black text-primary uppercase tracking-wider">View AI Care Plan</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">Personalised steps, meditation &amp; grounding for today</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Personalised steps, meditation &amp; grounding for today</p>
                           </div>
                         </div>
                         <Sparkles className="h-4 w-4 text-primary group-hover:scale-110 transition-transform shrink-0" />

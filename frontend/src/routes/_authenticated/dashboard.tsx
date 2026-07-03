@@ -90,6 +90,7 @@ function BreathingExercise() {
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [count, setCount] = useState(4);
   const [cycles, setCycles] = useState(0);
+  const [ready, setReady] = useState(false); // "Relax" pre-start state
 
   useEffect(() => {
     if (!active) return;
@@ -108,43 +109,175 @@ function BreathingExercise() {
   }, [active]);
 
   const phase = BREATH_PHASES[phaseIdx];
-  const scale = phase.key === "in" || phase.key === "hold1" ? 1 : 0.62;
 
-  function toggle() {
-    if (active) {
-      setActive(false);
-    } else {
+  // Circle scale: small → large on inhale, large on hold, large → small on exhale, small on hold2
+  const isExpanded = active && (phase.key === "in" || phase.key === "hold1");
+  const circleScale = active ? (isExpanded ? 1 : 0.5) : ready ? 0.6 : 0.5;
+
+  // Transition duration matches phase
+  const phaseDuration = phase.key === "in" || phase.key === "out" ? "3900ms" : "200ms";
+  const transitionDuration = active ? phaseDuration : "600ms";
+
+  // Show overlapping ellipses during Hold
+  const isHold = active && phase.key === "hold1";
+
+  function start() {
+    setReady(true);
+    setTimeout(() => {
       setPhaseIdx(0);
       setCount(4);
       setCycles(0);
       setActive(true);
-    }
+      setReady(false);
+    }, 1800);
   }
 
+  function stop() {
+    setActive(false);
+    setReady(false);
+    setPhaseIdx(0);
+    setCount(4);
+    setCycles(0);
+  }
+
+  const phaseLabel = ready ? "Relax" : active ? phase.label : "Relax";
+
   return (
-    <div className="flex flex-col items-center py-2">
-      <div className="relative grid place-items-center h-36 w-36">
-        <div
-          className="absolute h-full w-full rounded-full bg-primary/15 border border-primary/30 transition-transform ease-in-out"
-          style={{ transitionDuration: "3800ms", transform: `scale(${active ? scale : 0.7})` }}
-        />
-        <div className="relative text-center">
-          <p className="text-sm font-bold text-foreground">{active ? phase.label : "Ready?"}</p>
-          {active && <p className="text-3xl font-black text-primary tnum leading-tight">{count}</p>}
+    <div className="flex flex-col items-center py-1">
+      {/* Main visual area */}
+      <div
+        className="relative w-full rounded-2xl overflow-hidden flex flex-col items-center justify-center"
+        style={{
+          minHeight: "220px",
+          background: "linear-gradient(135deg, #0f4c75 0%, #1b6ca8 40%, #0d7a55 100%)",
+        }}
+      >
+        {/* Cycle counter top-right */}
+        {active && (
+          <div className="absolute top-3 right-4 text-white/60 text-xs font-semibold tabular-nums">
+            {cycles + 1}
+          </div>
+        )}
+
+        {/* Phase label top-left */}
+        <div className="absolute top-3 left-4 text-white/70 text-xs font-semibold uppercase tracking-widest">
+          {active ? phase.label : ""}
         </div>
+
+        {/* Breathing circle SVG canvas */}
+        <div className="relative flex items-center justify-center" style={{ width: 180, height: 180 }}>
+          <svg
+            width="180" height="180"
+            viewBox="0 0 180 180"
+            className="absolute inset-0"
+            style={{ overflow: "visible" }}
+          >
+            {/* Background glow ring */}
+            <circle
+              cx="90" cy="90" r="72"
+              fill="none"
+              stroke="rgba(255,255,255,0.06)"
+              strokeWidth="1"
+            />
+
+            {/* Main breathing circle */}
+            <circle
+              cx="90" cy="90"
+              r="62"
+              fill="none"
+              stroke="rgba(255,255,255,0.85)"
+              strokeWidth="1.5"
+              style={{
+                transition: `transform ${transitionDuration} cubic-bezier(0.45,0,0.55,1)`,
+                transformOrigin: "90px 90px",
+                transform: `scale(${circleScale})`,
+              }}
+            />
+
+            {/* Vertical line during Inhale */}
+            {active && phase.key === "in" && (
+              <line
+                x1="90" y1="28" x2="90" y2="152"
+                stroke="rgba(255,255,255,0.7)"
+                strokeWidth="1"
+                style={{
+                  opacity: 1,
+                  transform: `scaleY(${circleScale})`,
+                  transformOrigin: "90px 90px",
+                  transition: `transform ${transitionDuration} cubic-bezier(0.45,0,0.55,1)`,
+                }}
+              />
+            )}
+
+            {/* Overlapping ellipses during Hold — iOS Relax style */}
+            {isHold && (
+              <>
+                <ellipse
+                  cx="90" cy="90" rx="55" ry="38"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.55)"
+                  strokeWidth="1"
+                  style={{
+                    transformOrigin: "90px 90px",
+                    transform: "rotate(-35deg)",
+                    animation: "breathHoldSpin 4s linear infinite",
+                  }}
+                />
+                <ellipse
+                  cx="90" cy="90" rx="55" ry="38"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.40)"
+                  strokeWidth="1"
+                  style={{
+                    transformOrigin: "90px 90px",
+                    transform: "rotate(35deg)",
+                    animation: "breathHoldSpin2 4s linear infinite",
+                  }}
+                />
+              </>
+            )}
+          </svg>
+
+          {/* Center text */}
+          <div className="relative z-10 text-center select-none pointer-events-none">
+            <p className="text-white text-base font-light tracking-wide" style={{ fontFamily: "inherit" }}>
+              {phaseLabel}
+            </p>
+            {active && (
+              <p className="text-white/60 text-xs mt-0.5 tabular-nums">{count}s</p>
+            )}
+          </div>
+        </div>
+
+        {/* Subtle bottom hint */}
+        <p className="text-white/40 text-[10px] mt-2 mb-4 tracking-widest uppercase">
+          {active ? `box breathing · cycle ${cycles + 1}` : "tap start to begin"}
+        </p>
+
+        {/* Keyframes injected inline */}
+        <style>{`
+          @keyframes breathHoldSpin {
+            from { transform: rotate(-35deg); }
+            to   { transform: rotate(145deg); }
+          }
+          @keyframes breathHoldSpin2 {
+            from { transform: rotate(35deg); }
+            to   { transform: rotate(-145deg); }
+          }
+        `}</style>
       </div>
-      <p className="text-[11px] text-muted-foreground mt-2">
-        {active ? `Cycle ${cycles + 1} · box breathing 4-4-4-4` : "A one-minute calm reset — follow the circle"}
-      </p>
+
+      {/* Control button */}
       <button
-        onClick={toggle}
+        onClick={active ? stop : start}
         className="mt-3 rounded-xl border border-border bg-surface-raised/40 hover:bg-surface-raised px-5 py-2 text-xs font-bold uppercase tracking-wider text-foreground transition-colors cursor-pointer"
       >
-        {active ? "Stop" : "Start breathing"}
+        {active ? "Stop" : ready ? "Starting…" : "Start breathing"}
       </button>
     </div>
   );
 }
+
 
 function WellnessCarePlanDialog({
   open,

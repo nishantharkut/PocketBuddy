@@ -279,6 +279,15 @@ function BreathingExercise() {
 }
 
 
+const GROUNDING_TASKS = [
+  "Relax your jaw, drop your shoulders, and take one slow, deep breath.",
+  "Look around you and name 3 things that are blue.",
+  "Feel the physical weight of your feet firmly on the floor for 5 seconds.",
+  "Clench your fists tight for 3 seconds, then release them slowly.",
+  "Touch a nearby object (like a desk or phone) and focus on its texture.",
+  "Listen closely and name 2 distinct sounds you can hear right now."
+];
+
 function WellnessCarePlanDialog({
   open,
   onOpenChange,

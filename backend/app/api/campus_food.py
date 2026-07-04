@@ -20,9 +20,18 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user, map_doc, map_docs
 from app.services.campus_food import load_campus_food
+from app.core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger("app.api.campus_food")
+
+async def _is_user_trusted(db, user_id: str) -> bool:
+    user = await db.users.find_one({"_id": user_id})
+    if not user:
+        return False
+    role = user.get("role", "").lower()
+    is_admin = user.get("is_admin", False)
+    return role in ("admin", "moderator") or is_admin
 
 # Max upload size: 5 MB
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
@@ -143,10 +152,11 @@ async def create_food_item(
     Supports creating items as 'active' (e.g. from manual menus) or 'pending_verification'.
     """
     db = get_db()
+    is_trusted = await _is_user_trusted(db, user_id)
     venue_name = body.venue_name.strip()
     item_name = body.item_name.strip()
     campus = body.campus.strip()
-    status = body.status if body.status in ("active", "pending_verification") else "pending_verification"
+    status = body.status if (body.status in ("active", "pending_verification") and is_trusted) else "pending_verification"
 
     existing = await db.campus_food.find_one({
         "venue_name": {"$regex": f"^{re.escape(venue_name)}$", "$options": "i"},
@@ -165,7 +175,7 @@ async def create_food_item(
         "price": body.price,
         "price_history": [{"price": body.price, "changed_at": datetime.datetime.utcnow().isoformat()}],
         "status": status,
-        "verification_votes": 3 if status == "active" else 1,
+        "verification_votes": 3 if (status == "active" and is_trusted) else 1,
         "verification_threshold": 3,
         "scanned_by": user_id,
         "s3_image_uri": "",
@@ -236,22 +246,29 @@ async def scan_menu_photo(
     if raw_text.strip():
         parsed_items = structure_menu_text(raw_text, venue_name, campus)
 
+    is_fallback = False
     if not parsed_items:
-        logger.warning("OCR returned empty or unparseable text. Using venue-based fallback.")
-        vl = venue_name.lower()
-        if any(k in vl for k in ("tea", "chai", "nescafe", "coffee")):
-            raw_text = "Masala Chai 10\nGinger Tea 12\nSamosa 15\nKachori 15\nBun Maska 25"
-        elif any(k in vl for k in ("canteen", "mess", "dining", "hostel", "bh2", "bh-2")):
-            raw_text = "Veg Thali 80\nSpecial Thali 120\nPaneer Butter Masala 110\nTandoori Roti 8\nJeera Rice 60"
-        elif any(k in vl for k in ("dhaba", "punjabi")):
-            raw_text = "Aloo Paratha 40\nPaneer Paratha 60\nDal Makhani 90\nLassi 35"
+        if settings.DEMO_MODE:
+            logger.warning("OCR returned empty or unparseable text. Using venue-based fallback in DEMO_MODE.")
+            is_fallback = True
+            vl = venue_name.lower()
+            if any(k in vl for k in ("tea", "chai", "nescafe", "coffee")):
+                raw_text = "Masala Chai 10\nGinger Tea 12\nSamosa 15\nKachori 15\nBun Maska 25"
+            elif any(k in vl for k in ("canteen", "mess", "dining", "hostel", "bh2", "bh-2")):
+                raw_text = "Veg Thali 80\nSpecial Thali 120\nPaneer Butter Masala 110\nTandoori Roti 8\nJeera Rice 60"
+            elif any(k in vl for k in ("dhaba", "punjabi")):
+                raw_text = "Aloo Paratha 40\nPaneer Paratha 60\nDal Makhani 90\nLassi 35"
+            else:
+                raw_text = "Masala Maggi 30\nCheese Maggi 40\nVeg Sandwich 45\nCold Coffee 35"
+            parsed_items = structure_menu_text(raw_text, venue_name, campus)
         else:
-            raw_text = "Masala Maggi 30\nCheese Maggi 40\nVeg Sandwich 45\nCold Coffee 35"
-        parsed_items = structure_menu_text(raw_text, venue_name, campus)
+            logger.warning("OCR returned empty or unparseable text. Raising exception.")
+            raise HTTPException(status_code=422, detail="OCR text extraction failed or was unparseable. No menu items could be identified.")
 
     # Step 3: Upsert into DB
     now = datetime.datetime.utcnow()
     inserted = []
+    is_trusted = await _is_user_trusted(db, user_id)
     for item in parsed_items:
         existing = await db.campus_food.find_one({
             "venue_name": {"$regex": f"^{re.escape(item['venue_name'])}$", "$options": "i"},
@@ -265,6 +282,8 @@ async def scan_menu_photo(
             updated = await db.campus_food.find_one({"_id": existing["_id"]})
             inserted.append(map_doc(updated))
         else:
+            status = "active" if (is_trusted and not is_fallback) else "pending_verification"
+            votes = 3 if (is_trusted and not is_fallback) else 1
             doc = {
                 "_id": item["id"],
                 "campus": item["campus"],
@@ -273,8 +292,8 @@ async def scan_menu_photo(
                 "item_name": item["item_name"],
                 "category": item.get("category", "other"),
                 "price": item["price"],
-                "status": "active",
-                "verification_votes": 1,
+                "status": status,
+                "verification_votes": votes,
                 "verification_threshold": 3,
                 "scanned_by": user_id,
                 "s3_image_uri": "",
@@ -332,6 +351,11 @@ async def edit_food_item(
     if not item:
         raise HTTPException(status_code=404, detail="Menu item not found.")
 
+    is_creator = item.get("scanned_by") == user_id
+    is_trusted = await _is_user_trusted(db, user_id)
+    if not (is_creator or is_trusted):
+        raise HTTPException(status_code=403, detail="Not authorized to edit this menu item.")
+
     updates: dict = {"updated_at": datetime.datetime.utcnow(), "edited_by": user_id}
     push_updates: dict = {}
     if req.item_name is not None:
@@ -364,9 +388,16 @@ async def delete_food_item(
 ):
     """Delete a food item from active/pending menus."""
     db = get_db()
-    res = await db.campus_food.delete_one({"_id": item_id})
-    if res.deleted_count == 0:
+    item = await db.campus_food.find_one({"_id": item_id})
+    if not item:
         raise HTTPException(status_code=404, detail="Item not found.")
+
+    is_creator = item.get("scanned_by") == user_id
+    is_trusted = await _is_user_trusted(db, user_id)
+    if not (is_creator or is_trusted):
+        raise HTTPException(status_code=403, detail="Not authorized to delete this menu item.")
+
+    await db.campus_food.delete_one({"_id": item_id})
     return {"message": "Item deleted successfully."}
 
 
@@ -533,7 +564,8 @@ async def scan_receipt(
         "mapped_merchant_name": recipient,
         "raw_merchant_string": f"UPI Pay: {recipient}",
         "created_at": now,
-        "notes": f"Auto-verified via UPI Receipt OCR (Ref: {txn_ref})"
+        "notes": f"Auto-verified via UPI Receipt OCR (Ref: {txn_ref})",
+        "needs_verification": True
     }
     await db.transactions.insert_one(txn_doc)
 
@@ -565,11 +597,35 @@ class SubmitQuizRequest(BaseModel):
     location: Optional[str] = None
     image_b64: Optional[str] = None  # supporting receipt verification!
 
+def mask_merchant_name(raw_string: str) -> str:
+    # Remove UPI address formats (e.g. user@bank -> user***@bank)
+    if "@" in raw_string:
+        parts = raw_string.split("@")
+        name = parts[0]
+        bank = parts[1]
+        if len(name) > 3:
+            name = name[:3] + "***"
+        else:
+            name = "***"
+        raw_string = f"{name}@{bank}"
+    
+    # If it looks like a phone number (e.g., contains 10 consecutive digits)
+    phone_match = re.search(r"\d{10}", raw_string)
+    if phone_match:
+        num = phone_match.group(0)
+        raw_string = raw_string.replace(num, num[:3] + "****" + num[7:])
+        
+    return raw_string
+
+
 @router.get("/quizzes")
 @router.get("/quizzes/")
 async def get_community_quizzes(user_id: str = Depends(get_current_user)):
     db = get_db()
     quizzes = []
+
+    MIN_USERS_THRESHOLD = 3
+    MIN_TXNS_THRESHOLD = 5
 
     # 1. Category check quizzes: Find unmapped transactions with repeating count across different users
     try:
@@ -605,15 +661,23 @@ async def get_community_quizzes(user_id: str = Depends(get_current_user)):
                 continue
 
             user_count = len(tc.get("unique_users", []))
+            tx_count = tc.get("count", 0)
+            
+            # Apply privacy thresholds
+            if user_count < MIN_USERS_THRESHOLD or tx_count < MIN_TXNS_THRESHOLD:
+                continue
+
+            masked_raw_string = mask_merchant_name(raw_string)
+            masked_question_string = masked_raw_string.replace('_', ' ')
             
             quizzes.append({
                 "id": f"quiz_cat_{raw_string}",
                 "type": "category",
                 "title": "Category Audit",
-                "question": f"Is '{raw_string.replace('_', ' ')}' a campus food joint, tapri, or canteen?",
+                "question": f"Is '{masked_question_string}' a campus food joint, tapri, or canteen?",
                 "merchant_raw": raw_string,
                 "options": ["Food Canteen", "Stationery", "Delivery Services", "General Stores"],
-                "detail": f"Detected {tc.get('count', 1)} payment{'s' if tc.get('count', 1) > 1 else ''} across {user_count} student{'s' if user_count > 1 else ''}."
+                "detail": f"Detected {tx_count} payment{'s' if tx_count > 1 else ''} across {user_count} student{'s' if user_count > 1 else ''}."
             })
     except Exception as e:
         logger.exception("Error generating category quizzes: %s", str(e))
@@ -712,7 +776,7 @@ async def get_community_quizzes(user_id: str = Depends(get_current_user)):
         logger.exception("Error generating item quizzes: %s", str(e))
 
     # Fallback to seed default community quizzes matching user screenshot requests
-    if not quizzes:
+    if not quizzes and settings.DEMO_MODE:
         quizzes.extend([
             {
                 "id": "quiz_cat_QK_PAY_SNACKS",
@@ -806,6 +870,9 @@ async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(ge
             raise HTTPException(status_code=400, detail="Missing venue_name or price for item/meal quiz submission")
             
         item_id = f"{req.venue_name.lower().replace(' ', '_')}_{req.response_val.lower().replace(' ', '_')}_{uuid.uuid4().hex[:6]}"
+        is_trusted = await _is_user_trusted(db, user_id)
+        status = "active" if is_trusted else "pending_verification"
+        votes = 3 if is_trusted else 1
         doc = {
             "_id": item_id,
             "campus": "ABV-IIITM Gwalior",
@@ -815,15 +882,16 @@ async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(ge
             "category": "food",
             "price": req.price,
             "price_history": [{"price": req.price, "changed_at": now.isoformat()}],
-            "status": "active",
-            "verification_votes": 3 if verified else 1,
+            "status": status,
+            "verification_votes": votes,
             "verification_threshold": 3,
             "scanned_by": user_id,
             "created_at": now,
             "updated_at": now
         }
         await db.campus_food.insert_one(doc)
-        return {"status": "success", "message": f"Added item '{req.response_val}' at ₹{req.price/100:.0f} to {req.venue_name} Official Menu."}
+        msg_suffix = "Official Menu." if status == "active" else "Menu (pending community verification)."
+        return {"status": "success", "message": f"Added item '{req.response_val}' at ₹{req.price/100:.0f} to {req.venue_name} {msg_suffix}"}
 
     elif req.quiz_type == "price_spike":
         if not req.venue_name or not req.item_name or not req.new_price:

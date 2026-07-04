@@ -54,7 +54,7 @@ def extract_text_from_image(image_bytes: bytes) -> str:
         filetype = "JPG"
 
     data = urllib.parse.urlencode({
-        "apikey": "helloworld",
+        "apikey": settings.OCR_SPACE_API_KEY,
         "base64image": f"data:{mime};base64,{base64_image}",
         "language": "eng",
         "isOverlayRequired": "false",

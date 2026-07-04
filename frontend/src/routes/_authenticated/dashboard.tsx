@@ -7,7 +7,7 @@ import { PlatformIcon } from "@/components/PlatformIcon";
 import {
   Plus, ChevronRight, AlertTriangle, Users, Utensils, ShoppingBag,
   Bus, Receipt, MoreHorizontal, Wallet, Timer, MessageSquare, Phone, Mail, MapPin, ExternalLink, Compass, TrendingDown,
-  ShieldCheck, Sparkles
+  ShieldCheck, Sparkles, Image, ZoomIn, ZoomOut, Maximize2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -827,7 +827,66 @@ function Dashboard() {
 
   // Expanded Photo View State
   const [expandedPhotoVenue, setExpandedPhotoVenue] = useState<string | null>(null);
+  const [zoomScale, setZoomScale] = useState(1);
   const [venuePhotos, setVenuePhotos] = useState<Record<string, string>>({});
+
+  const photoCanvasRef = useRef<HTMLDivElement | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [panScroll, setPanScroll] = useState({ left: 0, top: 0 });
+
+  const handlePanMouseDown = (e: React.MouseEvent) => {
+    if (zoomScale <= 1 || !photoCanvasRef.current) return;
+    setIsPanning(true);
+    setPanStart({ x: e.clientX, y: e.clientY });
+    setPanScroll({
+      left: photoCanvasRef.current.scrollLeft,
+      top: photoCanvasRef.current.scrollTop
+    });
+  };
+
+  const handlePanMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning || zoomScale <= 1 || !photoCanvasRef.current) return;
+    e.preventDefault();
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+    photoCanvasRef.current.scrollLeft = panScroll.left - dx;
+    photoCanvasRef.current.scrollTop = panScroll.top - dy;
+  };
+
+  const handlePanMouseUpOrLeave = () => {
+    setIsPanning(false);
+  };
+
+  const activeVenuePhoto = useMemo(() => {
+    if (!expandedPhotoVenue) return null;
+    const firstPhoto = (foods ?? []).find((it: any) => it.venue_name === expandedPhotoVenue && it.s3_image_uri)?.s3_image_uri;
+    const dbPhoto = venuePhotos[expandedPhotoVenue];
+    return firstPhoto || dbPhoto || null;
+  }, [expandedPhotoVenue, foods, venuePhotos]);
+
+  useEffect(() => {
+    if (expandedPhotoVenue === null) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") {
+        return;
+      }
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        setZoomScale((s) => Math.min(3, s + 0.25));
+      } else if (e.key === "-") {
+        e.preventDefault();
+        setZoomScale((s) => Math.max(0.5, s - 0.25));
+      } else if (e.key.toLowerCase() === "r" || e.key === "0") {
+        e.preventDefault();
+        setZoomScale(1);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [expandedPhotoVenue]);
 
   // Inline Menu Edit State
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -1260,6 +1319,7 @@ function Dashboard() {
   // ── Smart nudges derived from insights ──────────────────────────────────
   const [dismissedNudges, setDismissedNudges] = useState<Set<string>>(new Set());
   const dismiss = (id: string) => setDismissedNudges((s) => new Set([...s, id]));
+  const [currentWarningIndex, setCurrentWarningIndex] = useState(0);
 
   const nudges = useMemo(() => {
     const list: { id: string; icon: any; accent: string; title: string; body: string }[] = [];
@@ -1313,12 +1373,18 @@ function Dashboard() {
 
     // Spending velocity spike
     const vel = insights.velocity?.pct_change ?? 0;
-    if (vel > 30) {
+    const spend7 = (insights.velocity?.spend_7d_paise ?? 0) / 100;
+    const spendPrior = (insights.velocity?.spend_prior_7d_paise ?? 0) / 100;
+    const diff = spend7 - spendPrior;
+
+    // Only nudge if the percentage change is above 30% AND the actual increase is more than ₹500
+    if (vel > 30 && diff > 500) {
+      const velocityDisplay = vel >= 100 ? `${(vel / 100).toFixed(1)}×` : `${vel}%`;
       list.push({
         id: "velocity_spike",
         icon: AlertTriangle,
         accent: "#f59e0b",
-        title: `Spending up ${vel}% this week`,
+        title: `Spending up ${velocityDisplay} this week`,
         body: `You're spending significantly more than last week. At this pace your runway shrinks by ~${Math.round(vel / 10)} extra days.`,
       });
     }
@@ -1339,6 +1405,86 @@ function Dashboard() {
   }, [insights, calc]);
 
   const visibleNudges = nudges.filter((n) => !dismissedNudges.has(n.id)).slice(0, 2);
+
+  // Unified warnings feed for mobile carousel/ticker
+  const activeWarnings = useMemo(() => {
+    const list: {
+      id: string;
+      type: string;
+      icon: any;
+      accent: string;
+      title: string;
+      body: string;
+      onAction?: () => void;
+      actionText?: string;
+      onDismiss?: () => void;
+    }[] = [];
+
+    // 1. Add active nudges
+    visibleNudges.forEach((n) => {
+      list.push({
+        id: n.id,
+        type: "nudge",
+        icon: n.icon,
+        accent: n.accent,
+        title: n.title,
+        body: n.body,
+        onDismiss: () => dismiss(n.id)
+      });
+    });
+
+    // 2. Add price spikes
+    if (insights?.food?.price_spikes) {
+      insights.food.price_spikes.forEach((spike: any, idx: number) => {
+        list.push({
+          id: `price_spike_${idx}`,
+          type: "price_spike",
+          icon: AlertTriangle,
+          accent: "#ef4444",
+          title: "Price Spike Alert",
+          body: `Payments at ${spike.venue_name} suggest the price of ${spike.item_name} rose from ${rupees(spike.old_price * 100)} to ${rupees(spike.new_price * 100)} (+${spike.pct_increase}%).`,
+          onAction: () => setShowFoodSheet(true),
+          actionText: "Verify Menu"
+        });
+      });
+    }
+
+    // 3. Add meal gap warning
+    if (foodGapHours > 8 || (insights?.food?.gap_hours ?? 0) > 8) {
+      const gap = Math.round(foodGapHours || insights?.food?.gap_hours || 0);
+      const bodyText = bestFood 
+        ? `It has been ${gap} hours since your last meal. Protect your runway with a ${bestFood.item_name} for ${rupees(bestFood.price)} at ${bestFood.venue_name}.`
+        : `It has been ${gap} hours since your last meal. Grab a healthy meal at a campus canteen to stay active.`;
+      list.push({
+        id: "meal_gap",
+        type: "meal_gap",
+        icon: Utensils,
+        accent: "#f59e0b",
+        title: "Meal Gap Warning",
+        body: bodyText,
+        onAction: () => setShowFoodSheet(true),
+        actionText: "Find Food"
+      });
+    }
+
+    return list;
+  }, [visibleNudges, insights, foodGapHours, bestFood]);
+
+  // Keep currentWarningIndex in bounds
+  useEffect(() => {
+    if (currentWarningIndex >= activeWarnings.length) {
+      setCurrentWarningIndex(0);
+    }
+  }, [activeWarnings.length, currentWarningIndex]);
+
+  // Mobile warnings carousel auto-cycle
+  useEffect(() => {
+    if (activeWarnings.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentWarningIndex((prev) => (prev + 1) % activeWarnings.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeWarnings.length]);
 
   async function handleCheckInAte() {
     if (!user) return;
@@ -1494,78 +1640,163 @@ function Dashboard() {
 
       <div className="pb-16">
 
-        {/* ── Smart Nudges row ──────────────────────────────────────────── */}
-        {visibleNudges.length > 0 && (
-          <div className="mb-6 space-y-2">
-            {visibleNudges.map((n) => (
-              <NudgeCard key={n.id} {...n} onDismiss={() => dismiss(n.id)} />
-            ))}
+        {/* Mobile Rotating Alerts Ticker (Visible on mobile only, auto-cycling) */}
+        {activeWarnings.length > 0 && (
+          <div className="block md:hidden mb-6 animate-[fadeIn_0.3s_ease-out]">
+            {(() => {
+              const active = activeWarnings[currentWarningIndex % activeWarnings.length];
+              if (!active) return null;
+              
+              const Icon = active.icon;
+              return (
+                <div 
+                  className="relative rounded-2xl border p-4 overflow-hidden bg-surface/40 backdrop-blur-md transition-all duration-300"
+                  style={{ borderColor: `${active.accent}30` }}
+                >
+                  <div className="absolute inset-0 pointer-events-none"
+                    style={{ background: `radial-gradient(ellipse at top left, ${active.accent}08, transparent 70%)` }} />
+                  
+                  {/* Indicators / Progress Dot */}
+                  {activeWarnings.length > 1 && (
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                      {activeWarnings.map((_, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setCurrentWarningIndex(idx);
+                          }}
+                          className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                            idx === (currentWarningIndex % activeWarnings.length)
+                              ? "w-3"
+                              : "w-1.5 opacity-40"
+                          }`}
+                          style={{ backgroundColor: active.accent }}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-start gap-3 pr-10">
+                    <div className="p-2 rounded-xl bg-white/5 border border-white/10 shrink-0">
+                      <Icon className="h-4.5 w-4.5" style={{ color: active.accent }} />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <p className="text-[10px] font-black tracking-widest uppercase" style={{ color: active.accent }}>
+                        {active.title}
+                      </p>
+                      <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+                        {active.body}
+                      </p>
+                      
+                      {/* Action buttons inside the carousel */}
+                      <div className="flex items-center gap-2 pt-1.5">
+                        {active.onAction && (
+                          <button
+                            type="button"
+                            onClick={active.onAction}
+                            className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg border transition-all cursor-pointer"
+                            style={{ 
+                              borderColor: `${active.accent}40`, 
+                              color: active.accent,
+                              background: `${active.accent}0a`
+                            }}
+                          >
+                            {active.actionText}
+                          </button>
+                        )}
+                        {active.onDismiss && (
+                          <button
+                            type="button"
+                            onClick={active.onDismiss}
+                            className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider px-2 py-1 hover:text-zinc-400 cursor-pointer"
+                          >
+                            Dismiss
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
-        {/* ── AI Food Guard Live Banner ────────────────────────────────── */}
-        {((insights?.food?.price_spikes && insights.food.price_spikes.length > 0) || 
-          (foodGapHours > 8 || (insights?.food?.gap_hours ?? 0) > 8)) && (
-          <div className="mb-6 space-y-2 animate-[fadeIn_0.3s_ease-out]">
-            {/* Price Spike Notification */}
-            {insights?.food?.price_spikes?.map((spike: any, idx: number) => (
-              <div 
-                key={idx} 
-                className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-xs"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="grid place-items-center h-8 w-8 rounded-lg bg-destructive/10 text-destructive shrink-0">
-                    <AlertTriangle className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-black text-destructive uppercase tracking-wider">Price Spike Alert</p>
-                    <p className="text-zinc-300 font-medium leading-relaxed mt-0.5">
-                      Payments at <strong className="text-foreground">{spike.venue_name}</strong> suggest the price of <strong className="text-foreground">{spike.item_name}</strong> rose from {rupees(spike.old_price * 100)} to <strong className="text-destructive font-mono">{rupees(spike.new_price * 100)}</strong> (+{spike.pct_increase}%).
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowFoodSheet(true)}
-                  className="shrink-0 bg-destructive/10 hover:bg-destructive/15 border border-destructive/20 text-destructive px-3.5 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                >
-                  Verify Menu
-                </button>
-              </div>
-            ))}
+        {/* Desktop Stacked Warnings (Visible on desktop/tablet only) */}
+        <div className="hidden md:block space-y-2 mb-6">
+          {visibleNudges.length > 0 && (
+            <div className="space-y-2">
+              {visibleNudges.map((n) => (
+                <NudgeCard key={n.id} {...n} onDismiss={() => dismiss(n.id)} />
+              ))}
+            </div>
+          )}
 
-            {/* Food Gap / Meal Miss Guardrail */}
-            {(foodGapHours > 8 || (insights?.food?.gap_hours ?? 0) > 8) && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-warning/20 bg-warning/5 p-4 text-xs">
-                <div className="flex items-center gap-3">
-                  <div className="grid place-items-center h-8 w-8 rounded-lg bg-warning/10 text-warning shrink-0">
-                    <Utensils className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-black text-warning uppercase tracking-wider">Meal Gap Warning</p>
-                    <p className="text-zinc-300 font-medium leading-relaxed mt-0.5">
-                      It has been <strong className="text-foreground">{Math.round(foodGapHours || insights?.food?.gap_hours || 0)} hours</strong> since your last meal.
-                      {bestFood ? (
-                        <>
-                          {" "}Protect your runway with a <strong className="text-foreground">{bestFood.item_name}</strong> for <strong className="text-success font-mono">{rupees(bestFood.price)}</strong> at <strong className="text-foreground">{bestFood.venue_name}</strong>.
-                        </>
-                      ) : (
-                        " Grab a healthy meal at a campus canteen to stay active."
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowFoodSheet(true)}
-                  className="shrink-0 bg-warning/10 hover:bg-warning/15 border border-warning/20 text-warning px-3.5 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-colors cursor-pointer"
+          {/* AI Food Guard Live Banner */}
+          {((insights?.food?.price_spikes && insights.food.price_spikes.length > 0) || 
+            (foodGapHours > 8 || (insights?.food?.gap_hours ?? 0) > 8)) && (
+            <div className="space-y-2 animate-[fadeIn_0.3s_ease-out]">
+              {/* Price Spike Notification */}
+              {insights?.food?.price_spikes?.map((spike: any, idx: number) => (
+                <div 
+                  key={idx} 
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-xs"
                 >
-                  Find Food
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+                  <div className="flex items-center gap-3">
+                    <div className="grid place-items-center h-8 w-8 rounded-lg bg-destructive/10 text-destructive shrink-0">
+                      <AlertTriangle className="h-4 w-4 animate-pulse" />
+                    </div>
+                    <div>
+                      <p className="font-black text-destructive uppercase tracking-wider">Price Spike Alert</p>
+                      <p className="text-zinc-300 font-medium leading-relaxed mt-0.5">
+                        Payments at <strong className="text-foreground">{spike.venue_name}</strong> suggest the price of <strong className="text-foreground">{spike.item_name}</strong> rose from {rupees(spike.old_price * 100)} to <strong className="text-destructive font-mono">{rupees(spike.new_price * 100)}</strong> (+{spike.pct_increase}%).
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFoodSheet(true)}
+                    className="shrink-0 bg-destructive/10 hover:bg-destructive/15 border border-destructive/20 text-destructive px-3.5 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  >
+                    Verify Menu
+                  </button>
+                </div>
+              ))}
+
+              {/* Food Gap / Meal Miss Guardrail */}
+              {(foodGapHours > 8 || (insights?.food?.gap_hours ?? 0) > 8) && (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-warning/20 bg-warning/5 p-4 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="grid place-items-center h-8 w-8 rounded-lg bg-warning/10 text-warning shrink-0">
+                      <Utensils className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="font-black text-warning uppercase tracking-wider">Meal Gap Warning</p>
+                      <p className="text-zinc-300 font-medium leading-relaxed mt-0.5">
+                        It has been <strong className="text-foreground">{Math.round(foodGapHours || insights?.food?.gap_hours || 0)} hours</strong> since your last meal.
+                        {bestFood ? (
+                          <>
+                            {" "}Protect your runway with a <strong className="text-foreground">{bestFood.item_name}</strong> for <strong className="text-success font-mono">{rupees(bestFood.price)}</strong> at <strong className="text-foreground">{bestFood.venue_name}</strong>.
+                          </>
+                        ) : (
+                          " Grab a healthy meal at a campus canteen to stay active."
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFoodSheet(true)}
+                    className="shrink-0 bg-warning/10 hover:bg-warning/15 border border-warning/20 text-warning px-3.5 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  >
+                    Find Food
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* ── Main Column ─────────────────────────────────────────────── */}
@@ -2450,6 +2681,92 @@ function Dashboard() {
           </DialogContent>
         </Dialog>
 
+        {/* Menu Photo Viewer Modal with Zoom Controls */}
+        <Dialog 
+          open={expandedPhotoVenue !== null} 
+          onOpenChange={(o) => {
+            if (!o) {
+              setExpandedPhotoVenue(null);
+              setZoomScale(1);
+            }
+          }}
+        >
+          <DialogContent className="w-[95%] sm:max-w-2xl bg-background border border-border text-foreground space-y-4 rounded-xl mx-auto p-5 overflow-hidden">
+            <DialogHeader className="flex flex-row justify-between items-center pr-6">
+              <DialogTitle className="text-sm font-black uppercase tracking-wider text-foreground">
+                {expandedPhotoVenue} Menu
+              </DialogTitle>
+              {/* Zoom Toolbar */}
+              <div className="flex items-center gap-1.5 bg-surface-raised/40 border border-border/60 px-2 py-1 rounded-lg select-none shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((s) => Math.max(0.5, s - 0.25))}
+                  disabled={zoomScale <= 0.5}
+                  className="p-1 hover:bg-white/5 disabled:opacity-30 rounded text-zinc-400 hover:text-foreground cursor-pointer transition-colors"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[10px] font-bold font-mono text-zinc-400 min-w-[36px] text-center">
+                  {Math.round(zoomScale * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((s) => Math.min(3, s + 0.25))}
+                  disabled={zoomScale >= 3}
+                  className="p-1 hover:bg-white/5 disabled:opacity-30 rounded text-zinc-400 hover:text-foreground cursor-pointer transition-colors"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <div className="h-3 w-[1px] bg-border/80 mx-0.5" />
+                <button
+                  type="button"
+                  onClick={() => setZoomScale(1)}
+                  className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 hover:bg-white/5 rounded text-zinc-400 hover:text-foreground cursor-pointer transition-colors"
+                >
+                  Reset
+                </button>
+              </div>
+            </DialogHeader>
+
+            {/* Scrollable image canvas */}
+            <div 
+              ref={photoCanvasRef}
+              onMouseDown={handlePanMouseDown}
+              onMouseMove={handlePanMouseMove}
+              onMouseUp={handlePanMouseUpOrLeave}
+              onMouseLeave={handlePanMouseUpOrLeave}
+              className={`w-full h-[60vh] min-h-[300px] border border-border/50 bg-black/85 rounded-lg overflow-auto flex items-center justify-center relative p-4 scrollbar-thin select-none ${
+                zoomScale > 1 
+                  ? (isPanning ? "cursor-grabbing" : "cursor-grab") 
+                  : "cursor-default"
+              }`}
+            >
+              {activeVenuePhoto ? (
+                <div 
+                  className="transition-transform duration-200 ease-out"
+                  style={{ 
+                    transform: `scale(${zoomScale})`, 
+                    transformOrigin: "center center" 
+                  }}
+                >
+                  <img
+                    src={activeVenuePhoto}
+                    alt={`${expandedPhotoVenue} Menu`}
+                    className="max-h-[58vh] max-w-full object-contain pointer-events-none select-none"
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No menu photo available.</p>
+              )}
+            </div>
+            <div className="text-[10px] text-muted-foreground text-center font-medium leading-relaxed">
+              💡 Use pinch-to-zoom, trackpad scroll, or the toolbar buttons above to zoom and pan.
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Add txn */}
         <Dialog open={adding} onOpenChange={setAdding}>
           <DialogContent id="dialog-add-transaction">
@@ -2592,17 +2909,21 @@ function Dashboard() {
 
                     return (
                       <div key={venue} className="space-y-2 border border-border bg-surface-raised/10 p-4 rounded-2xl">
-                      <div className="flex justify-between items-start flex-wrap gap-2 pb-1 border-b border-border/50">
-                        <div>
-                          <h4 className="text-xs font-black uppercase tracking-wider text-zinc-400">{venue}</h4>
-                          <div className="flex items-center gap-3 mt-0.5">
+                      <div className="flex justify-between items-start flex-wrap gap-3 pb-3 border-b border-border/50">
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-extrabold text-foreground tracking-tight">{venue}</h4>
+                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
                             {hasPhoto ? (
                               <button
                                 type="button"
-                                onClick={() => setExpandedPhotoVenue(isPhotoExpanded ? null : venue)}
-                                className="text-[9px] text-primary font-bold uppercase tracking-wider hover:underline cursor-pointer bg-transparent border-0"
+                                onClick={() => {
+                                  setZoomScale(1);
+                                  setExpandedPhotoVenue(venue);
+                                }}
+                                className="text-[10px] text-amber-500 hover:text-amber-400 font-black uppercase tracking-wider hover:underline cursor-pointer bg-transparent border-0 flex items-center gap-1 transition-all"
                               >
-                                {isPhotoExpanded ? "Hide Menu Photo" : "Show Menu Photo"}
+                                <Image className="w-3.5 h-3.5" />
+                                View Menu Photo
                               </button>
                             ) : (
                               <button
@@ -2611,54 +2932,55 @@ function Dashboard() {
                                   setScanVenue(venue);
                                   setFoodTab("scan");
                                 }}
-                                className="text-[9px] text-zinc-500 hover:text-zinc-300 font-bold uppercase tracking-wider cursor-pointer bg-transparent border-0"
+                                className="text-[10px] text-zinc-400 hover:text-zinc-300 font-black uppercase tracking-wider hover:underline cursor-pointer bg-transparent border-0 flex items-center gap-1 transition-all"
                               >
-                                Upload Menu Photo
+                                <Image className="w-3.5 h-3.5 opacity-60" />
+                                Upload Photo
                               </button>
                             )}
+                            <span className="text-zinc-700 text-[9px] select-none">•</span>
                             <a
                               href={`tel:${vDetails.phone}`}
-                              className="text-[9px] text-zinc-400 hover:text-foreground font-bold uppercase tracking-wider inline-flex items-center gap-0.5 hover:underline"
+                              className="text-[10px] text-zinc-400 hover:text-foreground font-black uppercase tracking-wider inline-flex items-center gap-1 hover:underline transition-all"
                             >
-                              Call Canteen ({vDetails.phone})
+                              <Phone className="w-3.5 h-3.5 text-zinc-500" />
+                              Call ({vDetails.phone})
                             </a>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest font-mono shrink-0">
-                            Rating: ★ {rating} ({reviewsCount} reviews)
-                          </span>
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1 bg-white/5 border border-border/60 px-2 py-0.5 rounded-lg text-[10px] font-bold text-zinc-300">
+                            <span className="text-amber-500">★</span>
+                            <span>{rating}</span>
+                            <span className="text-zinc-500 font-normal font-mono">({reviewsCount})</span>
+                          </div>
+                          <Badge variant="outline" className={`font-bold text-[9px] px-2 py-0.5 border flex items-center gap-1.5 ${
                             (items[0]?.crowd_density || "").includes("High")
-                              ? "bg-destructive/10 text-destructive border-destructive/20"
+                              ? "bg-red-500/5 text-red-500 border-red-500/20"
                               : (items[0]?.crowd_density || "").includes("Moderate")
-                                ? "bg-warning/10 text-warning border-warning/20"
-                                : "bg-success/10 text-success border-success/20"
+                                ? "bg-amber-500/5 text-amber-500 border-amber-500/20"
+                                : "bg-emerald-500/5 text-emerald-500 border-emerald-500/20"
                           }`}>
-                            ⚡ Crowd: {items[0]?.crowd_density || "Low (Quick Service)"}
-                          </span>
+                            <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                              (items[0]?.crowd_density || "").includes("High")
+                                ? "bg-red-500"
+                                : (items[0]?.crowd_density || "").includes("Moderate")
+                                  ? "bg-amber-500"
+                                  : "bg-emerald-500"
+                            }`} />
+                            Crowd: {items[0]?.crowd_density || "Low Queue"}
+                          </Badge>
                         </div>
                       </div>
 
-                      {/* Expanded Photo Container */}
-                      {isPhotoExpanded && (firstPhoto || dbPhoto) && (
-                        <div className="my-2 border border-border/60 bg-black/40 rounded-xl overflow-hidden animate-[fadeIn_0.15s_ease-out]">
-                          <img
-                            src={firstPhoto || dbPhoto || ""}
-                            alt={`${venue} Menu`}
-                            className="w-full h-auto max-h-64 object-contain mx-auto"
-                          />
-                        </div>
-                      )}
-
-                      <div className="space-y-1">
+                      <div className="space-y-1 mt-3">
                         {filteredItems.map((it) => {
                           const open = isTimeInRange(new Date(), it.available_from, it.available_until);
                           const isDirectUpi = it.venue_name.toLowerCase().includes("canteen") || it.venue_name.toLowerCase().includes("center") || it.venue_name.toLowerCase().includes("dhaba");
                           const isEditing = editingItemId === it.id;
 
                           return (
-                            <div key={it.id} className="flex items-center justify-between rounded-xl bg-surface border border-border p-3 gap-4">
+                            <div key={it.id} className="flex items-center justify-between rounded-xl bg-surface border border-border p-3 gap-4 hover:bg-surface-raised/10 transition-colors">
                               {isEditing ? (
                                 <div className="flex flex-col gap-2 w-full">
                                   <div className="flex gap-2">
@@ -2666,7 +2988,7 @@ function Dashboard() {
                                       value={editName}
                                       onChange={(e) => setEditName(e.target.value)}
                                       placeholder="Item Name"
-                                      className="bg-surface-raised border-border text-xs font-semibold flex-1 h-8"
+                                      className="bg-surface-raised border-border text-foreground placeholder:text-muted-foreground text-xs font-semibold flex-1 h-8"
                                     />
                                     <Input
                                       value={editPrice}
@@ -2674,14 +2996,14 @@ function Dashboard() {
                                       placeholder="Price (₹)"
                                       type="number"
                                       step="0.01"
-                                      className="bg-surface-raised border-border text-xs font-semibold w-24 h-8 font-mono"
+                                      className="bg-surface-raised border-border text-foreground placeholder:text-muted-foreground text-xs font-semibold w-24 h-8 font-mono"
                                     />
                                   </div>
                                   <div className="flex gap-1.5 justify-end">
                                     <button
                                       type="button"
                                       onClick={() => setEditingItemId(null)}
-                                      className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-[9px] uppercase cursor-pointer"
+                                      className="px-2.5 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground font-bold text-[9px] uppercase cursor-pointer border border-border transition-colors"
                                     >
                                       Cancel
                                     </button>
@@ -2689,7 +3011,7 @@ function Dashboard() {
                                       type="button"
                                       onClick={() => handleEditSave(it.id)}
                                       disabled={editMutation.isPending}
-                                      className="px-2.5 py-1 rounded bg-primary hover:bg-primary/95 text-primary-foreground font-bold text-[9px] uppercase cursor-pointer disabled:opacity-50"
+                                      className="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[9px] uppercase cursor-pointer disabled:opacity-50 transition-colors"
                                     >
                                       {editMutation.isPending ? "Saving..." : "Save"}
                                     </button>
@@ -2698,14 +3020,19 @@ function Dashboard() {
                               ) : (
                                 <>
                                   <div className="min-w-0 flex-1 space-y-1">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                       <p className="text-xs font-bold text-foreground truncate">{it.item_name}</p>
+                                      {it.verification_votes >= 3 && (
+                                        <span className="inline-flex items-center gap-0.5 px-1 py-0.25 rounded bg-emerald-500/10 border border-emerald-500/20 text-[7px] text-emerald-500 font-bold uppercase tracking-wider shrink-0" title="Verified by multiple campus transactions">
+                                          Verified
+                                        </span>
+                                      )}
                                       {it.was_corrected && (
                                         <span className="inline-flex items-center gap-0.5 px-1 py-0.25 rounded bg-primary/10 border border-primary/20 text-[7px] text-primary font-bold uppercase tracking-wider shrink-0" title={`Auto-corrected from "${it.original_name}"`}>
                                           Corrected
                                         </span>
                                       )}
-                                      <span className="text-[8px] text-zinc-700 font-semibold">|</span>
+                                      <span className="text-zinc-700 text-[8px] select-none">•</span>
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -2713,15 +3040,15 @@ function Dashboard() {
                                           setEditName(it.item_name);
                                           setEditPrice((it.price / 100).toString());
                                         }}
-                                        className="text-[8px] text-zinc-500 hover:text-zinc-300 font-semibold uppercase tracking-wider cursor-pointer bg-transparent border-0"
+                                        className="text-[9px] text-zinc-500 hover:text-primary font-bold uppercase tracking-wider cursor-pointer bg-transparent border-0 transition-colors"
                                       >
                                         Edit
                                       </button>
-                                      <span className="text-[8px] text-zinc-700 font-semibold">|</span>
+                                      <span className="text-zinc-700 text-[8px] select-none">•</span>
                                       <button
                                         type="button"
                                         onClick={() => handleDeleteItem(it.id)}
-                                        className="text-[8px] text-red-500/80 hover:text-red-400 font-semibold uppercase tracking-wider cursor-pointer bg-transparent border-0"
+                                        className="text-[9px] text-red-500/80 hover:text-red-400 font-bold uppercase tracking-wider cursor-pointer bg-transparent border-0 transition-colors"
                                       >
                                         Delete
                                       </button>
@@ -3289,17 +3616,19 @@ function Dashboard() {
               }}
             >
               <DialogContent 
-                className="sm:max-w-md bg-background border border-border text-foreground space-y-4 text-center" 
+                className="w-[92%] sm:max-w-md max-w-[calc(100vw-2rem)] bg-background/95 backdrop-blur-md border border-amber-500/25 border-t-4 border-t-amber-500 text-foreground p-6 shadow-2xl shadow-amber-500/5 rounded-2xl mx-auto space-y-4" 
                 id="dialog-recurring-menu-builder"
                 onClick={clearDismissTimer}
                 onFocus={clearDismissTimer}
                 onKeyDown={clearDismissTimer}
               >
-                <DialogHeader className="space-y-1.5">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500">
-                    <Sparkles className="w-5 h-5 animate-pulse" />
+                <DialogHeader className="space-y-2 text-center">
+                  <div className="flex justify-center">
+                    <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                      Campus Intel Quiz
+                    </span>
                   </div>
-                  <DialogTitle className="text-sm font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  <DialogTitle className="text-base font-extrabold tracking-tight text-foreground">
                     Let's Answer This!
                   </DialogTitle>
                 </DialogHeader>
@@ -3338,7 +3667,7 @@ function Dashboard() {
                             clearDismissTimer();
                             setRecurringItemName(opt);
                           }}
-                          className="px-2.5 py-1.5 rounded-lg border border-border bg-surface text-foreground text-[10px] font-black uppercase tracking-wider hover:bg-surface-raised cursor-pointer transition-colors"
+                          className="px-2.5 py-1.5 rounded-lg border border-border/80 bg-surface/50 text-foreground text-[10px] font-bold tracking-wide hover:bg-amber-500/10 hover:border-amber-500/30 hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer transition-all duration-200"
                         >
                           {opt}
                         </button>
@@ -3381,6 +3710,13 @@ function Dashboard() {
         {/* Global Floating Community Intel Quiz Popup (Now Centered Dialog) */}
         {(() => {
           if (!isQuizTriggered) return null;
+          
+          // Avoid overlapping with active recurring menu quiz popup
+          const activeRecurringQuiz = quizzes?.find(
+            (q: any) => (q.type === "item_name" || q.type === "meal_guess") && q.id !== dismissedCenterQuizId
+          );
+          if (activeRecurringQuiz && !isCenterQuizDismissed) return null;
+
           if (isFloatingQuizDismissed) return null;
           if (!quizzes || quizzes.length === 0) return null;
           const activeQuiz = quizzes.find((q: any) => q.type !== "item_name" && q.type !== "meal_guess" && q.id !== dismissedQuizId);
@@ -3398,17 +3734,19 @@ function Dashboard() {
               }}
             >
               <DialogContent 
-                className="sm:max-w-md bg-background border border-border text-foreground space-y-4 text-center" 
+                className="w-[92%] sm:max-w-md max-w-[calc(100vw-2rem)] bg-background/95 backdrop-blur-md border border-amber-500/25 border-t-4 border-t-amber-500 text-foreground p-6 shadow-2xl shadow-amber-500/5 rounded-2xl mx-auto space-y-4" 
                 id="dialog-category-audit"
                 onClick={clearDismissTimer}
                 onFocus={clearDismissTimer}
                 onKeyDown={clearDismissTimer}
               >
-                <DialogHeader className="space-y-1.5">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500">
-                    <Sparkles className="w-5 h-5 animate-pulse" />
+                <DialogHeader className="space-y-2 text-center">
+                  <div className="flex justify-center">
+                    <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                      Community Intel Quiz
+                    </span>
                   </div>
-                  <DialogTitle className="text-sm font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  <DialogTitle className="text-base font-extrabold tracking-tight text-foreground">
                     Let's Answer This!
                   </DialogTitle>
                 </DialogHeader>
@@ -3489,10 +3827,10 @@ function Dashboard() {
                             setSelectedOption(opt);
                             setShowCustomCategoryInput(false);
                           }}
-                          className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                          className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold tracking-wide transition-all cursor-pointer ${
                             isSelected
-                              ? "bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-300 font-extrabold"
-                              : "bg-surface border-border text-foreground hover:bg-surface-raised"
+                              ? "bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 font-extrabold shadow-sm shadow-amber-500/10"
+                              : "bg-surface/50 border-border text-foreground hover:bg-amber-500/10 hover:border-amber-500/30 hover:text-amber-600 dark:hover:text-amber-400"
                           }`}
                         >
                           {opt}
@@ -3508,10 +3846,10 @@ function Dashboard() {
                           setSelectedOption("__custom__");
                           setShowCustomCategoryInput(true);
                         }}
-                        className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold tracking-wide transition-all cursor-pointer ${
                           selectedOption === "__custom__"
-                            ? "bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-300 font-extrabold"
-                            : "bg-surface border-border text-foreground hover:bg-surface-raised"
+                            ? "bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 font-extrabold shadow-sm shadow-amber-500/10"
+                            : "bg-surface/50 border-border text-foreground hover:bg-amber-500/10 hover:border-amber-500/30 hover:text-amber-600 dark:hover:text-amber-400"
                         }`}
                       >
                         + Custom Category

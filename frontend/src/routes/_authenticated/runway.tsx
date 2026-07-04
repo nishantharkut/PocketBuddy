@@ -68,7 +68,14 @@ function RunwayPage() {
     return Math.round((forecast?.projection?.projected_daily_spend || 20000) / 100);
   }, [forecast]);
 
-  const [simulatedDailySpend, setSimulatedDailySpend] = useState<number | null>(null);
+  const [simulatedDailySpend, setSimulatedDailySpend] = useState<number | null>(() => {
+    const saved = localStorage.getItem("pb_sandbox_simulated_daily_spend");
+    if (saved) {
+      localStorage.removeItem("pb_sandbox_simulated_daily_spend");
+      return parseInt(saved, 10);
+    }
+    return null;
+  });
   const activeSimulatedSpend = simulatedDailySpend ?? defaultPace;
 
   const adjustedCommitmentsTotal = useMemo(() => {

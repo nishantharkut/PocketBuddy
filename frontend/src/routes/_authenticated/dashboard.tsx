@@ -405,191 +405,545 @@ function ResponsiveFoodPanel({
   );
 }
 
-function SpendingSmartCheck({ calc }: { calc: any }) {
-  // Meals per week state (default is a mixed routine)
-  const [meals, setMeals] = useState({
-    mess: 7,
-    home: 4,
-    cooking: 4,
-    canteen: 4,
-    delivery: 2
-  });
+function SpendingSmartCheck({ 
+  calc, 
+  insights, 
+  profile, 
+  foods, 
+  txns 
+}: { 
+  calc: any; 
+  insights: any; 
+  profile: any; 
+  foods: any; 
+  txns: any; 
+}) {
+  const nav = useNavigate();
+  const [selectedOption, setSelectedOption] = useState<null | "delivery" | "secondary" | "primary">(null);
 
-  const safeDaily = calc?.safeDailyLimit ?? 200;
-  const targetWeekly = safeDaily * 7;
-
-  // Costs in rupees per meal type
-  const mealCosts = {
-    mess: 0,       // prepaid
-    home: 0,       // zero cost
-    cooking: 60,   // self-cooked pg meal
-    canteen: 100,  // campus canteen meal
-    delivery: 250  // zomato/swiggy order
-  };
-
-  // Presets
-  const applyPreset = (preset: "hostel" | "pg" | "day" | "mixed") => {
-    if (preset === "hostel") {
-      setMeals({ mess: 15, home: 0, cooking: 0, canteen: 4, delivery: 2 });
-    } else if (preset === "pg") {
-      setMeals({ mess: 0, home: 0, cooking: 14, canteen: 5, delivery: 2 });
-    } else if (preset === "day") {
-      setMeals({ mess: 0, home: 18, cooking: 0, canteen: 3, delivery: 0 });
-    } else if (preset === "mixed") {
-      setMeals({ mess: 7, home: 4, cooking: 4, canteen: 4, delivery: 2 });
+  // Detect default segment from profile data
+  const defaultSegment = useMemo(() => {
+    if (profile?.mess_enrolled) return "hostel";
+    const hostelBlock = (profile?.hostel_block || "").toLowerCase();
+    if (hostelBlock.includes("pg") || hostelBlock.includes("paying guest") || hostelBlock.includes("flat") || hostelBlock.includes("rented")) {
+      return "pg";
     }
-  };
+    if (hostelBlock === "none" || hostelBlock === "day scholar" || hostelBlock === "commuter") {
+      return "day";
+    }
+    return "hostel"; // Fallback default
+  }, [profile]);
 
-  const totalMeals = Object.values(meals).reduce((a, b) => a + b, 0);
-  const totalWeeklyCost = Object.entries(meals).reduce(
-    (acc, [key, val]) => acc + val * mealCosts[key as keyof typeof mealCosts],
-    0
-  );
-  
-  const avgMealCost = totalMeals > 0 ? Math.round(totalWeeklyCost / totalMeals) : 0;
-  const runwayDiff = Math.round((targetWeekly - totalWeeklyCost) / (safeDaily || 1));
+  const [segment, setSegment] = useState<"hostel" | "pg" | "day">(defaultSegment);
+  const safeDaily = calc?.safeDailyLimit ?? 200;
 
-  // Modify counters helper
-  const adjustMeals = (key: keyof typeof meals, amount: number) => {
-    setMeals(prev => {
-      const nextVal = Math.max(0, prev[key] + amount);
-      return { ...prev, [key]: nextVal };
+  // PG Fridge Roulette state
+  const [fridgeEggs, setFridgeEggs] = useState(false);
+  const [fridgeBread, setFridgeBread] = useState(false);
+  const [fridgeMaggi, setFridgeMaggi] = useState(false);
+  const [fridgeVeggies, setFridgeVeggies] = useState(false);
+
+  // Day Scholar Commute & Chai state
+  const [commuteMode, setCommuteMode] = useState<"metro" | "pool" | "solo">("metro");
+  const [chaiType, setChaiType] = useState<"tapri" | "cafe">("tapri");
+
+  // Reset selection when tab changes
+  useEffect(() => {
+    setSelectedOption(null);
+  }, [segment]);
+
+  // Dynamic Averages
+  const canteenCost = useMemo(() => {
+    if (foods && foods.length > 0) {
+      const activeItems = foods.filter((f: any) => f.status === "active");
+      if (activeItems.length > 0) {
+        return Math.round(activeItems.reduce((sum: number, f: any) => sum + f.price, 0) / activeItems.length / 100);
+      }
+    }
+    return 100;
+  }, [foods]);
+
+  const deliveryCost = useMemo(() => {
+    const delivTxns = (txns ?? []).filter((t: any) => {
+      const name = (t.raw_merchant_string || t.mapped_merchant_name || "").toLowerCase();
+      return name.includes("zomato") || name.includes("swiggy") || name.includes("ubereats") || name.includes("delivery");
     });
+    if (delivTxns.length > 0) {
+      return Math.round(delivTxns.reduce((sum: number, t: any) => sum + t.amount, 0) / delivTxns.length / 100);
+    }
+    return 250;
+  }, [txns]);
+
+  const pgCookingCost = useMemo(() => {
+    const groceryTxns = (txns ?? []).filter((t: any) => t.category === "groceries");
+    if (groceryTxns.length > 0) {
+      const avgGrocerySpend = groceryTxns.reduce((sum: number, t: any) => sum + t.amount, 0) / groceryTxns.length / 100;
+      return Math.max(35, Math.round(avgGrocerySpend / 10));
+    }
+    return 60;
+  }, [txns]);
+
+  const messMealCost = useMemo(() => {
+    if (profile?.mess_enrolled) {
+      if (profile.mess_billing_model === "per_meal" && profile.mess_per_meal_cost) {
+        return Math.round(profile.mess_per_meal_cost / 100);
+      }
+      return 0; // Prepaid
+    }
+    return 0;
+  }, [profile]);
+
+  // PG Fridge Roulette Recipe Logic
+  const rouletteRecipe = useMemo(() => {
+    const activeCount = [fridgeEggs, fridgeBread, fridgeMaggi, fridgeVeggies].filter(Boolean).length;
+    if (activeCount === 0) {
+      return { recipe: "Empty fridge? Tap to order groceries in bulk.", cost: deliveryCost, savings: 0, isDelivery: true };
+    }
+    
+    let recipeName = "";
+    let estimatedCost = 25; // base condiments
+    
+    if (fridgeMaggi && fridgeVeggies) {
+      recipeName = "Street-style Veggie Masala Maggi";
+      estimatedCost += 20;
+    } else if (fridgeEggs && fridgeBread) {
+      recipeName = "Classic Egg Toast / French Toast";
+      estimatedCost += 30;
+    } else if (fridgeMaggi) {
+      recipeName = "Classic Cheese/Spicy Dry Maggi";
+      estimatedCost += 15;
+    } else if (fridgeEggs) {
+      recipeName = "Spicy Egg Bhurji scrambled";
+      estimatedCost += 20;
+    } else if (fridgeBread) {
+      recipeName = "Crispy Garlic Butter Toast";
+      estimatedCost += 10;
+    } else if (fridgeVeggies) {
+      recipeName = "Stir-fry Healthy Veggies";
+      estimatedCost += 25;
+    }
+
+    const savings = Math.max(0, deliveryCost - estimatedCost);
+    return {
+      recipe: recipeName,
+      cost: estimatedCost,
+      savings,
+      isDelivery: false
+    };
+  }, [fridgeEggs, fridgeBread, fridgeMaggi, fridgeVeggies, deliveryCost]);
+
+  // Day Scholar calculations
+  const dayScholarCosts = useMemo(() => {
+    const commuteCosts = { metro: 30, pool: 80, solo: 220 };
+    const chaiCosts = { tapri: 15, cafe: 110 };
+    
+    const total = commuteCosts[commuteMode] + chaiCosts[chaiType];
+    const bestPotential = commuteCosts["metro"] + chaiCosts["tapri"];
+    const savings = Math.max(0, total - bestPotential);
+    
+    return { total, savings };
+  }, [commuteMode, chaiType]);
+
+  // Apply savings to runway helper
+  const handleApplySavings = (savingsAmount: number) => {
+    const simulatedDaily = Math.max(20, Math.round(safeDaily - (savingsAmount / 7)));
+    localStorage.setItem("pb_sandbox_simulated_daily_spend", simulatedDaily.toString());
+    toast.success("Applied to Runway Flight Sandbox!");
+    nav({ to: "/runway" });
   };
+
+  // Map choices based on segment
+  const choices = useMemo(() => {
+    if (segment === "hostel") {
+      return {
+        delivery: { label: "Order Zomato / Swiggy", cost: deliveryCost, icon: ShoppingBag },
+        secondary: { label: "Eat at Campus Canteen", cost: canteenCost, icon: Compass },
+        primary: { label: "Eat at Hostel Mess", cost: messMealCost, icon: Utensils }
+      };
+    } else if (segment === "pg") {
+      return {
+        delivery: { label: "Order Zomato / Swiggy", cost: deliveryCost, icon: ShoppingBag },
+        secondary: { label: "Eat at Campus Canteen", cost: canteenCost, icon: Compass },
+        primary: { label: "Cook at PG", cost: pgCookingCost, icon: Flame }
+      };
+    } else {
+      return {
+        delivery: { label: "Order Zomato / Swiggy", cost: deliveryCost, icon: ShoppingBag },
+        secondary: { label: "Eat at Campus Canteen", cost: canteenCost, icon: Compass },
+        primary: { label: "Eat Home-Cooked Food", cost: 0, icon: Home }
+      };
+    }
+  }, [segment, deliveryCost, canteenCost, pgCookingCost, messMealCost]);
+
+  // Find a smart meal combo suggestion from their campus that fits under their daily budget limit
+  const suggestedCombo = useMemo(() => {
+    if (!foods || foods.length === 0) return null;
+    const activeItems = foods.filter((f: any) => f.status === "active");
+    if (activeItems.length === 0) return null;
+    const sorted = [...activeItems].sort((a, b) => a.price - b.price);
+    const foodItem = sorted.find((f: any) => f.category === "food" && (f.price / 100) < safeDaily * 0.7);
+    const drinkItem = sorted.find((f: any) => 
+      (f.category === "drink" || f.category === "beverage" || 
+       f.item_name.toLowerCase().includes("chai") || f.item_name.toLowerCase().includes("tea") || 
+       f.item_name.toLowerCase().includes("coffee")) && 
+      (f.price / 100) < safeDaily * 0.25
+    );
+    if (foodItem) {
+      return `${foodItem.item_name}${drinkItem ? ` + ${drinkItem.item_name}` : ""}`;
+    }
+    return sorted[0].item_name;
+  }, [foods, safeDaily]);
+
+  if (selectedOption) {
+    const choice = choices[selectedOption];
+    const diff = choice.cost - safeDaily;
+    const isOver = diff > 0;
+    const absDiff = Math.abs(diff);
+
+    // Apply simulated savings to local storage when continuing to runway
+    const handleApplyAndNav = () => {
+      const savedDaily = isOver ? 0 : absDiff;
+      const simulatedDaily = Math.max(20, safeDaily - savedDaily);
+      localStorage.setItem("pb_sandbox_simulated_daily_spend", simulatedDaily.toString());
+      toast.success("Applied to Runway Flight Sandbox!");
+      nav({ to: "/runway" });
+    };
+
+    return (
+      <Card className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden transition-all duration-300">
+        <div className="absolute inset-0 pointer-events-none" style={{ 
+          background: isOver 
+            ? "radial-gradient(ellipse at top right, rgba(239,68,68,0.04), transparent 65%)" 
+            : "radial-gradient(ellipse at top right, rgba(34,197,94,0.04), transparent 65%)"
+        }} />
+        
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-[10px] font-black tracking-wider text-zinc-500 uppercase">
+            Plan: {choice.label} (₹{choice.cost})
+          </span>
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border ${
+            isOver ? "bg-red-500/10 border-red-500/20 text-red-500" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+          }`}>
+            {isOver ? `₹${absDiff} Over Limit` : `₹${absDiff} Saved`}
+          </span>
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-xs text-zinc-300 leading-relaxed font-semibold">
+            {isOver ? (
+              <>
+                Your delivery order is <strong className="text-red-400">₹{absDiff} above</strong> your daily safe limit of <strong className="text-foreground font-bold font-black">₹{safeDaily}</strong>. Doing this daily will slash your runway early!
+              </>
+            ) : (
+              <>
+                Great choice! This fits within your daily safe limit of <strong className="text-foreground font-bold font-black">₹{safeDaily}</strong>. You'll add <strong className="text-emerald-400">+{Math.max(1, Math.round(absDiff / (safeDaily || 1)))} days</strong> of runway extensions.
+                {selectedOption === "secondary" && suggestedCombo && (
+                  <span className="block mt-1.5 text-[11px] text-zinc-400 font-medium">
+                    💡 Suggestion: Try ordering the <strong className="text-foreground">{suggestedCombo}</strong> from the campus menu to stay under budget!
+                  </span>
+                )}
+              </>
+            )}
+          </p>
+
+          <div className="flex gap-2">
+            {selectedOption === "delivery" ? (
+              <Link 
+                to="/pool" 
+                className="flex-1 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center text-xs font-black uppercase tracking-wider transition-all active:scale-[0.98]"
+              >
+                Join Swiggy Pool
+              </Link>
+            ) : (
+              <button 
+                onClick={handleApplyAndNav}
+                className="flex-1 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center text-xs font-black uppercase tracking-wider transition-all active:scale-[0.98] cursor-pointer"
+              >
+                Check Runway
+              </button>
+            )}
+            <button 
+              onClick={() => setSelectedOption(null)} 
+              className="px-4 h-9 rounded-xl bg-surface-raised border border-border text-zinc-400 hover:text-zinc-200 text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  const Icon1 = choices.delivery.icon;
+  const Icon2 = choices.secondary.icon;
+  const Icon3 = choices.primary.icon;
 
   return (
-    <Card className="bg-surface border border-border rounded-2xl p-6 relative overflow-hidden space-y-5">
+    <Card className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden space-y-4">
       <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.03), transparent 65%)" }} />
       
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Compass className="h-4.5 w-4.5 text-primary" />
-          <p className="text-xs font-black tracking-[0.15em] text-zinc-400 uppercase">Runway Meal Routine Mixer</p>
+          <p className="text-xs font-black tracking-[0.15em] text-zinc-400 uppercase">Tonight's Plan Optimizer</p>
         </div>
-        <div className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border ${
-          runwayDiff >= 0 
-            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" 
-            : "bg-red-500/10 border-red-500/20 text-red-500 animate-pulse"
-        }`}>
-          {runwayDiff >= 0 ? `+${runwayDiff} Days Runway Extension` : `${runwayDiff} Days Runway Reduction`}
-        </div>
+      </div>
+
+      {/* Profile Selector tabs */}
+      <div className="flex bg-surface-raised p-1 rounded-xl border border-border/60">
+        <button
+          type="button"
+          onClick={() => setSegment("hostel")}
+          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer \${
+            segment === "hostel"
+              ? "bg-background text-foreground shadow-sm border border-border/60"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          Hostel
+        </button>
+        <button
+          type="button"
+          onClick={() => setSegment("pg")}
+          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer \${
+            segment === "pg"
+              ? "bg-background text-foreground shadow-sm border border-border/60"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          PG
+        </button>
+        <button
+          type="button"
+          onClick={() => setSegment("day")}
+          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer \${
+            segment === "day"
+              ? "bg-background text-foreground shadow-sm border border-border/60"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          Day Scholar
+        </button>
       </div>
 
       <p className="text-xs text-zinc-300 leading-relaxed font-semibold">
-        Adjust your weekly routine below. We'll simulate how your choices (cooking vs. dining hall vs. delivery) affect your runway forecast.
+        What's your plan for dinner tonight? Click an option to see the immediate effect on your Runway.
       </p>
 
-      {/* Routine Presets */}
-      <div className="space-y-1.5">
-        <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Apply Student Preset</p>
-        <div className="flex flex-wrap gap-1.5">
+      {/* HOSTEL FLOW */}
+      {segment === "hostel" && (
+        <div className="flex flex-col gap-2">
           <button
-            type="button"
-            onClick={() => applyPreset("hostel")}
-            className="px-2.5 py-1 text-[9px] font-bold uppercase rounded-lg border border-border bg-surface-raised hover:bg-surface text-zinc-300 hover:text-foreground transition-all cursor-pointer"
+            onClick={() => setSelectedOption("delivery")}
+            className="w-full flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-raised/40 hover:bg-surface hover:border-primary/40 transition-all text-xs font-bold text-foreground cursor-pointer group"
           >
-            🎓 Hostel Mess
+            <span className="flex items-center gap-2.5">
+              <Icon1 className="h-4 w-4 text-pb-red" />
+              <span>{choices.delivery.label}</span>
+            </span>
+            <span className="font-mono text-zinc-400 group-hover:text-primary transition-colors font-medium">~₹{choices.delivery.cost}</span>
           </button>
+
           <button
-            type="button"
-            onClick={() => applyPreset("pg")}
-            className="px-2.5 py-1 text-[9px] font-bold uppercase rounded-lg border border-border bg-surface-raised hover:bg-surface text-zinc-300 hover:text-foreground transition-all cursor-pointer"
+            onClick={() => setSelectedOption("secondary")}
+            className="w-full flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-raised/40 hover:bg-surface hover:border-primary/40 transition-all text-xs font-bold text-foreground cursor-pointer group"
           >
-            🍳 PG Self-Cook
+            <span className="flex items-center gap-2.5">
+              <Icon2 className="h-4 w-4 text-pb-amber" />
+              <span>{choices.secondary.label}</span>
+            </span>
+            <span className="font-mono text-zinc-400 group-hover:text-primary transition-colors font-medium">~₹{choices.secondary.cost}</span>
           </button>
+
           <button
-            type="button"
-            onClick={() => applyPreset("day")}
-            className="px-2.5 py-1 text-[9px] font-bold uppercase rounded-lg border border-border bg-surface-raised hover:bg-surface text-zinc-300 hover:text-foreground transition-all cursor-pointer"
+            onClick={() => setSelectedOption("primary")}
+            className="w-full flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface-raised/40 hover:bg-surface hover:border-primary/40 transition-all text-xs font-bold text-foreground cursor-pointer group"
           >
-            🏠 Day Scholar
-          </button>
-          <button
-            type="button"
-            onClick={() => applyPreset("mixed")}
-            className="px-2.5 py-1 text-[9px] font-bold uppercase rounded-lg border border-border bg-surface-raised hover:bg-surface text-zinc-300 hover:text-foreground transition-all cursor-pointer"
-          >
-            🔄 Mixed Flex
+            <span className="flex items-center gap-2.5">
+              <Icon3 className="h-4 w-4 text-pb-green" />
+              <span>{choices.primary.label}</span>
+            </span>
+            <span className="font-mono text-zinc-400 group-hover:text-primary transition-colors font-medium font-bold">~₹{choices.primary.cost}</span>
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Mixer Counters List */}
-      <div className="space-y-2 bg-surface-raised/20 p-3.5 rounded-xl border border-border/40">
-        {[
-          { key: "mess", label: "Hostel Mess Meals", cost: 0, color: "text-pb-green", icon: Utensils },
-          { key: "home", label: "Home Cooked (Scholar)", cost: 0, color: "text-cyan-500", icon: Home },
-          { key: "cooking", label: "PG Cooking (Groceries)", cost: 60, color: "text-purple-500", icon: Flame },
-          { key: "canteen", label: "Canteen & Dhabas", cost: 100, color: "text-pb-amber", icon: Compass },
-          { key: "delivery", label: "Zomato & Swiggy", cost: 250, color: "text-pb-red", icon: ShoppingBag }
-        ].map((item) => {
-          const val = meals[item.key as keyof typeof meals];
-          const Icon = item.icon;
-          return (
-            <div key={item.key} className="flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <Icon className={`h-4 w-4 shrink-0 ${item.color}`} />
-                <div className="min-w-0">
-                  <p className="font-semibold text-foreground truncate">{item.label}</p>
-                  <p className="text-[9px] text-zinc-500 font-mono">₹{item.cost}/meal</p>
-                </div>
+      {/* PG RESIDENT FLOW (FRIDGE ROULETTE) */}
+      {segment === "pg" && (
+        <div className="space-y-3.5 animate-[fadeIn_0.2s_ease-out]">
+          <div className="space-y-1">
+            <p className="text-xs font-black text-primary tracking-wide uppercase">PG Fridge Roulette</p>
+            <p className="text-[11px] text-zinc-400 font-medium">Select what is currently in your kitchen/fridge:</p>
+          </div>
+
+          {/* Ingredient Pills */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { name: "Eggs", active: fridgeEggs },
+              { name: "Bread", active: fridgeBread },
+              { name: "Maggi", active: fridgeMaggi },
+              { name: "Veggies", active: fridgeVeggies }
+            ].map(item => (
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => {
+                  if (item.name === "Eggs") setFridgeEggs(!fridgeEggs);
+                  if (item.name === "Bread") setFridgeBread(!fridgeBread);
+                  if (item.name === "Maggi") setFridgeMaggi(!fridgeMaggi);
+                  if (item.name === "Veggies") setFridgeVeggies(!fridgeVeggies);
+                }}
+                className={`px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer \${
+                  item.active 
+                    ? "bg-primary/10 border-primary text-primary" 
+                    : "bg-surface-raised/40 border-border text-zinc-500 hover:bg-surface-raised/80"
+                }`}
+              >
+                {item.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Dynamic Recipe Card */}
+          <div className="bg-surface-raised/35 border border-border/40 p-4 rounded-xl space-y-3">
+            <div className="flex justify-between items-start text-xs gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block font-mono">SUGGESTED DISH</span>
+                <span className="font-bold text-foreground truncate block mt-0.5 font-display">{rouletteRecipe.recipe}</span>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => adjustMeals(item.key as keyof typeof meals, -1)}
-                  className="h-6 w-6 rounded-lg bg-surface-raised border border-border text-zinc-400 hover:text-zinc-100 flex items-center justify-center font-bold text-sm cursor-pointer select-none active:scale-95 transition-all"
-                >
-                  -
-                </button>
-                <span className="w-6 text-center font-mono font-bold text-foreground text-xs">{val}</span>
-                <button
-                  type="button"
-                  onClick={() => adjustMeals(item.key as keyof typeof meals, 1)}
-                  className="h-6 w-6 rounded-lg bg-surface-raised border border-border text-zinc-400 hover:text-zinc-100 flex items-center justify-center font-bold text-sm cursor-pointer select-none active:scale-95 transition-all"
-                >
-                  +
-                </button>
+              <div className="text-right shrink-0">
+                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block font-mono">EST. COST</span>
+                <span className="font-mono font-bold text-foreground mt-0.5 block">₹{rouletteRecipe.cost}</span>
               </div>
             </div>
-          );
-        })}
-      </div>
 
-      {/* Projection Feedback */}
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <div className="bg-surface-raised/40 p-2.5 border border-border rounded-xl">
-          <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Weekly Budget</p>
-          <p className="text-[13px] font-black text-foreground mt-0.5 font-mono">₹{totalWeeklyCost}</p>
+            {!rouletteRecipe.isDelivery ? (
+              <>
+                <p className="text-[11px] text-zinc-400 leading-normal font-medium">
+                  Cooking this will save you <strong className="text-emerald-400">₹{rouletteRecipe.savings}</strong> over food delivery. It extends your runway by <strong>+{Math.max(1, Math.round(rouletteRecipe.savings / (safeDaily || 1)))} days</strong>.
+                </p>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleApplySavings(rouletteRecipe.savings * 5)}
+                    className="flex-1 h-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black uppercase tracking-wider cursor-pointer"
+                  >
+                    Lock In Savings
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex gap-2">
+                <Link
+                  to="/pool"
+                  className="flex-1 h-8 rounded-xl bg-surface-raised border border-border text-zinc-300 hover:text-foreground text-xs font-bold uppercase transition-all cursor-pointer flex items-center justify-center"
+                >
+                  Order Grocery Restock
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="bg-surface-raised/40 p-2.5 border border-border rounded-xl">
-          <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Avg Meal Cost</p>
-          <p className="text-[13px] font-black text-primary mt-0.5 font-mono">₹{avgMealCost}</p>
-        </div>
-        <div className="bg-surface-raised/40 p-2.5 border border-border rounded-xl">
-          <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Total Meals</p>
-          <p className="text-[13px] font-black text-zinc-300 mt-0.5 font-mono">{totalMeals} / wk</p>
-        </div>
-      </div>
+      )}
 
-      <div className="pt-2 border-t border-border/40 flex items-start gap-2.5">
-        <Compass className={`h-4 w-4 mt-0.5 shrink-0 ${runwayDiff >= 0 ? "text-emerald-500" : "text-pb-red"}`} />
-        <p className="text-[10px] text-zinc-400 leading-relaxed font-semibold">
-          {runwayDiff >= 0 ? (
-            <>
-              <span className="text-emerald-500 font-extrabold">Safe Routine.</span> Your custom plan spends <span className="font-bold text-foreground">₹{Math.round(targetWeekly - totalWeeklyCost)} less</span> than your target allowance, saving you money!
-            </>
-          ) : (
-            <>
-              <span className="text-pb-red font-extrabold">Runway pressure.</span> This routine is <span className="font-bold text-foreground">₹{Math.round(totalWeeklyCost - targetWeekly)} above</span> your target. Consider swapping {Math.ceil((totalWeeklyCost - targetWeekly) / 190)} Zomato orders to PG Cooking to save ₹{Math.ceil((totalWeeklyCost - targetWeekly) / 190) * 190}!
-            </>
-          )}
-        </p>
-      </div>
+      {/* DAY SCHOLAR SEGMENT FLOW (COMMUTE & CHAI POOL) */}
+      {segment === "day" && (
+        <div className="space-y-4 animate-[fadeIn_0.2s_ease-out]">
+          <div className="space-y-3">
+            <div>
+              <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5 font-mono">1. Select Today's Commute</span>
+              <div className="grid grid-cols-3 gap-1.5 bg-surface-raised p-0.5 rounded-lg border border-border/50">
+                {[
+                  { key: "metro", label: "Metro/Bus", sub: "₹30" },
+                  { key: "pool", label: "Pool Cab", sub: "₹80" },
+                  { key: "solo", label: "Solo Cab", sub: "₹220" }
+                ].map(item => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setCommuteMode(item.key as any)}
+                    className={`py-1.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer \${
+                      commuteMode === item.key 
+                        ? "bg-background text-foreground shadow border border-border/50" 
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    <span className="block">{item.label}</span>
+                    <span className="block text-[8px] font-mono text-zinc-400 mt-0.5">{item.sub}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5 font-mono">2. Select Campus Drink Hangout</span>
+              <div className="grid grid-cols-2 gap-1.5 bg-surface-raised p-0.5 rounded-lg border border-border/50">
+                {[
+                  { key: "tapri", label: "Tapri Chai", sub: "₹15" },
+                  { key: "cafe", label: "Cafe Coffee", sub: "₹110" }
+                ].map(item => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setChaiType(item.key as any)}
+                    className={`py-1.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer \${
+                      chaiType === item.key 
+                        ? "bg-background text-foreground shadow border border-border/50" 
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    <span className="block">{item.label}</span>
+                    <span className="block text-[8px] font-mono text-zinc-400 mt-0.5">{item.sub}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Calculator Output */}
+          <div className="bg-surface-raised/35 border border-border/40 p-4 rounded-xl space-y-3">
+            <div className="flex justify-between items-center text-xs">
+              <div>
+                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block font-mono">ESTIMATED SPEND</span>
+                <span className="font-mono text-base font-black text-foreground block mt-0.5">₹{dayScholarCosts.total}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block font-mono">POTENTIAL SAVINGS</span>
+                <span className="font-mono text-base font-black text-success block mt-0.5">₹{dayScholarCosts.savings}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-zinc-400 leading-normal font-medium">
+              {dayScholarCosts.total > safeDaily ? (
+                <>
+                  ⚠️ Spending ₹{dayScholarCosts.total} exceeds your daily safe limit of <strong>₹{safeDaily}</strong>! Consider carpooling or taking transit to save.
+                </>
+              ) : (
+                <>
+                  Nice! You are staying under budget. Commuting by {commuteMode === "metro" ? "Transit" : commuteMode === "pool" ? "Shared Cab" : "Solo Cab"} and choosing {chaiType === "tapri" ? "Tapri Chai" : "Cafe Coffee"} extends your runway.
+                </>
+              )}
+            </p>
+
+            <div className="flex gap-2">
+              {commuteMode === "solo" ? (
+                <Link to="/travel" className="flex-1 h-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center text-xs font-black uppercase tracking-wider transition-all active:scale-[0.98]">
+                  Find Travel Pools
+                </Link>
+              ) : (
+                <button 
+                  onClick={() => handleApplySavings(dayScholarCosts.savings * 5)}
+                  className="flex-1 h-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black uppercase tracking-wider transition-all active:scale-[0.98] cursor-pointer"
+                >
+                  Apply to Runway
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
-
 const getVenueDetails = (venueName: string) => {
   const name = (venueName || "").toLowerCase();
   if (name.includes("bh-2") || name.includes("bh2")) {
@@ -2197,7 +2551,7 @@ function Dashboard() {
               </div>
             </div>
 
-            {calc && <SpendingSmartCheck calc={calc} />}
+            {calc && <SpendingSmartCheck calc={calc} insights={insights} profile={profile} foods={foods} txns={txns} />}
 
             {/* ── Behaviour Analytics Row ─────────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -82,20 +82,33 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
     ]
     late_night_spend_7d = len(late_txns_7d)
 
-    # 2. Meal regularity — average gap between food transactions over 7 days
-    food_txns_7d = [
-        t for t in txns
-        if t.get("category") == "food" and t.get("created_at") and t["created_at"] >= since_7
-    ]
-    food_txns_7d.sort(key=lambda t: t["created_at"])
-    if food_txns_7d:
+    # 2. Meal regularity — average gap between food transactions or check-in meal events over 7 days
+    # This prevents false food-gaps for students eating prepaid mess/home food.
+    ate_logs_cursor = db.checkin_logs.find({
+        "user_id": user_id,
+        "created_at": {"$gte": since_7},
+        "response": "wellness_ate"
+    })
+    ate_logs = await ate_logs_cursor.to_list(length=100)
+
+    meal_events = []
+    for t in txns:
+        if t.get("category") == "food" and t.get("created_at") and t["created_at"] >= since_7:
+            meal_events.append(t["created_at"])
+    for l in ate_logs:
+        if l.get("created_at"):
+            meal_events.append(l["created_at"])
+
+    meal_events.sort()
+
+    if meal_events:
         gaps_7d = [
-            (food_txns_7d[i]["created_at"] - food_txns_7d[i - 1]["created_at"]).total_seconds() / 3600.0
-            for i in range(1, len(food_txns_7d))
+            (meal_events[i] - meal_events[i - 1]).total_seconds() / 3600.0
+            for i in range(1, len(meal_events))
         ]
-        gaps_7d.append((now - food_txns_7d[-1]["created_at"]).total_seconds() / 3600.0)
+        gaps_7d.append((now - meal_events[-1]).total_seconds() / 3600.0)
         avg_food_gap_hours_7d = sum(gaps_7d) / len(gaps_7d)
-        current_food_gap_hours = (now - food_txns_7d[-1]["created_at"]).total_seconds() / 3600.0
+        current_food_gap_hours = (now - meal_events[-1]).total_seconds() / 3600.0
     else:
         avg_food_gap_hours_7d = 168.0
         current_food_gap_hours = 168.0

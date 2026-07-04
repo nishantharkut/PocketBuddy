@@ -329,10 +329,12 @@ const GROUNDING_TASKS = [
 
 // ── AI Care Plan Dialog (popup) ─────────────────────────────────────────────
 function WellnessCarePlanDialog({
-  open, onOpenChange, plan, loading,
+  open, onOpenChange, plan, loading, calc, onAteAction,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void;
   plan: any; loading: boolean;
+  calc?: any;
+  onAteAction?: () => Promise<void>;
 }) {
   const isMobile = useIsMobile();
   const [done, setDone] = useState<Set<number>>(new Set());
@@ -412,25 +414,68 @@ function WellnessCarePlanDialog({
                 </div>
                 {done.size === plan.steps.length && (
                   <p className="text-[10px] text-success font-semibold flex items-center gap-1 animate-pulse">
-                    ✨ Perfect self-care day! Proud of you.
+                    Perfect self-care day! Proud of you.
                   </p>
                 )}
               </div>
 
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Three Small Steps</p>
-                <div className="space-y-2">
-                  {plan.steps.map((s: string, i: number) => (
-                    <button key={i} onClick={() => toggleStep(i)}
-                      className="w-full flex items-start gap-3 rounded-xl border border-border bg-surface-raised/30 hover:bg-surface-raised/60 p-3 text-left transition-colors cursor-pointer">
-                      <span className={`grid place-items-center h-5 w-5 rounded-md border shrink-0 mt-0.5 transition-colors ${
-                        done.has(i) ? "bg-primary border-primary text-primary-foreground" : "border-border text-transparent"
-                      }`}>
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                      <span className={`text-xs leading-relaxed ${done.has(i) ? "text-muted-foreground line-through" : "text-foreground"}`}>{s}</span>
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  {plan.steps.map((s: string, i: number) => {
+                    const isMealStep = s.toLowerCase().includes("meal") || s.toLowerCase().includes("eat");
+                    const isBudgetStep = s.toLowerCase().includes("spend") || s.toLowerCase().includes("limit") || s.includes("₹");
+
+                    return (
+                      <div key={i} className="rounded-xl border border-border bg-surface-raised/30 p-3.5 space-y-3 text-left">
+                        <button onClick={() => toggleStep(i)}
+                          className="w-full flex items-start gap-3 text-left transition-colors cursor-pointer font-medium">
+                          <span className={`grid place-items-center h-5 w-5 rounded-md border shrink-0 mt-0.5 transition-colors ${
+                            done.has(i) ? "bg-primary border-primary text-primary-foreground" : "border-border text-transparent"
+                          }`}>
+                            <Check className="h-3.5 w-3.5" />
+                          </span>
+                          <span className={`text-xs leading-relaxed ${done.has(i) ? "text-muted-foreground line-through font-normal" : "text-foreground font-semibold"}`}>
+                            {s}
+                          </span>
+                        </button>
+
+                        {/* Interactive sub-elements for the step if not completed */}
+                        {!done.has(i) && (
+                          <div className="pl-8 pt-1 animate-[fadeIn_0.2s_ease-out]">
+                            {isMealStep && onAteAction && (
+                              <button
+                                onClick={async () => {
+                                  await onAteAction();
+                                  toggleStep(i);
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/5 hover:bg-success/10 text-[10px] font-bold text-success px-2.5 py-1.5 transition-all cursor-pointer"
+                              >
+                                I Ate Meal Now
+                              </button>
+                            )}
+
+                            {isBudgetStep && calc && (
+                              <div className="space-y-1.5 max-w-xs">
+                                <div className="flex justify-between text-[9px] font-mono text-muted-foreground">
+                                  <span>Spent Today: ₹{calc.spentToday.toFixed(0)}</span>
+                                  <span>Safe Target: ₹{calc.safeDailyLimit.toFixed(0)}</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-surface border border-border rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all duration-300 ${
+                                      calc.spentToday > calc.safeDailyLimit ? "bg-pb-red" : "bg-pb-green"
+                                    }`}
+                                    style={{ width: `${Math.min(100, Math.round((calc.spentToday / (calc.safeDailyLimit || 1)) * 100))}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1597,31 +1642,36 @@ function Dashboard() {
 
                     {/* Watch Quick Action Nudges */}
                     {wellness.status === "watch" && (
-                      <div className="border-t border-border pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <span className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-1 sm:mb-0 sm:mr-2 font-mono">Routine Nudge:</span>
-                        <div className="flex flex-wrap gap-2 flex-1">
-                          <button
-                            id="btn-wellness-ate"
-                            onClick={() => handleWellnessAction("ate")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-success hover:text-success/90 bg-success/5 hover:bg-success/10 border border-success/20 hover:border-success/30 rounded-xl transition-all cursor-pointer"
-                          >
-                            I Ate Meal
-                          </button>
-                          <button
-                            id="btn-wellness-break"
-                            onClick={() => handleWellnessAction("break")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-warning hover:text-warning/90 bg-warning/5 hover:bg-warning/10 border border-warning/20 hover:border-warning/30 rounded-xl transition-all cursor-pointer"
-                          >
-                            I Need a Break
-                          </button>
-                          <button
-                            id="btn-wellness-spending"
-                            onClick={() => handleWellnessAction("spending")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-foreground hover:text-foreground/90 bg-white/5 hover:bg-white/10 border border-border hover:border-white/15 rounded-xl transition-all cursor-pointer"
-                          >
-                            I'll Plan Spending
-                          </button>
+                      <div className="border-t border-border pt-4 flex flex-col gap-2">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <span className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-1 sm:mb-0 sm:mr-2 font-mono">Routine Nudge:</span>
+                          <div className="flex flex-wrap gap-2 flex-1">
+                            <button
+                              id="btn-wellness-ate"
+                              onClick={() => handleWellnessAction("ate")}
+                              className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-success hover:text-success/90 bg-success/5 hover:bg-success/10 border border-success/20 hover:border-success/30 rounded-xl transition-all cursor-pointer"
+                            >
+                              I Ate Meal
+                            </button>
+                            <button
+                              id="btn-wellness-break"
+                              onClick={() => handleWellnessAction("break")}
+                              className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-warning hover:text-warning/90 bg-warning/5 hover:bg-warning/10 border border-warning/20 hover:border-warning/30 rounded-xl transition-all cursor-pointer"
+                            >
+                              I Need a Break
+                            </button>
+                            <button
+                              id="btn-wellness-spending"
+                              onClick={() => handleWellnessAction("spending")}
+                              className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-foreground hover:text-foreground/90 bg-white/5 hover:bg-white/10 border border-border hover:border-white/15 rounded-xl transition-all cursor-pointer"
+                            >
+                              I'll Plan Spending
+                            </button>
+                          </div>
                         </div>
+                        <p className="text-[10px] text-zinc-500 font-medium text-left px-1">
+                          Eating at home or prepaid mess? Click "I Ate Meal" to update your routine index without logging transactions.
+                        </p>
                       </div>
                     )}
 
@@ -1677,6 +1727,10 @@ function Dashboard() {
               onOpenChange={setCarePlanOpen}
               plan={carePlan}
               loading={carePlanLoading}
+              calc={calc}
+              onAteAction={async () => {
+                await handleWellnessAction("ate");
+              }}
             />
 
             {/* Runway Hero */}

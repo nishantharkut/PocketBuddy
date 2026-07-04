@@ -354,7 +354,7 @@ function WellnessCarePlanDialog({
         <div className="border-b border-border pb-4 mb-4">
           <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider font-display text-foreground">
             <HeartPulse className="h-4 w-4 text-primary" />
-            AI Wellness Care Plan
+            Wellness &amp; Support Resources
             {plan?.source === "bedrock" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-primary/30 bg-primary/5 text-[10px] font-bold text-primary">
                 <Sparkles className="h-3 w-3" /> AI
@@ -375,6 +375,14 @@ function WellnessCarePlanDialog({
         </div>
       ) : plan ? (
         <>
+          {/* Privacy Disclaimer */}
+          <div className="flex items-start gap-2.5 text-[10px] text-muted-foreground bg-surface-raised/40 p-3 rounded-xl border border-border/60 text-left">
+            <ShieldCheck className="h-4 w-4 text-success shrink-0 mt-0.5" />
+            <p>
+              <strong>Privacy Policy:</strong> Reflections and logs are confidential, saved locally to your profile, never aggregated across users, and automatically purged after 30 days.
+            </p>
+          </div>
+
           {/* Affirmation */}
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
             <p className="text-sm text-foreground font-medium leading-relaxed">{plan.affirmation}</p>
@@ -457,23 +465,45 @@ function WellnessCarePlanDialog({
             <BreathingExercise />
           </div>
 
-          {/* Support */}
-          {plan.show_support && (
-            <div className="rounded-xl border p-4 flex items-center gap-3"
-              style={{ borderColor: "rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.04)" }}>
-              <div className="grid place-items-center h-9 w-9 rounded-lg bg-surface border border-border shrink-0 text-primary">
-                <Phone className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-foreground">Tele-MANAS · free &amp; confidential</p>
-                <p className="text-[10px] text-muted-foreground">24x7 national student mental-health support</p>
-              </div>
-              <a href="tel:14416"
-                className="shrink-0 rounded-lg bg-primary/10 text-primary px-3 py-1.5 text-xs font-black tracking-wide hover:bg-primary/20 transition-colors">
-                14416
-              </a>
+          {/* Counseling & Support Resources */}
+          <div className="rounded-xl border border-border bg-surface overflow-hidden text-left">
+            <div className="p-4 border-b border-border bg-surface-raised/30">
+              <p className="text-xs font-bold text-foreground flex items-center gap-1.5 font-display uppercase tracking-wider">
+                <Phone className="h-3.5 w-3.5 text-primary" />
+                Confidential Support Resources
+              </p>
             </div>
-          )}
+            <div className="p-4 space-y-3.5">
+              <div>
+                <p className="text-xs font-bold text-foreground">Campus Counseling Cell</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                  Confidential &amp; free support cell. Located at Room 102, Admin Block.
+                </p>
+                <p className="text-[10px] text-zinc-400 mt-1 font-mono">
+                  Call: +91 11 2345 6789 | Email: wellness@institute.edu
+                </p>
+              </div>
+              <div className="border-t border-border/60 pt-3">
+                <p className="text-xs font-bold text-foreground mb-2">National Helpline Resources</p>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div>
+                      <p className="font-semibold text-foreground">Tele-MANAS Helpline</p>
+                      <p className="text-[9px] text-muted-foreground">Govt. of India 24x7 support</p>
+                    </div>
+                    <a href="tel:14416" className="font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors">14416</a>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] pt-1">
+                    <div>
+                      <p className="font-semibold text-foreground">KIRAN Helpline</p>
+                      <p className="text-[9px] text-muted-foreground">Toll-free mental health support</p>
+                    </div>
+                    <a href="tel:18005990019" className="font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors">1800-599-0019</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </>
       ) : (
         <p className="py-6 text-center text-sm text-muted-foreground">Couldn't load your plan. Please try again.</p>
@@ -498,7 +528,7 @@ function WellnessCarePlanDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-wider font-display text-foreground">
             <HeartPulse className="h-4 w-4 text-primary" />
-            AI Wellness Care Plan
+            Wellness &amp; Support Resources
             {plan?.source === "bedrock" && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-primary/30 bg-primary/5 text-[10px] font-bold text-primary">
                 <Sparkles className="h-3 w-3" /> AI
@@ -1189,8 +1219,6 @@ function Dashboard() {
   // Red State Wellness Check-in
   const [redCheckinText, setRedCheckinText] = useState("");
   const [redCheckinSubmitting, setRedCheckinSubmitting] = useState(false);
-  const [inlineBreatherOpen, setInlineBreatherOpen] = useState(false);
-  const [showCounseling, setShowCounseling] = useState(false);
 
   useEffect(() => {
     if (checkinChecked.current || !profile || !txns) return;
@@ -1495,7 +1523,7 @@ function Dashboard() {
                       color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)",
                       background: wellness.status === "steady" ? "rgba(22,163,74,0.05)" : wellness.status === "watch" ? "rgba(217,119,6,0.05)" : "rgba(220,38,38,0.05)"
                     }}>
-                      {wellness.status === "steady" ? "🌲 Balanced Aura" : wellness.status === "watch" ? "🌤️ Mindful Pacing" : "🌧️ Gentle Recovery"}
+                      {wellness.label}
                     </Badge>
                   )}
                 </div>
@@ -1537,9 +1565,7 @@ function Dashboard() {
                     </div>
 
                     <p className="text-xs md:text-sm text-zinc-300 font-medium leading-relaxed mb-4">
-                      {wellness.status === "stressed" 
-                        ? "Take a gentle breath. You have a lot on your plate right now, but your budget is just numbers and you are doing your best. Let's look at small resets to help you balance." 
-                        : wellness.message}
+                      {wellness.message}
                     </p>
 
                     {/* Contributing Signals */}
@@ -1569,18 +1595,6 @@ function Dashboard() {
                       </div>
                     </div>
 
-                    {/* Inline Guided Breather Visualizer */}
-                    {inlineBreatherOpen && (
-                      <div className="border-t border-border pt-4 pb-2 animate-[fadeIn_0.3s_ease-out]">
-                        <div className="rounded-xl border border-border bg-surface-raised/20 p-4">
-                          <p className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5 font-display uppercase tracking-wider">
-                            <Wind className="h-4 w-4 text-primary" /> Active Breathing space
-                          </p>
-                          <BreathingExercise />
-                        </div>
-                      </div>
-                    )}
-
                     {/* Watch Quick Action Nudges */}
                     {wellness.status === "watch" && (
                       <div className="border-t border-border pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -1595,13 +1609,10 @@ function Dashboard() {
                           </button>
                           <button
                             id="btn-wellness-break"
-                            onClick={() => {
-                              handleWellnessAction("break");
-                              setInlineBreatherOpen((v) => !v);
-                            }}
+                            onClick={() => handleWellnessAction("break")}
                             className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-warning hover:text-warning/90 bg-warning/5 hover:bg-warning/10 border border-warning/20 hover:border-warning/30 rounded-xl transition-all cursor-pointer"
                           >
-                            {inlineBreatherOpen ? "Close Breather" : "I Need a Break"}
+                            I Need a Break
                           </button>
                           <button
                             id="btn-wellness-spending"
@@ -1634,54 +1645,10 @@ function Dashboard() {
                             {redCheckinSubmitting ? "Logging check-in..." : "Log Check-in"}
                           </button>
                         </form>
-
-                        <div className="rounded-xl border border-border bg-surface-raised/40 overflow-hidden">
-                          <button
-                            type="button"
-                            onClick={() => setShowCounseling(!showCounseling)}
-                            className="w-full flex items-center justify-between p-4 text-xs font-bold text-foreground hover:bg-surface-raised/60 transition-colors cursor-pointer"
-                          >
-                            <span className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-primary" />
-                              Campus Counseling Services (Confidential)
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">
-                              {showCounseling ? "Hide info ▲" : "Show info ▼"}
-                            </span>
-                          </button>
-                          
-                          {showCounseling && (
-                            <div className="px-4 pb-4 pt-2 space-y-2.5 border-t border-border bg-red-950/5 animate-[fadeIn_0.2s_ease-out]">
-                              <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-                                No pressure at all, but if things are feeling too heavy, the campus support team is a free and confidential space dedicated to helping students pace themselves.
-                              </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-500 font-medium pt-1">
-                                <div className="flex items-center gap-1.5">
-                                  <MapPin className="h-3 w-3 shrink-0 text-zinc-600" />
-                                  <span>Wellness Cell, Room 102, Admin Block</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <Phone className="h-3 w-3 shrink-0 text-zinc-600" />
-                                  <a href="tel:+911123456789" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
-                                    +91 11 2345 6789
-                                    <ExternalLink className="h-2 w-2" />
-                                  </a>
-                                </div>
-                                <div className="flex items-center gap-1.5 col-span-full">
-                                  <Mail className="h-3 w-3 shrink-0 text-zinc-600" />
-                                  <a href="mailto:wellness@institute.edu" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
-                                    wellness@institute.edu
-                                    <ExternalLink className="h-2 w-2" />
-                                  </a>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
                       </div>
                     )}
 
-                    {/* AI Care Plan CTA */}
+                    {/* Unified Support Resources CTA (Drawer) */}
                     <div className="mt-4 pt-4 border-t border-border">
                       <button
                         id="btn-open-care-plan"
@@ -1693,11 +1660,11 @@ function Dashboard() {
                             <HeartPulse className="h-4 w-4" />
                           </div>
                           <div className="text-left">
-                            <p className="text-xs font-black text-primary uppercase tracking-wider">View AI Care Plan</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Personalised steps, meditation &amp; grounding for today</p>
+                            <p className="text-xs font-black text-primary uppercase tracking-wider">Support Resources</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Confidential counseling contact lines, breathing space &amp; AI care plan</p>
                           </div>
                         </div>
-                        <Sparkles className="h-4 w-4 text-primary group-hover:scale-110 transition-transform shrink-0" />
+                        <ChevronRight className="h-4 w-4 text-primary group-hover:translate-x-0.5 transition-transform shrink-0" />
                       </button>
                     </div>
                   </>
@@ -2543,12 +2510,17 @@ function Dashboard() {
         </ResponsiveFoodPanel>
 
         {/* Check-in dialog */}
-        <Dialog open={showCheckIn} onOpenChange={setShowCheckIn}>
+        <Dialog open={showCheckIn} onOpenChange={(open) => {
+          setShowCheckIn(open);
+          if (!open) {
+            localStorage.setItem("pocketbuddy_last_checkin", String(Date.now()));
+          }
+        }}>
           <DialogContent id="dialog-checkin">
             <DialogHeader>
-              <DialogTitle>Hey, it's been a while since your last meal.</DialogTitle>
+              <DialogTitle>Hey, how are your meals going?</DialogTitle>
             </DialogHeader>
-            <p className="text-[13px] text-muted-foreground">It's exam season. Quick check:</p>
+            <p className="text-[13px] text-muted-foreground">Quick routine check-in:</p>
             <p className="text-[12px] text-warning">Last food transaction was {Math.round(foodGapHours)} hours ago</p>
             <div className="mt-3 space-y-2">
               <button
@@ -2556,7 +2528,7 @@ function Dashboard() {
                 onClick={handleCheckInAte}
                 className="w-full rounded-md border-l-4 border-l-success bg-surface p-3 text-left text-[13px] cursor-pointer hover:bg-surface-raised transition-colors"
               >
-                I ate at mess / cooked / ordered in
+                I had a proper meal (mess, home food, or canteen)
               </button>
               <div className="rounded-md border-l-4 border-l-destructive bg-surface p-3">
                 <button
@@ -2573,7 +2545,7 @@ function Dashboard() {
                       id="input-checkin-note"
                       value={stressNote}
                       onChange={(e) => setStressNote(e.target.value)}
-                      placeholder="e.g., was studying, mess closed, no money"
+                      placeholder="e.g., was studying, no food around, busy"
                     />
                     <Button
                       variant="outline"
@@ -2588,7 +2560,10 @@ function Dashboard() {
               <Button
                 variant="ghost"
                 className="w-full text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => setShowCheckIn(false)}
+                onClick={() => {
+                  localStorage.setItem("pocketbuddy_last_checkin", String(Date.now()));
+                  setShowCheckIn(false);
+                }}
               >
                 Not now
               </Button>

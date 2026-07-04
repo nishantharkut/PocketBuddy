@@ -45,12 +45,12 @@ MOOD_LABELS = {
 
 
 def _weather_of(status: str) -> dict[str, str]:
-    """Reframe the clinical-sounding score as gentle 'week weather'."""
+    """Reframe the score as gentle 'week weather'."""
     return {
-        "steady": {"weather": "calm", "emoji": "sun", "headline": "Your week looks calm"},
-        "watch": {"weather": "cloudy", "emoji": "cloud", "headline": "A few clouds this week"},
-        "stressed": {"weather": "stormy", "emoji": "storm", "headline": "It's been a heavy week"},
-    }.get(status, {"weather": "calm", "emoji": "sun", "headline": "Your week looks calm"})
+        "steady": {"weather": "calm", "emoji": "sun", "headline": "Stable routine"},
+        "watch": {"weather": "cloudy", "emoji": "cloud", "headline": "Needs attention"},
+        "stressed": {"weather": "stormy", "emoji": "storm", "headline": "Reset suggested"},
+    }.get(status, {"weather": "calm", "emoji": "sun", "headline": "Stable routine"})
 
 
 async def _streak_and_history(db, user_id: str, limit: int = 8):
@@ -98,6 +98,11 @@ async def _streak_and_history(db, user_id: str, limit: int = 8):
 async def get_checkin(user_id: str = Depends(get_current_user)):
     """The full supportive check-in package for the Wellness Companion page."""
     db = get_db()
+
+    # Enforce 30-day privacy retention policy: check-in logs are automatically purged after 30 days.
+    # Note: PocketBuddy enforces a strict "no cross-user aggregation" constraint to protect student privacy.
+    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    await db.checkin_logs.delete_many({"user_id": user_id, "created_at": {"$lt": thirty_days_ago}})
     profile = await db.profiles.find_one({"_id": user_id}) or {}
 
     package = await compute_wellness(db, user_id)
@@ -186,6 +191,11 @@ class WellnessCheckinReq(BaseModel):
 @router.post("/checkin")
 async def post_checkin(req: WellnessCheckinReq, user_id: str = Depends(get_current_user)):
     db = get_db()
+
+    # Enforce 30-day privacy retention policy: check-in logs are automatically purged after 30 days.
+    # Note: PocketBuddy enforces a strict "no cross-user aggregation" constraint to protect student privacy.
+    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    await db.checkin_logs.delete_many({"user_id": user_id, "created_at": {"$lt": thirty_days_ago}})
 
     response = req.response
     if not response:

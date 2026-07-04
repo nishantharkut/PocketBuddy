@@ -170,7 +170,7 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
     # PocketBuddy's differentiator: only a money app that also reads routine can
     # say "this week's stress is mostly financial."
     score = 100
-    driver_points = {"money": 0, "routine": 0, "academic": 0, "social": 0}
+    driver_points = {"money": 0, "routine": 0, "academic": 0}
 
     def deduct(points: int, driver: str) -> None:
         nonlocal score
@@ -200,21 +200,18 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
     elif spend_velocity > 1.2:
         deduct(8, "money")
 
-    if days_since_last_pool is not None and days_since_last_pool > 7:
-        deduct(10, "social")
-
     score = max(0, min(100, score))
 
     if score >= 70:
         status = "steady"
-        label = "Your routine looks steady"
+        label = "Stable routine"
         message = (
             "Your routine looks steady this week. Keep meals regular and stay "
             "within today's safe spend target."
         )
     elif score >= 50:
         status = "watch"
-        label = "A few patterns need attention"
+        label = "Needs attention"
         message = (
             "A few patterns need attention: your food timing, spending pace, or "
             "exam pressure is starting to stack up. Pick one reset today: a proper "
@@ -222,10 +219,10 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
         )
     else:
         status = "stressed"
-        label = "Pattern suggests high stress"
+        label = "Reset suggested"
         message = (
-            "Your recent pattern suggests you may be stretched thin. You do not need "
-            "to fix everything today; start with one meal and one planned spend "
+            "Your recent spending or routine pattern suggests a reset. You do not need "
+            "to adjust everything today; start with one proper meal and one planned spend "
             "decision, then check in again."
         )
 
@@ -281,16 +278,12 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
         "detail": "Active exam schedule" if in_exam_period else "No exams active",
     })
 
-    pool_sev = "stressed" if (days_since_last_pool is not None and days_since_last_pool > 7) else "ok"
     signals.append({
         "key": "cart_pool",
-        "label": "Social index",
+        "label": "Shared-order activity",
         "value": f"{days_since_last_pool}d idle" if days_since_last_pool is not None else "None",
-        "severity": pool_sev,
-        "detail": (
-            "Low cart-pool participation recently (possible social withdrawal)"
-            if pool_sev == "stressed" else "Active in cart pools"
-        ),
+        "severity": "ok",
+        "detail": "No recent cart pool orders" if (days_since_last_pool is not None and days_since_last_pool > 7) else "Regular shared orders",
     })
 
     # ── Stress-source attribution (the standout insight) ─────────────────────
@@ -298,7 +291,6 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
         "money": {"label": "Money", "color": "#ef4444"},
         "routine": {"label": "Routine", "color": "#f59e0b"},
         "academic": {"label": "Academics", "color": "#8b5cf6"},
-        "social": {"label": "Social", "color": "#3b82f6"},
     }
     total_deducted = sum(driver_points.values())
     drivers = []
@@ -319,7 +311,6 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
         "money": "Most of this week's pressure looks financial — your runway and spending pace are the biggest factors.",
         "routine": "Most of this week's pressure is routine-related — meal timing and late nights are adding up.",
         "academic": "Exam pressure is the biggest factor this week. Protecting meals and sleep matters most right now.",
-        "social": "You've been less active in shared plans lately. A quick wing pool can help you reconnect.",
     }.get(primary_driver, "Your money, meals, and routine all look balanced this week.")
 
     return {
@@ -365,7 +356,7 @@ def build_reset_actions(metrics: dict[str, Any]) -> list[dict[str, Any]]:
             "title": "Have a proper meal",
             "body": (
                 f"It's been about {int(m['current_food_gap_hours'])}h since your last "
-                "food spend. A mess thali or canteen plate keeps energy (and budget) steady."
+                "food spend. Mess, home food, or a simple canteen plate works."
             ),
             "kind": "checkin",
             "checkin_response": "wellness_ate",
@@ -500,13 +491,14 @@ def generate_supportive_message(package: dict[str, Any], profile: dict[str, Any]
     primary = package.get("primary_driver")
 
     prompt = f"""You are PocketBuddy, a warm, supportive companion for an Indian college student.
-Write a short check-in (2-3 sentences, max 55 words) about how their week looks.
+Write a short check-in (2-3 sentences, max 55 words) about how their week looks based strictly on spending pace, meal gaps, and study/exam routine.
 
 Rules:
-- Be caring and encouraging, like a thoughtful friend. Use "you".
-- DO NOT diagnose, and DO NOT use clinical words like burnout, depression, anxiety, disorder.
+- Keep the message focused strictly on money behavior, routine signals, and simple corrective resets.
+- DO NOT use therapy-style or soothing language.
+- DO NOT diagnose, and DO NOT use clinical words like burnout, depression, anxiety, disorder, stress patterns.
 - Do not be preachy or alarmist. No emojis. No markdown.
-- Name the main source of pressure in plain words, then point to ONE small next step.
+- Name the main source of pressure (e.g. money or meals) in plain words, then point to ONE small next step.
 
 Overall read: {status}. Main pressure source: {primary or "nothing in particular"}.
 Patterns worth noting: {elevated}.
@@ -534,29 +526,28 @@ def _fallback_care_plan(package: dict[str, Any]) -> dict[str, Any]:
 
     steps: list[str] = []
     if m["avg_food_gap_hours_7d"] > 6 or m["current_food_gap_hours"] > 6:
-        steps.append("Eat a proper meal in the next hour — a mess thali or canteen plate works.")
+        steps.append("Eat a proper meal in the next hour — mess, home food, or a simple canteen plate works.")
     if m["spend_velocity"] > 1.2 or m["runway_days"] < 10:
         steps.append(f"Pick one low-spend window today and keep spends under about ₹{int(m['safe_daily_limit_rs'])}.")
     if m["in_exam_period"] or m["late_night_spend_7d"] > 1:
         steps.append("Take a real 15-minute break away from screens, and aim to wind down earlier tonight.")
     if len(steps) < 3:
-        steps.append("Message one friend or wingmate — a short chat lightens a heavy day.")
+        steps.append("Message one friend or wingmate — a short chat is a good way to take a quick break.")
     steps = steps[:3]
 
     focus_by_driver = {
         "money": "Ease the money pressure with one planned, low-spend day.",
         "routine": "Get your meals and sleep back to a steady rhythm.",
         "academic": "Protect meals and rest so exam prep stays sustainable.",
-        "social": "Reconnect with your wing — you don't have to do this alone.",
     }
 
     return {
-        "affirmation": "You're carrying a lot right now, and checking in already counts. One small step is enough for today.",
+        "affirmation": "Small adjustments to your daily routine can help reset your spending and meal timing today.",
         "focus": focus_by_driver.get(primary, "Keep your simple routine steady — meals, rest, and mindful spends."),
         "steps": steps,
-        "meal_tip": f"It's been about {int(m['current_food_gap_hours'])}h since your last food spend — a warm meal will help." if m["current_food_gap_hours"] > 5 else "Your meal timing looks okay — keep it steady.",
+        "meal_tip": f"It's been about {int(m['current_food_gap_hours'])}h since your last food spend — a simple meal works." if m["current_food_gap_hours"] > 5 else "Your meal timing looks okay — keep it steady.",
         "rest_tip": "Try a screens-off wind-down 30 minutes before bed tonight." if m["late_night_spend_7d"] > 1 else "Your nights look calm — protect that sleep window.",
-        "money_tip": f"About ₹{int(m['safe_daily_limit_rs'])} keeps you on track today; a wing pool can stretch it further." if m["runway_days"] < 12 else "Your runway looks stable — no money pressure to add stress today.",
+        "money_tip": f"About ₹{int(m['safe_daily_limit_rs'])} keeps you on track today; shared ordering can stretch it further." if m["runway_days"] < 12 else "Your runway looks stable — no money pressure to add stress today.",
         "source": "local_rules",
     }
 
@@ -570,12 +561,12 @@ def generate_care_plan(package: dict[str, Any], profile: dict[str, Any]) -> dict
 
     m = package["metrics"]
     prompt = f"""You are PocketBuddy, a warm, supportive companion for an Indian college student.
-Create a short, practical care plan for today. Output ONLY JSON (no markdown fences) with keys:
-"affirmation" (1 warm sentence, no clinical words), "focus" (1 sentence, the single most useful focus today),
+Create a short, practical care plan for today based strictly on spending pace, meal gaps, and study/exam routine. Output ONLY JSON (no markdown fences) with keys:
+"affirmation" (1 simple sentence focusing on small adjustments, no clinical words, no therapy-style/soothing language), "focus" (1 sentence, the single most useful focus today),
 "steps" (array of exactly 3 short, concrete actions), "meal_tip", "rest_tip", "money_tip" (each 1 short sentence).
 
-Rules: caring and encouraging, use "you", never diagnose, no words like burnout/anxiety/depression/disorder,
-no emojis, no markdown. Ground it in the data below.
+Rules: caring and encouraging, use "you", never diagnose, no words like burnout/anxiety/depression/disorder/stress patterns,
+no emojis, no markdown. Focus on concrete spending, meal, and routine signals, not therapy. Ground it in the data below.
 
 Overall read: {package['status']}. Main pressure source: {package.get('primary_driver')}.
 Food gap avg: {m['avg_food_gap_hours_7d']}h, current gap: {m['current_food_gap_hours']}h.

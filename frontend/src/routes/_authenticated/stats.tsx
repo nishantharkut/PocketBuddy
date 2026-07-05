@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
@@ -19,6 +19,9 @@ import {
 
 export const Route = createFileRoute("/_authenticated/stats")({
   ssr: false,
+  beforeLoad: () => {
+    throw redirect({ to: "/transactions", search: { tab: "stats" } });
+  },
   component: StatsPage,
 });
 
@@ -55,6 +58,14 @@ function getCategoryIcon(cat: string, className = "h-4 w-4") {
 }
 
 function StatsPage() {
+  return (
+    <AppShell>
+      <StatsContent />
+    </AppShell>
+  );
+}
+
+export function StatsContent({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -95,7 +106,7 @@ function StatsPage() {
   // Custom label for pie chart
   const renderLabel = ({ cx, cy, midAngle, outerRadius, name, pct }: any) => {
     const RADIAN = Math.PI / 180;
-    const radius = outerRadius + 16;
+    const radius = outerRadius + 12;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     if (pct < 3) return null;
@@ -167,18 +178,20 @@ function StatsPage() {
   }, [stats?.day_of_week_data]);
 
   return (
-    <AppShell>
+    <>
       {/* Page Header */}
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
-        <div className="flex items-center gap-3 min-w-0">
-          <MobileMenuButton />
-          <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">
-            Stats & Analytics
-          </h1>
+      {!embedded && (
+        <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+          <div className="flex items-center gap-3 min-w-0">
+            <MobileMenuButton />
+            <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">
+              Stats & Analytics
+            </h1>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="py-4 pb-32 space-y-6 animate-[fadeIn_0.3s_ease-out]">
+      <div className={`${embedded ? "pt-1" : "py-4"} pb-32 space-y-6 animate-[fadeIn_0.3s_ease-out]`}>
 
         {/* ── Month Navigation ────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3">
@@ -294,9 +307,9 @@ function StatsPage() {
               ) : (
                 <div className="p-4 md:p-6">
                   <div className="flex flex-col md:flex-row md:items-center md:gap-8">
-                    <div className="flex-shrink-0 mx-auto md:mx-0" style={{ width: 280, height: 280 }}>
+                    <div className="mx-auto h-[300px] w-full max-w-[360px] flex-shrink-0 md:mx-0 md:h-[320px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
+                        <PieChart margin={{ top: 18, right: 52, bottom: 18, left: 52 }}>
                           <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75}
                             paddingAngle={2} dataKey="value" label={renderLabel}
                             labelLine={{ stroke: "var(--border)", strokeWidth: 1 }}
@@ -655,7 +668,7 @@ function StatsPage() {
           </>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }
 

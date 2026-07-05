@@ -91,12 +91,6 @@ export async function createCampusFoodItem({ venue_name, item_name, price, campu
   });
 }
 
-export async function deleteFoodItem(id: string) {
-  return apiRequest(`/api/campus-food/${id}`, {
-    method: "DELETE",
-  });
-}
-
 export async function scanReceiptScreenshot({ image_b64 }: { image_b64: string }) {
   return apiRequest("/api/campus-food/scan-receipt", {
     method: "POST",
@@ -111,7 +105,6 @@ export async function getCommunityQuizzes() {
 export async function submitQuizResponse(data: {
   quiz_id: string;
   quiz_type: string;
-  merchant_raw?: string;
   venue_name?: string;
   response_val: string;
   price?: number;
@@ -408,5 +401,3 @@ export async function deleteAccountData() {
 export async function confirmTransaction({ id }: { id: string }) {
   return apiRequest(`/api/transactions/${id}/confirm`, { method: "POST" });
 }
-
-

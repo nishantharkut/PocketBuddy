@@ -120,12 +120,57 @@ async def get_insights(user_id: str = Depends(get_current_user)):
         or any(kw in (t.get("mapped_merchant_name") or "").lower() for kw in delivery_keywords)
     ]
     delivery_count = len(delivery_txns)
-    mess_count = max(0, len(food_txns) - delivery_count)
+    campus_direct_txns = [t for t in food_txns if t not in delivery_txns]
+    mess_count = max(0, len(campus_direct_txns))
     delivery_spend_paise = sum(t.get("amount", 0) for t in delivery_txns)
+    food_30 = [t for t in food_txns if t.get("created_at", now) >= since_30]
+    avg_meal_cost_paise = round(sum(t.get("amount", 0) for t in food_30) / len(food_30)) if food_30 else 0
+
+    grocery_keywords = ["grocery", "groceries", "kirana", "blinkit", "zepto", "dmart", "bigbasket", "vegetable", "milk"]
+    cooking_txns = [
+        t for t in txns
+        if t.get("created_at", now) >= since_30 and (
+            (t.get("category") or "").lower() in {"grocery", "groceries"}
+            or any(kw in ((t.get("mapped_merchant_name") or t.get("raw_merchant_string") or "").lower()) for kw in grocery_keywords)
+        )
+    ]
+    hostel_hint = (profile or {}).get("hostel_block", "")
+    hostel_hint_l = str(hostel_hint or "").lower()
+    if (profile or {}).get("mess_enrolled"):
+        routine_type = "hostel_mess"
+        routine_label = "Hostel mess + campus food"
+    elif any(k in hostel_hint_l for k in ("pg", "paying guest", "flat", "rented")):
+        routine_type = "pg_cooking"
+        routine_label = "PG cooking + campus food"
+    elif any(k in hostel_hint_l for k in ("day scholar", "commuter", "none")):
+        routine_type = "day_scholar"
+        routine_label = "Day scholar routine"
+    elif cooking_txns and len(cooking_txns) >= max(2, delivery_count):
+        routine_type = "pg_cooking"
+        routine_label = "Cooking-led routine"
+    else:
+        routine_type = "mixed"
+        routine_label = "Mixed meal routine"
 
     # ── Price spikes detection ─────────────────────────────────────────────
     price_spikes = []
     active_foods = await db.campus_food.find({"status": "active"}).to_list(length=1000)
+    pending_menu_count = await db.campus_food.count_documents({"status": "pending_verification"})
+    trusted_menu_count = sum(1 for item in active_foods if item.get("verification_votes", 0) >= item.get("verification_threshold", 3))
+    fresh_menu_count = 0
+    for item in active_foods:
+        history = item.get("price_history") or []
+        if not history:
+            continue
+        last_changed = history[-1].get("changed_at")
+        if not last_changed:
+            continue
+        try:
+            last_changed_dt = datetime.datetime.fromisoformat(str(last_changed).replace("Z", "+00:00")).replace(tzinfo=None)
+            if (now - last_changed_dt).days <= 30:
+                fresh_menu_count += 1
+        except Exception:
+            continue
     venue_items = {}
     for item in active_foods:
         v_name = item.get("venue_name")
@@ -208,9 +253,17 @@ async def get_insights(user_id: str = Depends(get_current_user)):
         "food": {
             "gap_hours": round(food_gap_hours, 1),
             "avg_daily_paise": round(avg_daily_food),
+            "avg_meal_cost_paise": avg_meal_cost_paise,
+            "routine_type": routine_type,
+            "routine_label": routine_label,
             "delivery_count_30d": delivery_count,
             "mess_count_30d": mess_count,
+            "campus_direct_count_30d": len(campus_direct_txns),
+            "cooking_signal_count_30d": len(cooking_txns),
             "delivery_spend_paise": delivery_spend_paise,
+            "trusted_menu_count": trusted_menu_count,
+            "fresh_menu_count": fresh_menu_count,
+            "pending_menu_count": pending_menu_count,
             "price_spikes": price_spikes[:3],
         },
         "velocity": {

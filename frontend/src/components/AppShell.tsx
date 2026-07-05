@@ -3,7 +3,6 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   LayoutDashboard, 
-  List, 
   ShoppingCart, 
   Settings, 
   ChevronLeft, 
@@ -35,13 +34,12 @@ const SidebarCtx = createContext<Ctx | null>(null);
 
 const tabs = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
-  { to: "/transactions", label: "History", icon: List, id: "nav-transactions" },
-  { to: "/stats", label: "Stats", icon: BarChart3, id: "nav-stats" },
-  { to: "/runway", label: "Runway", icon: Activity, id: "nav-runway" },
   { to: "/pool", label: "Pool", icon: ShoppingCart, id: "nav-pool" },
+  { to: "/runway", label: "Runway", icon: Activity, id: "nav-runway" },
   { to: "/travel", label: "Travel", icon: Compass, id: "nav-travel" },
-  { to: "/settings", label: "Settings", icon: Settings, id: "nav-settings" },
+  { to: "/transactions", label: "Transactions", icon: BarChart3, id: "nav-transactions" },
   { to: "/privacy", label: "Privacy", icon: ShieldCheck, id: "nav-privacy" },
+  { to: "/settings", label: "Settings", icon: Settings, id: "nav-settings" },
 ] as const;
 
 
@@ -165,7 +163,10 @@ function SidebarBody({ onNavigate, isMobile = false }: { onNavigate?: () => void
         <nav className="flex-1 px-3">
           <ul className="space-y-0.5">
             {tabs.map((t) => {
-              const active = pathname === t.to || pathname.startsWith(t.to + "/");
+              const active =
+                pathname === t.to ||
+                pathname.startsWith(t.to + "/") ||
+                (t.to === "/transactions" && pathname === "/stats");
               const Icon = t.icon;
               return (
                 <li key={t.to}>

@@ -57,7 +57,6 @@ import {
   editFoodItem,
   getVenuePhoto,
   createCampusFoodItem,
-  deleteFoodItem,
   scanReceiptScreenshot,
   getCommunityQuizzes,
   submitQuizResponse,
@@ -121,7 +120,7 @@ function UnlabelledPaymentPrompt({ txns, foods, qc }: { txns: any[]; foods: any[
 
   const handleConfirm = () => {
     setConfirmed(true);
-    toast.success(`Verified! ${displayPrice} at ${merchantName} registered in campus database.`);
+    toast.success(`Marked ${displayPrice} at ${merchantName} for review.`);
   };
 
   const handleCustomSubmit = (e: React.FormEvent) => {
@@ -129,14 +128,13 @@ function UnlabelledPaymentPrompt({ txns, foods, qc }: { txns: any[]; foods: any[
     if (!labelVal.trim()) return;
     setConfirmed(true);
     setEditing(false);
-    toast.success(`Thanks! Added "${labelVal.trim()}" at ${displayPrice} to ${merchantName}.`);
+    toast.success(`Saved "${labelVal.trim()}" at ${displayPrice} for review.`);
   };
 
   return (
-    <div className="rounded-xl border border-dashed border-border bg-surface-raised/30 p-3 space-y-2.5 animate-[fadeIn_0.3s_ease-out]">
-      <div className="flex items-center gap-1.5 text-warning font-bold text-[10px] uppercase tracking-wider">
-        <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
-        Unlabelled Price Cluster Detected
+    <div className="rounded-xl border border-border bg-surface-raised/30 p-3 space-y-2.5 animate-[fadeIn_0.3s_ease-out]">
+      <div className="text-muted-foreground font-bold text-[10px] uppercase tracking-wider">
+        Payment to review
       </div>
       
       {!editing ? (
@@ -694,7 +692,7 @@ function SpendingSmartCheck({
         <button
           type="button"
           onClick={() => setSegment("hostel")}
-          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer \${
+          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
             segment === "hostel"
               ? "bg-background text-foreground shadow-sm border border-border/60"
               : "text-zinc-500 hover:text-zinc-300"
@@ -705,7 +703,7 @@ function SpendingSmartCheck({
         <button
           type="button"
           onClick={() => setSegment("pg")}
-          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer \${
+          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
             segment === "pg"
               ? "bg-background text-foreground shadow-sm border border-border/60"
               : "text-zinc-500 hover:text-zinc-300"
@@ -716,7 +714,7 @@ function SpendingSmartCheck({
         <button
           type="button"
           onClick={() => setSegment("day")}
-          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer \${
+          className={`flex-1 text-center py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
             segment === "day"
               ? "bg-background text-foreground shadow-sm border border-border/60"
               : "text-zinc-500 hover:text-zinc-300"
@@ -793,7 +791,7 @@ function SpendingSmartCheck({
                   if (item.name === "Maggi") setFridgeMaggi(!fridgeMaggi);
                   if (item.name === "Veggies") setFridgeVeggies(!fridgeVeggies);
                 }}
-                className={`px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer \${
+                className={`px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                   item.active 
                     ? "bg-primary/10 border-primary text-primary" 
                     : "bg-surface-raised/40 border-border text-zinc-500 hover:bg-surface-raised/80"
@@ -861,7 +859,7 @@ function SpendingSmartCheck({
                     key={item.key}
                     type="button"
                     onClick={() => setCommuteMode(item.key as any)}
-                    className={`py-1.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer \${
+                    className={`py-1.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer ${
                       commuteMode === item.key 
                         ? "bg-background text-foreground shadow border border-border/50" 
                         : "text-zinc-500 hover:text-zinc-300"
@@ -885,7 +883,7 @@ function SpendingSmartCheck({
                     key={item.key}
                     type="button"
                     onClick={() => setChaiType(item.key as any)}
-                    className={`py-1.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer \${
+                    className={`py-1.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer ${
                       chaiType === item.key 
                         ? "bg-background text-foreground shadow border border-border/50" 
                         : "text-zinc-500 hover:text-zinc-300"
@@ -945,39 +943,10 @@ function SpendingSmartCheck({
   );
 }
 const getVenueDetails = (venueName: string) => {
-  const name = (venueName || "").toLowerCase();
-  if (name.includes("bh-2") || name.includes("bh2")) {
-    return {
-      phone: "+91 94567 12301",
-      upi: "bh2canteen@upi",
-      displayName: "BH-2 Night Canteen"
-    };
-  }
-  if (name.includes("juice")) {
-    return {
-      phone: "+91 94567 12302",
-      upi: "juicecenter@upi",
-      displayName: "Campus Juice Center"
-    };
-  }
-  if (name.includes("nescafe") || name.includes("coffee")) {
-    return {
-      phone: "+91 94567 12303",
-      upi: "nescafe@upi",
-      displayName: "Nescafe Coffee"
-    };
-  }
-  if (name.includes("canteen") || name.includes("mess")) {
-    return {
-      phone: "+91 94567 12304",
-      upi: "canteen@upi",
-      displayName: "Campus Canteen"
-    };
-  }
   return {
-    phone: "+91 94567 12305",
-    upi: "campusfood@upi",
-    displayName: venueName
+    phone: null as string | null,
+    upi: null as string | null,
+    displayName: venueName || "Campus Food"
   };
 };
 
@@ -1310,7 +1279,7 @@ function Dashboard() {
   const [scanVenueMode, setScanVenueMode] = useState<"select" | "custom">("select");
   const [manualVenueMode, setManualVenueMode] = useState<"select" | "custom">("select");
 
-  // Global Floating Quiz States
+  // Food trust contribution state
   const [dismissedQuizId, setDismissedQuizId] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [quizLocation, setQuizLocation] = useState("");
@@ -1320,39 +1289,6 @@ function Dashboard() {
   const [quizReceiptBusy, setQuizReceiptBusy] = useState(false);
   const [recurringItemName, setRecurringItemName] = useState("");
   const [dismissedCenterQuizId, setDismissedCenterQuizId] = useState<string | null>(null);
-  const [isFloatingQuizDismissed, setIsFloatingQuizDismissed] = useState(false);
-  const [isCenterQuizDismissed, setIsCenterQuizDismissed] = useState(false);
-  const [isQuizTriggered, setIsQuizTriggered] = useState(false);
-  const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const clearDismissTimer = () => {
-    if (dismissTimerRef.current) {
-      clearTimeout(dismissTimerRef.current);
-      dismissTimerRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    const delay = 4000 + Math.random() * 8000;
-    const timer = setTimeout(() => {
-      setIsQuizTriggered(true);
-    }, delay);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (isQuizTriggered) {
-      dismissTimerRef.current = setTimeout(() => {
-        setIsFloatingQuizDismissed(true);
-        setIsCenterQuizDismissed(true);
-      }, 10000);
-    }
-    return () => {
-      if (dismissTimerRef.current) {
-        clearTimeout(dismissTimerRef.current);
-      }
-    };
-  }, [isQuizTriggered]);
 
   const safeDailyLimit = wellness?.safe_daily_limit_rs ?? 150.0;
   const remainingAllowance = wellness?.remaining_allowance_rs ?? 4500.0;
@@ -1389,13 +1325,17 @@ function Dashboard() {
   // Edit Mutation
   const editMutation = useMutation({
     mutationFn: editFoodItem,
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       setEditingItemId(null);
       qc.invalidateQueries({ queryKey: ["foods"] });
-      toast.success("Item updated successfully!");
+      qc.invalidateQueries({ queryKey: ["pending-foods"] });
+      if (typeof refetchPending === "function") {
+        refetchPending();
+      }
+      toast.success(res?.message || (res?.status === "pending_verification" ? "Correction sent for community verification." : "Menu item updated."));
     },
-    onError: () => {
-      toast.error("Failed to update item.");
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to save correction.");
     }
   });
 
@@ -1409,27 +1349,6 @@ function Dashboard() {
     editMutation.mutate({ id, item_name: editName.trim(), price: priceInPaise });
   };
 
-  // Delete Mutation
-  const deleteMutation = useMutation({
-    mutationFn: deleteFoodItem,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["foods"] });
-      if (typeof refetchPending === "function") {
-        refetchPending();
-      }
-      toast.success("Item deleted successfully!");
-    },
-    onError: () => {
-      toast.error("Failed to delete item.");
-    }
-  });
-
-  const handleDeleteItem = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this item?")) {
-      deleteMutation.mutate(id);
-    }
-  };
-
   // Manual Add Menu Form State
   const [manualVenue, setManualVenue] = useState("");
   const [manualItemName, setManualItemName] = useState("");
@@ -1439,9 +1358,13 @@ function Dashboard() {
   // Manual Creation Mutation
   const manualCreateMutation = useMutation({
     mutationFn: createCampusFoodItem,
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["foods"] });
-      toast.success("Food item added to Official Menus!");
+      toast.success(
+        res?.status === "active"
+          ? "Food item added to the menu."
+          : "Food item saved for community verification."
+      );
       setManualItemName("");
       setManualPrice("");
     },
@@ -1487,7 +1410,6 @@ function Dashboard() {
     submitQuizMutation.mutate({
       quiz_id: quiz.id,
       quiz_type: quiz.type,
-      merchant_raw: quiz.merchant_raw,
       venue_name: quiz.venue_name,
       response_val: answer,
       price: quiz.price,
@@ -1522,6 +1444,38 @@ function Dashboard() {
     setRecurringItemName("");
   }, [activeQuizId]);
 
+  const activeMenuQuiz = useMemo(() => {
+    return quizzes?.find(
+      (q: any) => (q.type === "item_name" || q.type === "meal_guess") && q.id !== dismissedCenterQuizId
+    ) || null;
+  }, [quizzes, dismissedCenterQuizId]);
+
+  const activeTrustQuiz = useMemo(() => {
+    return quizzes?.find(
+      (q: any) => q.type !== "item_name" && q.type !== "meal_guess" && q.id !== dismissedQuizId
+    ) || null;
+  }, [quizzes, dismissedQuizId]);
+
+  const foodRoutineLabel = insights?.food?.routine_label || (
+    profile?.mess_enrolled
+      ? "Hostel mess + campus food"
+      : "Mixed meal routine"
+  );
+
+  const trustedMenuCount = insights?.food?.trusted_menu_count ?? (foods ?? []).filter((f: any) => (f.verification_votes ?? 0) >= (f.verification_threshold ?? 3)).length;
+  const pendingMenuCount = insights?.food?.pending_menu_count ?? 0;
+  const freshMenuCount = insights?.food?.fresh_menu_count ?? (foods ?? []).filter((f: any) => !f.price_spike_alert).length;
+  const campusDirectCount = insights?.food?.campus_direct_count_30d ?? insights?.food?.mess_count_30d ?? 0;
+  const cookingSignalCount = insights?.food?.cooking_signal_count_30d ?? 0;
+  const avgMealCostPaise = insights?.food?.avg_meal_cost_paise ?? bestFood?.price ?? 0;
+  const foodSavingsEstimate = useMemo(() => {
+    const deliveryCount = insights?.food?.delivery_count_30d ?? 0;
+    const deliverySpend = insights?.food?.delivery_spend_paise ?? 0;
+    if (!deliveryCount || !deliverySpend || !avgMealCostPaise) return 0;
+    const avgDeliveryPaise = deliverySpend / deliveryCount;
+    return Math.max(0, Math.round((avgDeliveryPaise - avgMealCostPaise) / 100));
+  }, [insights, avgMealCostPaise]);
+
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualVenue.trim()) {
@@ -1543,7 +1497,7 @@ function Dashboard() {
       item_name: manualItemName.trim(),
       price: Math.round(parsedPrice * 100),
       campus: profile?.college_name || "ABV-IIITM Gwalior",
-      status: "active"
+      status: "pending_verification"
     });
   };
 
@@ -1572,7 +1526,7 @@ function Dashboard() {
   const { data: pendingFoods, refetch: refetchPending } = useQuery({
     queryKey: ["pending-foods"],
     queryFn: () => getCampusFood("pending_verification"),
-    enabled: showFoodSheet,
+    enabled: !!user,
   });
 
   const verifyMutation = useMutation({
@@ -1580,15 +1534,21 @@ function Dashboard() {
     onSuccess: (res, variables) => {
       refetchPending();
       qc.invalidateQueries({ queryKey: ["foods"] });
-      if (variables?.id) {
+      if (variables?.id && variables.vote === "up") {
         setConfirmedItemIds(prev => [...prev, variables.id]);
       }
       toast.success(
-        res.status === "promoted_to_active"
-          ? "Item promoted to active campus menu!"
+        res.status === "merged_into_active"
+          ? "Correction merged into the trusted menu."
+          : res.status === "promoted_to_active"
+          ? "Item promoted to trusted campus menu."
+          : res.status === "rejected"
+          ? "Candidate rejected after community review."
           : res.status === "already_voted"
           ? "You have already voted on this item."
-          : "Thank you for verifying!"
+          : variables?.vote === "down"
+          ? "Marked as wrong for review."
+          : "Thank you for verifying."
       );
     },
     onError: () => {
@@ -1603,7 +1563,11 @@ function Dashboard() {
   const scanMutation = useMutation({
     mutationFn: scanMenuPhoto,
     onSuccess: (res) => {
-      toast.success(res.message || `Successfully parsed menu!`);
+      if (res?.status === "needs_review") {
+        toast.info(res.message || "Menu photo needs manual review.");
+      } else {
+        toast.success(res.message || "Menu candidates saved for review.");
+      }
       setScanVenue("");
       setScanFile(null);
       setFoodTab("verify"); // Switch to verification page to see it
@@ -1659,10 +1623,11 @@ function Dashboard() {
     onSuccess: (res) => {
       setReconciledReceipt(res);
       setReceiptFile(null);
-      qc.invalidateQueries({ queryKey: ["transactions"] });
-      qc.invalidateQueries({ queryKey: ["wellness-insights"] });
-      qc.invalidateQueries({ queryKey: ["forecast"] });
-      toast.success("UPI Receipt scanned & verified successfully!");
+      if (res?.status === "needs_review") {
+        toast.info(res.message || "Receipt saved for review.");
+      } else {
+        toast.success(res?.message || "Receipt saved.");
+      }
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to process receipt image. Ensure it is a clear payment confirmation screenshot.");
@@ -1738,21 +1703,21 @@ function Dashboard() {
         icon: Wallet,
         accent: "#8C7853",
         title: "Welcome to PocketBuddy",
-        body: "Your AI spending guard is active. Start logging transactions or pair the Android companion to begin tracking automatically.",
+        body: "Your spending guard is active. Start logging transactions or pair the Android companion to begin tracking automatically.",
       });
       return list;
     }
 
     // Food delivery nudge
     const delivCount = insights.food?.delivery_count_30d ?? 0;
-    const messCount = insights.food?.mess_count_30d ?? 0;
-    if (delivCount > 5 && delivCount > messCount) {
+    const campusDirectForNudge = insights.food?.campus_direct_count_30d ?? insights.food?.mess_count_30d ?? 0;
+    if (delivCount > 5 && delivCount > campusDirectForNudge) {
       list.push({
         id: "delivery_overuse",
         icon: Utensils,
         accent: "#FC8019",
-        title: "Heavy on delivery apps",
-        body: `You've ordered ${delivCount}× via delivery this month vs ${messCount} mess visits. Switching 3 meals/week to mess saves ~₹${Math.round(delivCount * 35)} monthly.`,
+        title: "Delivery is dominating meals",
+        body: `You've used delivery ${delivCount}× this month vs ${campusDirectForNudge} campus/direct meals. Plan two ${foodRoutineLabel.toLowerCase()} meals this week to protect your runway.`,
       });
     }
 
@@ -1775,7 +1740,7 @@ function Dashboard() {
         icon: AlertTriangle,
         accent: "#ef4444",
         title: `Exam period — ${insights.exam.days_left}d left`,
-        body: "Your budget matters most right now. Aim for mess meals to keep daily food cost under ₹80. Campus canteens are usually open late.",
+        body: "Your budget matters most right now. Use your lowest-friction meal routine — mess, PG cooking, home food, or campus canteen — before defaulting to delivery.",
       });
     }
 
@@ -1810,7 +1775,7 @@ function Dashboard() {
     }
 
     return list;
-  }, [insights, calc]);
+  }, [insights, calc, foodRoutineLabel]);
 
   const visibleNudges = nudges.filter((n) => !dismissedNudges.has(n.id)).slice(0, 2);
 
@@ -1847,9 +1812,9 @@ function Dashboard() {
         list.push({
           id: `price_spike_${idx}`,
           type: "price_spike",
-          icon: AlertTriangle,
+          icon: TrendingDown,
           accent: "#ef4444",
-          title: "Price Spike Alert",
+          title: "Price change to verify",
           body: `Payments at ${spike.venue_name} suggest the price of ${spike.item_name} rose from ${rupees(spike.old_price * 100)} to ${rupees(spike.new_price * 100)} (+${spike.pct_increase}%).`,
           onAction: () => setShowFoodSheet(true),
           actionText: "Verify Menu"
@@ -1857,58 +1822,8 @@ function Dashboard() {
       });
     }
 
-    // 3. Add meal gap warning with different severity levels
-    const gap = Math.round(foodGapHours || insights?.food?.gap_hours || 0);
-    
-    if (gap >= 12) {
-      // Critical - 12+ hours
-      const bodyText = bestFood 
-        ? `CRITICAL: ${gap} hours without food! Your health and focus are at risk. Get a ${bestFood.item_name} for ${rupees(bestFood.price)} at ${bestFood.venue_name} immediately.`
-        : `CRITICAL: ${gap} hours without food! Your health and focus are at risk. Find the nearest campus canteen immediately.`;
-      list.push({
-        id: "meal_gap_critical",
-        type: "meal_gap",
-        icon: AlertTriangle,
-        accent: "#ef4444",
-        title: "🚨 FIND MEAL NOW",
-        body: bodyText,
-        onAction: () => setShowFoodSheet(true),
-        actionText: "FIND MEAL NOW"
-      });
-    } else if (gap >= 8) {
-      // Warning - 8+ hours
-      const bodyText = bestFood 
-        ? `It has been ${gap} hours since your last meal. Protect your runway with a ${bestFood.item_name} for ${rupees(bestFood.price)} at ${bestFood.venue_name}.`
-        : `It has been ${gap} hours since your last meal. Grab a healthy meal at a campus canteen to stay active.`;
-      list.push({
-        id: "meal_gap_warning",
-        type: "meal_gap",
-        icon: Utensils,
-        accent: "#f59e0b",
-        title: "Meal Gap Warning",
-        body: bodyText,
-        onAction: () => setShowFoodSheet(true),
-        actionText: "Find Food"
-      });
-    } else if (gap >= 6) {
-      // Early warning - 6+ hours
-      const bodyText = bestFood 
-        ? `${gap} hours since your last meal. Consider a ${bestFood.item_name} for ${rupees(bestFood.price)} at ${bestFood.venue_name} to maintain energy.`
-        : `${gap} hours since your last meal. Consider grabbing something healthy soon to maintain energy.`;
-      list.push({
-        id: "meal_gap_early",
-        type: "meal_gap",
-        icon: Timer,
-        accent: "#8b5cf6",
-        title: "Meal Reminder",
-        body: bodyText,
-        onAction: () => setShowFoodSheet(true),
-        actionText: "Browse Menu"
-      });
-    }
-
     return list;
-  }, [visibleNudges, insights, foodGapHours, bestFood]);
+  }, [visibleNudges, insights]);
 
   // Keep currentWarningIndex in bounds
   useEffect(() => {
@@ -2173,9 +2088,8 @@ function Dashboard() {
             </div>
           )}
 
-          {/* AI Food Guard Live Banner */}
-          {((insights?.food?.price_spikes && insights.food.price_spikes.length > 0) || 
-            (foodGapHours >= 6 || (insights?.food?.gap_hours ?? 0) >= 6)) && (
+          {/* Food Guard updates */}
+          {(insights?.food?.price_spikes && insights.food.price_spikes.length > 0) && (
             <div className="space-y-2 animate-[fadeIn_0.3s_ease-out]">
               {/* Price Spike Notification */}
               {insights?.food?.price_spikes?.map((spike: any, idx: number) => (
@@ -2185,10 +2099,10 @@ function Dashboard() {
                 >
                   <div className="flex items-center gap-3">
                     <div className="grid place-items-center h-8 w-8 rounded-lg bg-destructive/10 text-destructive shrink-0">
-                      <AlertTriangle className="h-4 w-4 animate-pulse" />
+                      <TrendingDown className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="font-black text-destructive uppercase tracking-wider">Price Spike Alert</p>
+                      <p className="font-black text-destructive uppercase tracking-wider">Price change to verify</p>
                       <p className="text-zinc-300 font-medium leading-relaxed mt-0.5">
                         Payments at <strong className="text-foreground">{spike.venue_name}</strong> suggest the price of <strong className="text-foreground">{spike.item_name}</strong> rose from {rupees(spike.old_price * 100)} to <strong className="text-destructive font-mono">{rupees(spike.new_price * 100)}</strong> (+{spike.pct_increase}%).
                       </p>
@@ -2203,89 +2117,6 @@ function Dashboard() {
                   </button>
                 </div>
               ))}
-
-              {/* Food Gap / Meal Miss Guardrail */}
-              {(foodGapHours >= 6 || (insights?.food?.gap_hours ?? 0) >= 6) && (
-                <div className={`flex items-center justify-between gap-3 rounded-2xl p-4 text-xs ${
-                  (foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12)
-                    ? 'border border-destructive/30 bg-destructive/10 animate-pulse'
-                    : (foodGapHours >= 8 || (insights?.food?.gap_hours ?? 0) >= 8)
-                    ? 'border border-warning/20 bg-warning/5'
-                    : 'border border-purple-500/20 bg-purple-500/5'
-                }`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`grid place-items-center h-8 w-8 rounded-lg shrink-0 ${
-                      (foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12)
-                        ? 'bg-destructive/20 text-destructive'
-                        : (foodGapHours >= 8 || (insights?.food?.gap_hours ?? 0) >= 8)
-                        ? 'bg-warning/10 text-warning'
-                        : 'bg-purple-500/10 text-purple-500'
-                    }`}>
-                      {(foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12) ? (
-                        <AlertTriangle className="h-4 w-4" />
-                      ) : (foodGapHours >= 8 || (insights?.food?.gap_hours ?? 0) >= 8) ? (
-                        <Utensils className="h-4 w-4" />
-                      ) : (
-                        <Timer className="h-4 w-4" />
-                      )}
-                    </div>
-                    <div>
-                      <p className={`font-black uppercase tracking-wider ${
-                        (foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12)
-                          ? 'text-destructive'
-                          : (foodGapHours >= 8 || (insights?.food?.gap_hours ?? 0) >= 8)
-                          ? 'text-warning'
-                          : 'text-purple-500'
-                      }`}>
-                        {(foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12)
-                          ? '🚨 FIND MEAL NOW'
-                          : (foodGapHours >= 8 || (insights?.food?.gap_hours ?? 0) >= 8)
-                          ? 'Meal Gap Warning'
-                          : 'Meal Reminder'}
-                      </p>
-                      <p className="text-zinc-300 font-medium leading-relaxed mt-0.5">
-                        {(foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12) ? (
-                          <>
-                            <strong className="text-destructive">CRITICAL:</strong> <strong className="text-foreground">{Math.round(foodGapHours || insights?.food?.gap_hours || 0)} hours</strong> without food! Your health and focus are at risk.
-                          </>
-                        ) : (
-                          <>
-                            It has been <strong className="text-foreground">{Math.round(foodGapHours || insights?.food?.gap_hours || 0)} hours</strong> since your last meal.
-                          </>
-                        )}
-                        {bestFood ? (
-                          <>
-                            {(foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12) ? ' Get a ' : ' Protect your runway with a '}
-                            <strong className="text-foreground">{bestFood.item_name}</strong> for <strong className="text-success font-mono">{rupees(bestFood.price)}</strong> at <strong className="text-foreground">{bestFood.venue_name}</strong>
-                            {(foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12) ? ' immediately.' : '.'}
-                          </>
-                        ) : (
-                          (foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12) 
-                            ? " Find the nearest campus canteen immediately."
-                            : " Grab a healthy meal at a campus canteen to stay active."
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowFoodSheet(true)}
-                    className={`shrink-0 px-3.5 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                      (foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12)
-                        ? 'bg-destructive/20 hover:bg-destructive/30 border border-destructive/40 text-destructive animate-pulse'
-                        : (foodGapHours >= 8 || (insights?.food?.gap_hours ?? 0) >= 8)
-                        ? 'bg-warning/10 hover:bg-warning/15 border border-warning/20 text-warning'
-                        : 'bg-purple-500/10 hover:bg-purple-500/15 border border-purple-500/20 text-purple-500'
-                    }`}
-                  >
-                    {(foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12)
-                      ? 'FIND MEAL NOW'
-                      : (foodGapHours >= 8 || (insights?.food?.gap_hours ?? 0) >= 8)
-                      ? 'Find Food'
-                      : 'Browse Menu'}
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -2569,13 +2400,8 @@ function Dashboard() {
                     )}
                   </>
                 ) : (
-                  <div className="flex items-end gap-1.5 h-16">
-                    {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-                      <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                        <div className="w-full rounded-sm bg-white/10" style={{ height: `${20 + Math.random() * 60}%`, minHeight: "8px" }} />
-                        <span className="text-[10px] text-zinc-600 font-bold">{d}</span>
-                      </div>
-                    ))}
+                  <div className="flex h-16 items-center justify-center rounded-xl border border-dashed border-border bg-surface-raised/30">
+                    <p className="text-xs text-zinc-500">Log transactions to see a 7-day spend pattern.</p>
                   </div>
                 )}
               </div>
@@ -2596,7 +2422,17 @@ function Dashboard() {
 
             {/* ── Food & Wellness Strip ───────────────────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5">
-              <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase mb-4">Food & Wellness</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Food & Wellness</p>
+                  <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                    Turns your meal routine into safer menu choices, verified prices, and runway-aware food decisions.
+                  </p>
+                </div>
+                <span className="rounded-full border border-border bg-surface-raised px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                  {foodRoutineLabel}
+                </span>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {/* Food gap */}
                 <div className="flex flex-col gap-1">
@@ -2611,13 +2447,15 @@ function Dashboard() {
                   <p className="text-xs text-zinc-600">food gap</p>
                 </div>
 
-                {/* Delivery vs mess */}
+                {/* Routine mix */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Delivery</p>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Routine Mix</p>
                   <p className="text-[16px] font-black text-foreground">
                     {insights?.food?.delivery_count_30d ?? "—"}×
                   </p>
-                  <p className="text-xs text-zinc-600">vs {insights?.food?.mess_count_30d ?? "—"} mess visits</p>
+                  <p className="text-xs text-zinc-600">
+                    {campusDirectCount} campus/direct{cookingSignalCount ? ` · ${cookingSignalCount} cooking` : ""}
+                  </p>
                 </div>
 
                 {/* Late night */}
@@ -2639,35 +2477,62 @@ function Dashboard() {
                 </div>
               </div>
 
-              {/* Mess vs delivery bar */}
-              {insights?.food && (insights.food.delivery_count_30d + insights.food.mess_count_30d) > 0 && (
+              {/* Campus/direct vs delivery bar */}
+              {insights?.food && (insights.food.delivery_count_30d + campusDirectCount) > 0 && (
                 <div className="mt-5 pt-4 border-t border-border">
-                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-2">Mess vs Delivery ratio (30d)</p>
+                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-2">Campus/direct vs delivery mix (30d)</p>
                   <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
                     <div
                       className="bg-success rounded-full transition-all"
-                      style={{ width: `${(insights.food.mess_count_30d / Math.max(insights.food.mess_count_30d + insights.food.delivery_count_30d, 1)) * 100}%` }}
+                      style={{ width: `${(campusDirectCount / Math.max(campusDirectCount + insights.food.delivery_count_30d, 1)) * 100}%` }}
                     />
                     <div
                       className="bg-warning rounded-full transition-all"
-                      style={{ width: `${(insights.food.delivery_count_30d / Math.max(insights.food.mess_count_30d + insights.food.delivery_count_30d, 1)) * 100}%` }}
+                      style={{ width: `${(insights.food.delivery_count_30d / Math.max(campusDirectCount + insights.food.delivery_count_30d, 1)) * 100}%` }}
                     />
                   </div>
                   <div className="flex justify-between mt-1.5">
-                    <span className="text-[10px] text-success font-bold">Mess {insights.food.mess_count_30d}</span>
+                    <span className="text-[10px] text-success font-bold">Campus/direct {campusDirectCount}</span>
                     <span className="text-[10px] text-warning font-bold">Delivery {insights.food.delivery_count_30d}</span>
                   </div>
                 </div>
               )}
 
-              {/* AI Food Guard Panel */}
+              {/* Food Guard Panel */}
               <div className="mt-5 pt-4 border-t border-border space-y-3">
-                <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-success shrink-0" />
-                  <p className="text-xs font-black tracking-wider text-foreground uppercase">AI Food Guard</p>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-success/10 text-success border border-success/20 animate-pulse">
-                    Active
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-success shrink-0" />
+                    <p className="text-xs font-black tracking-wider text-foreground uppercase">Food Guard</p>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-success/10 text-success border border-success/20">
+                      Active
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowFoodSheet(true);
+                      setFoodTab(pendingMenuCount > 0 ? "verify" : "scan");
+                    }}
+                    className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-primary transition-colors hover:bg-primary/10"
+                  >
+                    Help improve campus food
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-border bg-surface-raised/25 p-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Trusted</p>
+                    <p className="mt-0.5 text-sm font-black text-success tnum">{trustedMenuCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-surface-raised/25 p-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Pending</p>
+                    <p className="mt-0.5 text-sm font-black text-warning tnum">{pendingMenuCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-surface-raised/25 p-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Fresh</p>
+                    <p className="mt-0.5 text-sm font-black text-foreground tnum">{freshMenuCount}</p>
+                  </div>
                 </div>
 
                 {/* Main Dynamic Recommendation */}
@@ -2676,7 +2541,7 @@ function Dashboard() {
                     <span className="text-[10px] font-bold text-success uppercase tracking-widest">Safe Dining Pick</span>
                     {bestFood && (
                       <span className="text-[9px] text-zinc-500 font-medium">
-                        {bestFood.venue_name.toLowerCase().includes("canteen") || bestFood.venue_name.toLowerCase().includes("center") || bestFood.venue_name.toLowerCase().includes("dhaba") ? "Direct UPI Merchant" : "Aggregator"}
+                        {bestFood.venue_name.toLowerCase().includes("canteen") || bestFood.venue_name.toLowerCase().includes("center") || bestFood.venue_name.toLowerCase().includes("dhaba") ? "Campus venue" : "Delivery/aggregator"}
                       </span>
                     )}
                   </div>
@@ -2686,7 +2551,7 @@ function Dashboard() {
                         Grab <span className="font-bold text-primary">{bestFood.item_name}</span> at <span className="font-bold text-foreground">{bestFood.venue_name}</span> for <strong className="text-success font-mono">{rupees(bestFood.price)}</strong>.
                       </p>
                       <p className="text-[10px] text-muted-foreground leading-relaxed flex items-center gap-1.5 flex-wrap">
-                        <span>Verified from UPI transactions</span> · <span>Direct Merchant</span>
+                        <span>Based on campus menu signals</span> · <span>{trustedMenuCount ? "Community verified" : "Needs more verification"}</span>
                       </p>
                     </div>
                   ) : (
@@ -2697,12 +2562,217 @@ function Dashboard() {
                 {/* Budget Runway impact helper */}
                 {insights?.food && (
                   <p className="text-[11px] text-zinc-400 leading-relaxed font-medium">
-                    {insights.food.delivery_count_30d > 3 ? (
-                      <span><strong>Runway Hack:</strong> Replacing 2 delivery orders this week with campus canteen thalis saves ~<strong>₹170</strong> and extends your runway by <strong>1.5 days</strong>.</span>
+                    {insights.food.delivery_count_30d > 3 && foodSavingsEstimate > 0 ? (
+                      <span><strong>Runway move:</strong> Replacing 2 delivery orders this week with your usual campus/direct meal can save about <strong>₹{foodSavingsEstimate * 2}</strong>.</span>
+                    ) : avgMealCostPaise > 0 ? (
+                      <span>Your current {foodRoutineLabel.toLowerCase()} averages about <strong>{rupees(avgMealCostPaise)}</strong> per logged meal.</span>
                     ) : (
-                      <span>Your food spends are heavily direct UPI, keeping your average meal cost at a safe ₹62.</span>
+                      <span>Log a few meals or confirm campus menu prices to make Food Guard recommendations sharper.</span>
                     )}
                   </p>
+                )}
+
+                {(activeMenuQuiz || activeTrustQuiz) ? (
+                  <div className="rounded-xl border border-primary/15 bg-primary/[0.03] p-3.5 space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-primary">Help improve campus food</p>
+                        <p className="mt-1 text-[11px] text-zinc-400 leading-relaxed">
+                          Optional 10-second check. Your answer helps verify prices and menus for everyone without sharing raw payment details.
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                        No popup
+                      </span>
+                    </div>
+
+                    {activeMenuQuiz ? (
+                      <div className="space-y-2.5">
+                        <p className="text-xs font-semibold leading-relaxed text-foreground">
+                          Students often pay <strong className="font-mono text-primary">{rupees(activeMenuQuiz.price)}</strong> at <strong>{activeMenuQuiz.venue_name}</strong>. What item is this?
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {activeMenuQuiz.options.map((opt: string) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              disabled={submittingQuizId === activeMenuQuiz.id}
+                              onClick={() => handleQuizAnswer(activeMenuQuiz, opt).then(() => setDismissedCenterQuizId(activeMenuQuiz.id))}
+                              className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[10px] font-bold text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 disabled:opacity-50"
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Or type item name"
+                            value={recurringItemName}
+                            onChange={(e) => setRecurringItemName(e.target.value)}
+                            className="h-8 flex-1 bg-surface text-xs"
+                          />
+                          <Button
+                            type="button"
+                            disabled={submittingQuizId === activeMenuQuiz.id || !recurringItemName.trim()}
+                            onClick={() => {
+                              handleQuizAnswer(activeMenuQuiz, recurringItemName.trim()).then(() => {
+                                setRecurringItemName("");
+                                setDismissedCenterQuizId(activeMenuQuiz.id);
+                              });
+                            }}
+                            className="h-8 px-3 text-[10px] font-black uppercase"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setDismissedCenterQuizId(activeMenuQuiz.id)}
+                            className="h-8 px-3 bg-transparent text-[10px] font-black uppercase"
+                          >
+                            Later
+                          </Button>
+                        </div>
+                      </div>
+                    ) : activeTrustQuiz ? (
+                      <div className="space-y-2.5">
+                        <p className="text-xs font-semibold leading-relaxed text-foreground">{activeTrustQuiz.question}</p>
+                        <p className="text-[10px] text-zinc-500 font-medium">{activeTrustQuiz.detail}</p>
+
+                        {activeTrustQuiz.type === "category" && (
+                          <Input
+                            placeholder="Optional location, e.g. BH-2 Hostel"
+                            value={quizLocation}
+                            onChange={(e) => setQuizLocation(e.target.value)}
+                            className="h-8 bg-surface text-xs"
+                          />
+                        )}
+
+                        {activeTrustQuiz.type === "price_spike" && (
+                          <label className="flex h-12 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-surface text-center transition-colors hover:bg-surface-raised">
+                            <span className="text-[10px] font-bold text-zinc-300">
+                              {quizReceiptFile ? quizReceiptFile.name : "Attach receipt screenshot if you have one"}
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={quizReceiptBusy}
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  setQuizReceiptFile(e.target.files[0]);
+                                  handleQuizReceiptUpload(e.target.files[0], activeTrustQuiz);
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {activeTrustQuiz.options.map((opt: string) => {
+                            const isSelected = selectedOption === opt;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                disabled={submittingQuizId === activeTrustQuiz.id}
+                                onClick={() => {
+                                  setSelectedOption(opt);
+                                  setShowCustomCategoryInput(false);
+                                }}
+                                className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${
+                                  isSelected
+                                    ? "border-primary bg-primary/15 text-primary"
+                                    : "border-border bg-surface text-foreground hover:border-primary/30 hover:bg-primary/10"
+                                }`}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                          {activeTrustQuiz.type === "category" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedOption("__custom__");
+                                setShowCustomCategoryInput(true);
+                              }}
+                              className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold transition-colors ${
+                                selectedOption === "__custom__"
+                                  ? "border-primary bg-primary/15 text-primary"
+                                  : "border-border bg-surface text-foreground hover:border-primary/30 hover:bg-primary/10"
+                              }`}
+                            >
+                              + Custom
+                            </button>
+                          )}
+                        </div>
+
+                        {activeTrustQuiz.type === "category" && showCustomCategoryInput && (
+                          <Input
+                            placeholder="Type category"
+                            value={customCategory}
+                            onChange={(e) => setCustomCategory(e.target.value)}
+                            className="h-8 bg-surface text-xs"
+                          />
+                        )}
+
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            disabled={submittingQuizId === activeTrustQuiz.id || (!selectedOption && !customCategory.trim())}
+                            onClick={() => {
+                              const finalAnswer = selectedOption === "__custom__" ? customCategory.trim() : (selectedOption || "");
+                              if (!finalAnswer) return;
+                              handleQuizAnswer(activeTrustQuiz, finalAnswer).then(() => setDismissedQuizId(activeTrustQuiz.id));
+                            }}
+                            className="h-8 flex-1 text-[10px] font-black uppercase"
+                          >
+                            {submittingQuizId === activeTrustQuiz.id ? "Saving..." : "Save Answer"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setDismissedQuizId(activeTrustQuiz.id)}
+                            className="h-8 bg-transparent px-3 text-[10px] font-black uppercase"
+                          >
+                            Later
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border bg-surface-raised/25 p-3.5">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">No contribution needed right now</p>
+                    <p className="mt-1 text-[11px] text-zinc-400 leading-relaxed">
+                      Food Guard will ask for help only when enough students create a privacy-safe pattern worth verifying.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowFoodSheet(true);
+                          setFoodTab("scan");
+                        }}
+                        className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-foreground transition-colors hover:bg-surface-raised"
+                      >
+                        Scan menu
+                      </button>
+                      {pendingMenuCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowFoodSheet(true);
+                            setFoodTab("verify");
+                          }}
+                          className="rounded-lg border border-warning/20 bg-warning/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-warning transition-colors hover:bg-warning/15"
+                        >
+                          Review pending
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 {/* Price point crowdsource label trigger (Interactive feature) */}
@@ -3280,7 +3350,7 @@ function Dashboard() {
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Official Menus
+                  Trusted Menus
                 </button>
                 <button
                   type="button"
@@ -3291,7 +3361,7 @@ function Dashboard() {
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Suggested (UPI)
+                  Pending Review
                 </button>
                 <button
                   type="button"
@@ -3395,9 +3465,8 @@ function Dashboard() {
                     const isPhotoExpanded = expandedPhotoVenue === venue;
 
                     const vDetails = getVenueDetails(venue);
-                    const vCode = venue.charCodeAt(0) + venue.charCodeAt(venue.length - 1 || 0);
-                    const rating = (3.8 + (vCode % 12) / 10).toFixed(1);
-                    const reviewsCount = 12 + (vCode % 64);
+                    const verifiedItems = items.filter((it) => (it.verification_votes ?? 0) >= (it.verification_threshold ?? 3)).length;
+                    const stableItems = items.filter((it) => !it.price_spike_alert).length;
 
                     return (
                       <div key={venue} className="space-y-2 border border-border bg-surface-raised/10 p-4 rounded-2xl">
@@ -3430,21 +3499,25 @@ function Dashboard() {
                                 Upload Photo
                               </button>
                             )}
-                            <span className="text-zinc-700 text-[9px] select-none">•</span>
-                            <a
-                              href={`tel:${vDetails.phone}`}
-                              className="text-[10px] text-zinc-400 hover:text-foreground font-black uppercase tracking-wider inline-flex items-center gap-1 hover:underline transition-all"
-                            >
-                              <Phone className="w-3.5 h-3.5 text-zinc-500" />
-                              Call ({vDetails.phone})
-                            </a>
+                            {vDetails.phone && (
+                              <>
+                                <span className="text-zinc-700 text-[9px] select-none">•</span>
+                                <a
+                                  href={`tel:${vDetails.phone}`}
+                                  className="text-[10px] text-zinc-400 hover:text-foreground font-black uppercase tracking-wider inline-flex items-center gap-1 hover:underline transition-all"
+                                >
+                                  <Phone className="w-3.5 h-3.5 text-zinc-500" />
+                                  Call
+                                </a>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="flex items-center gap-1 bg-white/5 border border-border/60 px-2 py-0.5 rounded-lg text-[10px] font-bold text-zinc-300">
-                            <span className="text-amber-500">★</span>
-                            <span>{rating}</span>
-                            <span className="text-zinc-500 font-normal font-mono">({reviewsCount})</span>
+                            <ShieldCheck className="h-3 w-3 text-success" />
+                            <span>{verifiedItems}/{items.length} verified</span>
+                            <span className="text-zinc-500 font-normal font-mono">· {stableItems} stable</span>
                           </div>
                           <Badge variant="outline" className={`font-bold text-[9px] px-2 py-0.5 border flex items-center gap-1.5 ${
                             (items[0]?.crowd_density || "").includes("High")
@@ -3491,6 +3564,9 @@ function Dashboard() {
                                       className="bg-surface-raised border-border text-foreground placeholder:text-muted-foreground text-xs font-semibold w-24 h-8 font-mono"
                                     />
                                   </div>
+                                  <p className="text-[9px] text-zinc-500 font-semibold leading-relaxed">
+                                    Student corrections go to pending verification. Trusted menu data changes only after enough independent confirmations.
+                                  </p>
                                   <div className="flex gap-1.5 justify-end">
                                     <button
                                       type="button"
@@ -3505,7 +3581,7 @@ function Dashboard() {
                                       disabled={editMutation.isPending}
                                       className="px-2.5 py-1 rounded bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[9px] uppercase cursor-pointer disabled:opacity-50 transition-colors"
                                     >
-                                      {editMutation.isPending ? "Saving..." : "Save"}
+                                      {editMutation.isPending ? "Saving..." : "Send Correction"}
                                     </button>
                                   </div>
                                 </div>
@@ -3524,7 +3600,6 @@ function Dashboard() {
                                           Corrected
                                         </span>
                                       )}
-                                      <span className="text-zinc-700 text-[8px] select-none">•</span>
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -3534,15 +3609,7 @@ function Dashboard() {
                                         }}
                                         className="text-[9px] text-zinc-500 hover:text-primary font-bold uppercase tracking-wider cursor-pointer bg-transparent border-0 transition-colors"
                                       >
-                                        Edit
-                                      </button>
-                                      <span className="text-zinc-700 text-[8px] select-none">•</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeleteItem(it.id)}
-                                        className="text-[9px] text-red-500/80 hover:text-red-400 font-bold uppercase tracking-wider cursor-pointer bg-transparent border-0 transition-colors"
-                                      >
-                                        Delete
+                                        Suggest Correction
                                       </button>
                                     </div>
                                     <p className={`text-[10px] ${open ? "text-success font-semibold" : "text-muted-foreground"}`}>
@@ -3552,7 +3619,7 @@ function Dashboard() {
                                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide uppercase ${
                                         isDirectUpi ? "bg-success/10 text-success border border-success/20" : "bg-warning/10 text-warning border border-warning/20"
                                       }`}>
-                                        {isDirectUpi ? "Direct UPI" : "Aggregator"}
+                                        {isDirectUpi ? "Campus/direct" : "Delivery/aggregator"}
                                       </span>
                                     </div>
                                   </div>
@@ -3592,7 +3659,7 @@ function Dashboard() {
             {foodTab === "verify" && (
               <div className="mt-4 space-y-4 animate-[fadeIn_0.2s_ease-out]">
                 <div className="bg-warning/5 border border-warning/10 p-3.5 rounded-xl text-[10px] text-zinc-400 leading-relaxed font-semibold">
-                  <span className="text-warning font-black">Suggested UPI Items:</span> These are auto-detected from student payment clusters. Tap <strong className="text-foreground">Confirm Price</strong> to verify. Suggested items require <strong className="text-warning">3 confirmations</strong> to move to Official Menus.
+                  <span className="text-warning font-black">Pending Menu Candidates:</span> These come from privacy-safe campus patterns, menu scans, or manual corrections. Tap <strong className="text-foreground">Confirm Price</strong> only when you recognize the item and price. Candidates need <strong className="text-warning">3 confirmations</strong> to become trusted.
                 </div>
 
                 {Object.entries(
@@ -3606,12 +3673,15 @@ function Dashboard() {
                     <div key={venue} className="space-y-2 border border-warning/20 bg-warning/5 p-4 rounded-2xl">
                       <div className="flex justify-between items-start pb-1 border-b border-warning/10">
                         <h4 className="text-xs font-black uppercase tracking-wider text-warning">{venue}</h4>
-                        <a
-                          href={`tel:${vDetails.phone}`}
-                          className="text-[9px] text-zinc-400 hover:text-foreground font-bold uppercase tracking-wider inline-flex items-center gap-0.5 hover:underline"
-                        >
-                          📞 Call Canteen ({vDetails.phone})
-                        </a>
+                        {vDetails.phone && (
+                          <a
+                            href={`tel:${vDetails.phone}`}
+                            className="text-[9px] text-zinc-400 hover:text-foreground font-bold uppercase tracking-wider inline-flex items-center gap-0.5 hover:underline"
+                          >
+                            <Phone className="h-3 w-3" />
+                            Call
+                          </a>
+                        )}
                       </div>
 
                       <div className="space-y-1">
@@ -3635,7 +3705,7 @@ function Dashboard() {
                                   {hasConfirmed ? "✓ Confirmed by You" : `Votes: ${votes}/3 Confirmed`}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0">
                                 <span className={`tnum text-xs font-black font-mono shrink-0 ${
                                   hasConfirmed ? "text-success" : "text-warning"
                                 }`}>{rupees(pit.price)}</span>
@@ -3651,6 +3721,16 @@ function Dashboard() {
                                 >
                                   {hasConfirmed ? "Confirmed" : "Confirm Price"}
                                 </button>
+                                {!hasConfirmed && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleVerifyVote(pit.id, "down")}
+                                    disabled={verifyMutation.isPending}
+                                    className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all duration-300 bg-surface hover:bg-destructive/10 border border-border hover:border-destructive/25 text-zinc-500 hover:text-destructive"
+                                  >
+                                    Wrong
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -3671,7 +3751,7 @@ function Dashboard() {
                 <div className="space-y-4 border border-border bg-surface-raised/20 p-4 rounded-2xl">
                   <h3 className="text-xs font-black uppercase tracking-wider text-primary">Scan Menu Photo</h3>
                   <p className="text-[10px] text-zinc-400 font-semibold leading-relaxed">
-                    Upload a physical menu card or price board photo to automatically parse and add items.
+                    Upload a clear menu card or price board photo. OCR will parse candidate items for community review before they become trusted.
                   </p>
                   <form onSubmit={handleScanSubmit} className="space-y-4">
                     <div className="space-y-1.5">
@@ -3736,7 +3816,7 @@ function Dashboard() {
                             <p className="text-xs text-zinc-300 font-semibold">
                               {scanFile ? scanFile.name : "Select or Drop Menu Photo"}
                             </p>
-                            <p className="text-[10px] text-zinc-500 mt-1">PNG, JPG or JPEG up to 5MB</p>
+                            <p className="text-[10px] text-zinc-500 mt-1">Use a straight, well-lit PNG/JPG under 5MB</p>
                           </div>
                           <input
                             type="file"
@@ -3758,7 +3838,7 @@ function Dashboard() {
                       disabled={scanBusy}
                       className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-black uppercase text-xs h-10 tracking-wider disabled:opacity-50 cursor-pointer"
                     >
-                      {scanBusy ? "Reading menu... Please wait" : "Scan & Add Menu"}
+                      {scanBusy ? "Reading menu... Please wait" : "Scan for Review"}
                     </Button>
                   </form>
                 </div>
@@ -3853,7 +3933,7 @@ function Dashboard() {
                       disabled={manualBusy}
                       className="w-full bg-warning hover:bg-warning/95 text-warning-foreground font-black uppercase text-xs h-10 tracking-wider disabled:opacity-50 cursor-pointer"
                     >
-                      {manualBusy ? "Adding item..." : "Add to Official Menu"}
+                      {manualBusy ? "Saving item..." : "Save for Verification"}
                     </Button>
                   </form>
                 </div>
@@ -3866,13 +3946,16 @@ function Dashboard() {
           <DialogContent className="sm:max-w-md bg-background border border-border text-foreground" id="dialog-upi-payment">
             {upiPayItem && (() => {
               const details = getVenueDetails(upiPayItem.venue_name);
-              const upiUri = `upi://pay?pa=${details.upi}&pn=${encodeURIComponent(details.displayName)}&am=${(upiPayItem.price / 100).toFixed(2)}&cu=INR`;
-              const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUri)}`;
+              const hasVerifiedUpi = Boolean(details.upi);
+              const upiUri = hasVerifiedUpi ? `upi://pay?pa=${details.upi}&pn=${encodeURIComponent(details.displayName)}&am=${(upiPayItem.price / 100).toFixed(2)}&cu=INR` : "";
+              const qrCodeUrl = hasVerifiedUpi ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUri)}` : "";
 
               return (
                 <div className="space-y-4">
                   <DialogHeader>
-                    <DialogTitle className="text-sm font-black uppercase tracking-wider text-foreground">Quick UPI Payment</DialogTitle>
+                    <DialogTitle className="text-sm font-black uppercase tracking-wider text-foreground">
+                      {hasVerifiedUpi ? "Quick UPI Payment" : "Record Campus Payment"}
+                    </DialogTitle>
                   </DialogHeader>
                   
                   <div className="text-center space-y-2">
@@ -3882,33 +3965,45 @@ function Dashboard() {
                     <p className="text-2xl font-black text-primary font-mono">{rupees(upiPayItem.price)}</p>
                   </div>
 
-                  <div className="flex justify-center p-3 bg-white rounded-2xl w-48 h-48 mx-auto border border-border">
-                    <img 
-                      src={qrCodeUrl} 
-                      alt="UPI QR Code" 
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
+                  {hasVerifiedUpi ? (
+                    <>
+                      <div className="flex justify-center p-3 bg-white rounded-2xl w-48 h-48 mx-auto border border-border">
+                        <img
+                          src={qrCodeUrl}
+                          alt="UPI QR Code"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
 
-                  <div className="bg-surface-raised border border-border rounded-xl p-3 text-center space-y-1">
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Canteen UPI ID</p>
-                    <p className="text-xs font-mono font-bold text-foreground select-all">{details.upi}</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(details.upi);
-                        toast.success("UPI ID copied!");
-                      }}
-                      className="text-[9px] text-primary font-bold uppercase tracking-wider hover:underline mt-1 cursor-pointer block mx-auto bg-transparent border-0 font-sans"
-                    >
-                      Copy UPI ID
-                    </button>
-                  </div>
+                      <div className="bg-surface-raised border border-border rounded-xl p-3 text-center space-y-1">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Verified UPI ID</p>
+                        <p className="text-xs font-mono font-bold text-foreground select-all">{details.upi}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!details.upi) return;
+                            navigator.clipboard.writeText(details.upi);
+                            toast.success("UPI ID copied!");
+                          }}
+                          className="text-[9px] text-primary font-bold uppercase tracking-wider hover:underline mt-1 cursor-pointer block mx-auto bg-transparent border-0 font-sans"
+                        >
+                          Copy UPI ID
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-surface-raised border border-border rounded-xl p-3 text-center space-y-1">
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">No verified UPI stored</p>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Pay at the counter or through your usual UPI app, then mark it paid here so your food routine and runway stay accurate.
+                      </p>
+                    </div>
+                  )}
 
-                  {/* Screenshot Receipt Reconciliation */}
+                  {/* Screenshot Receipt Review */}
                   <div className="border-t border-border/50 pt-3 space-y-2">
                     <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest text-center">
-                      Instant Receipt Parser (OCR Verification)
+                      Receipt Review
                     </p>
                     <div className="flex items-center justify-center">
                       <label className="flex flex-col items-center justify-center w-full h-20 border border-dashed border-border rounded-xl cursor-pointer bg-surface hover:bg-surface-raised/60 transition-all select-none">
@@ -3917,7 +4012,7 @@ function Dashboard() {
                           <p className="text-[10px] text-zinc-300 font-semibold truncate max-w-xs">
                             {receiptFile ? receiptFile.name : "Upload Payment Screenshot"}
                           </p>
-                          <p className="text-[8px] text-zinc-500 mt-0.5">Extract receiver, amount & auto-log txn</p>
+                          <p className="text-[8px] text-zinc-500 mt-0.5">Extract receiver and amount for review</p>
                         </div>
                         <input
                           type="file"
@@ -3934,7 +4029,7 @@ function Dashboard() {
                       </label>
                     </div>
                     {receiptBusy && (
-                      <p className="text-[9px] text-center text-primary font-bold animate-pulse">Running OCR & parsing receipt... Please wait</p>
+                      <p className="text-[9px] text-center text-primary font-bold animate-pulse">Reading receipt for review...</p>
                     )}
                   </div>
 
@@ -3982,42 +4077,42 @@ function Dashboard() {
           </DialogContent>
         </Dialog>
 
-        {/* Reconciled Receipt Success Dialog */}
+        {/* Receipt Review Dialog */}
         <Dialog open={!!reconciledReceipt} onOpenChange={(o) => !o && setReconciledReceipt(null)}>
           <DialogContent className="sm:max-w-md bg-background border border-border text-foreground text-center space-y-4" id="dialog-receipt-reconciled">
             <DialogHeader>
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success/10 border border-success/30 text-success">
-                ✓
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 border border-primary/30 text-primary">
+                <Receipt className="h-5 w-5" />
               </div>
-              <DialogTitle className="text-sm font-black uppercase tracking-wider text-success mt-2">
-                UPI Receipt Reconciled!
+              <DialogTitle className="text-sm font-black uppercase tracking-wider text-primary mt-2">
+                Receipt saved for review
               </DialogTitle>
             </DialogHeader>
             {reconciledReceipt && (
               <div className="space-y-4">
                 <p className="text-xs text-zinc-300 font-semibold leading-relaxed">
-                  We processed your screenshot and successfully matched a payment reference to <strong className="text-foreground">{reconciledReceipt.venue_name}</strong>.
+                  We processed your screenshot and saved a pending candidate. Please confirm the details before it affects menus or spending.
                 </p>
                 <div className="bg-surface border border-border p-3.5 rounded-xl space-y-2 font-mono text-xs text-left">
                   <div className="flex justify-between border-b border-border/50 pb-1.5">
                     <span className="text-[10px] text-zinc-500 uppercase font-black font-sans">Merchant</span>
-                    <span className="font-bold text-foreground">{reconciledReceipt.venue_name}</span>
+                    <span className="font-bold text-foreground">{reconciledReceipt.venue_name || "Needs review"}</span>
                   </div>
                   <div className="flex justify-between border-b border-border/50 pb-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase font-black font-sans">Item Identified</span>
-                    <span className="font-bold text-primary">{reconciledReceipt.item_name}</span>
+                    <span className="text-[10px] text-zinc-500 uppercase font-black font-sans">Item</span>
+                    <span className="font-bold text-primary">{reconciledReceipt.item_name || "Not auto-selected"}</span>
                   </div>
                   <div className="flex justify-between border-b border-border/50 pb-1.5">
                     <span className="text-[10px] text-zinc-500 uppercase font-black font-sans">Amount Parsed</span>
-                    <span className="font-bold text-success">₹{reconciledReceipt.amount.toFixed(2)}</span>
+                    <span className="font-bold text-success">{reconciledReceipt.amount != null ? `₹${reconciledReceipt.amount.toFixed(2)}` : "Needs review"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[10px] text-zinc-500 uppercase font-black font-sans">Reference ID</span>
-                    <span className="font-bold text-zinc-400 select-all">{reconciledReceipt.transaction_id}</span>
+                    <span className="font-bold text-zinc-400 select-all">{reconciledReceipt.transaction_id || "Not found"}</span>
                   </div>
                 </div>
                 <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
-                  Your daily runway forecast and budget metrics have been updated.
+                  No spending totals or menu prices change until this is confirmed.
                 </p>
                 <Button
                   onClick={() => {
@@ -4026,7 +4121,7 @@ function Dashboard() {
                   }}
                   className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-black uppercase text-xs h-10 tracking-wider cursor-pointer"
                 >
-                  Awesome, Close
+                  Close
                 </Button>
               </div>
             )}
@@ -4087,381 +4182,7 @@ function Dashboard() {
           </DialogContent>
         </Dialog>
 
-        {/* Recurring Payment Canteen Menu Builder dialog */}
-        {(() => {
-          if (!isQuizTriggered) return null;
-          if (isCenterQuizDismissed) return null;
-          const activeRecurringQuiz = quizzes?.find(
-            (q: any) => (q.type === "item_name" || q.type === "meal_guess") && q.id !== dismissedCenterQuizId
-          );
-          if (!activeRecurringQuiz) return null;
-
-          const isSubmitting = submittingQuizId === activeRecurringQuiz.id;
-
-          return (
-            <Dialog 
-              open={true} 
-              onOpenChange={(o) => {
-                if (!o) {
-                  setIsCenterQuizDismissed(true);
-                }
-              }}
-            >
-              <DialogContent 
-                className="w-[92%] sm:max-w-md max-w-[calc(100vw-2rem)] bg-background/95 backdrop-blur-md border border-amber-500/25 border-t-4 border-t-amber-500 text-foreground p-6 shadow-2xl shadow-amber-500/5 rounded-2xl mx-auto space-y-4" 
-                id="dialog-recurring-menu-builder"
-                onClick={clearDismissTimer}
-                onFocus={clearDismissTimer}
-                onKeyDown={clearDismissTimer}
-              >
-                <DialogHeader className="space-y-2 text-center">
-                  <div className="flex justify-center">
-                    <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
-                      Campus Intel Quiz
-                    </span>
-                  </div>
-                  <DialogTitle className="text-base font-extrabold tracking-tight text-foreground">
-                    Let's Answer This!
-                  </DialogTitle>
-                </DialogHeader>
-
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground font-semibold leading-relaxed">
-                    We noticed recurring student payments of <strong className="text-foreground font-mono">₹{activeRecurringQuiz.price / 100}</strong> at <strong className="text-foreground">{activeRecurringQuiz.venue_name}</strong>.
-                  </p>
-                  <p className="text-xs font-bold text-foreground">
-                    What item did you buy for ₹{activeRecurringQuiz.price / 100}?
-                  </p>
-                </div>
-
-                <div className="space-y-3 text-left">
-                  <div className="space-y-1">
-                    <label className="text-[9px] text-muted-foreground font-black uppercase tracking-widest pl-0.5">Item Name</label>
-                    <Input
-                      placeholder="e.g. Ginger Tea, Samosa, Veg Dinner Thali"
-                      value={recurringItemName}
-                      onChange={(e) => {
-                        clearDismissTimer();
-                        setRecurringItemName(e.target.value);
-                      }}
-                      className="bg-surface border border-border text-foreground placeholder-muted-foreground text-xs font-semibold focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] text-muted-foreground font-black uppercase tracking-widest pl-0.5">Quick Suggestions</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeRecurringQuiz.options.map((opt: string) => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => {
-                            clearDismissTimer();
-                            setRecurringItemName(opt);
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg border border-border/80 bg-surface/50 text-foreground text-[10px] font-bold tracking-wide hover:bg-amber-500/10 hover:border-amber-500/30 hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer transition-all duration-200"
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 border-t border-border/50 pt-3.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      clearDismissTimer();
-                      setIsCenterQuizDismissed(true);
-                    }}
-                    className="flex-1 bg-transparent hover:bg-white/5 text-zinc-400 font-bold uppercase text-xs h-10 tracking-wider cursor-pointer border border-border"
-                  >
-                    Skip
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={isSubmitting || !recurringItemName.trim()}
-                    onClick={async () => {
-                      clearDismissTimer();
-                      await handleQuizAnswer(activeRecurringQuiz, recurringItemName.trim());
-                      setRecurringItemName("");
-                      setIsCenterQuizDismissed(true);
-                    }}
-                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase text-xs h-10 tracking-wider cursor-pointer disabled:opacity-50 transition-all active:scale-[0.98]"
-                  >
-                    {isSubmitting ? "Registering..." : "Add to Canteen Menu"}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          );
-        })()}
-
-        {/* Global Floating Community Intel Quiz Popup (Now Centered Dialog) */}
-        {(() => {
-          if (!isQuizTriggered) return null;
-          
-          // Avoid overlapping with active recurring menu quiz popup
-          const activeRecurringQuiz = quizzes?.find(
-            (q: any) => (q.type === "item_name" || q.type === "meal_guess") && q.id !== dismissedCenterQuizId
-          );
-          if (activeRecurringQuiz && !isCenterQuizDismissed) return null;
-
-          if (isFloatingQuizDismissed) return null;
-          if (!quizzes || quizzes.length === 0) return null;
-          const activeQuiz = quizzes.find((q: any) => q.type !== "item_name" && q.type !== "meal_guess" && q.id !== dismissedQuizId);
-          if (!activeQuiz) return null;
-
-          const isSubmitting = submittingQuizId === activeQuiz.id;
-
-          return (
-            <Dialog 
-              open={true} 
-              onOpenChange={(o) => {
-                if (!o) {
-                  setIsFloatingQuizDismissed(true);
-                }
-              }}
-            >
-              <DialogContent 
-                className="w-[92%] sm:max-w-md max-w-[calc(100vw-2rem)] bg-background/95 backdrop-blur-md border border-amber-500/25 border-t-4 border-t-amber-500 text-foreground p-6 shadow-2xl shadow-amber-500/5 rounded-2xl mx-auto space-y-4" 
-                id="dialog-category-audit"
-                onClick={clearDismissTimer}
-                onFocus={clearDismissTimer}
-                onKeyDown={clearDismissTimer}
-              >
-                <DialogHeader className="space-y-2 text-center">
-                  <div className="flex justify-center">
-                    <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
-                      Community Intel Quiz
-                    </span>
-                  </div>
-                  <DialogTitle className="text-base font-extrabold tracking-tight text-foreground">
-                    Let's Answer This!
-                  </DialogTitle>
-                </DialogHeader>
-
-                <div className="space-y-2">
-                  <p className="text-xs font-bold text-foreground leading-relaxed">
-                    {activeQuiz.question}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground font-semibold font-mono">
-                    {activeQuiz.detail}
-                  </p>
-                </div>
-
-                {/* Category-Specific Inputs (Category & Location) */}
-                {activeQuiz.type === "category" && (
-                  <div className="space-y-2.5 pt-1.5 border-t border-border/60 text-left">
-                    <div className="space-y-1">
-                      <label className="text-[9px] text-muted-foreground font-black uppercase tracking-widest pl-0.5">Where is this located?</label>
-                      <Input
-                        placeholder="e.g. BH-2 Hostel, Shopping Complex"
-                        value={quizLocation}
-                        onChange={(e) => {
-                          clearDismissTimer();
-                          setQuizLocation(e.target.value);
-                        }}
-                        className="bg-surface border border-border text-foreground placeholder-muted-foreground text-xs font-semibold focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 h-9"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Price Spike Quiz - Receipt-Backed Audit Upload */}
-                {activeQuiz.type === "price_spike" && (
-                  <div className="space-y-1.5 pt-1.5 border-t border-border/60 text-left">
-                    <label className="text-[9px] text-muted-foreground font-black uppercase tracking-widest pl-0.5">Verify with Receipt Photo</label>
-                    <label className="flex flex-col items-center justify-center w-full h-14 border border-dashed border-border rounded-xl cursor-pointer bg-surface hover:bg-surface-raised transition-all select-none">
-                      <div className="text-center p-2">
-                        <p className="text-[9px] text-foreground font-bold truncate max-w-[200px]">
-                          {quizReceiptFile ? quizReceiptFile.name : "Attach payment screenshot"}
-                        </p>
-                      </div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        disabled={quizReceiptBusy}
-                        onChange={(e) => {
-                          clearDismissTimer();
-                          if (e.target.files && e.target.files[0]) {
-                            setQuizReceiptFile(e.target.files[0]);
-                            handleQuizReceiptUpload(e.target.files[0], activeQuiz);
-                          }
-                        }}
-                      />
-                    </label>
-                    {quizReceiptBusy && (
-                      <p className="text-[8px] text-center text-primary font-bold animate-pulse">Scanning Receipt details...</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Options selection map */}
-                <div className="space-y-2.5 pt-2 border-t border-border/60 text-left">
-                  {activeQuiz.type === "category" && (
-                    <label className="text-[9px] text-muted-foreground font-black uppercase tracking-widest pl-0.5 block">Select Merchant Category</label>
-                  )}
-                  
-                  <div className="flex flex-wrap gap-1.5">
-                    {activeQuiz.options.map((opt: string) => {
-                      const isSelected = selectedOption === opt;
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() => {
-                            clearDismissTimer();
-                            setSelectedOption(opt);
-                            setShowCustomCategoryInput(false);
-                          }}
-                          className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold tracking-wide transition-all cursor-pointer ${
-                            isSelected
-                              ? "bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 font-extrabold shadow-sm shadow-amber-500/10"
-                              : "bg-surface/50 border-border text-foreground hover:bg-amber-500/10 hover:border-amber-500/30 hover:text-amber-600 dark:hover:text-amber-400"
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      );
-                    })}
-                    {activeQuiz.type === "category" && (
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => {
-                          clearDismissTimer();
-                          setSelectedOption("__custom__");
-                          setShowCustomCategoryInput(true);
-                        }}
-                        className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold tracking-wide transition-all cursor-pointer ${
-                          selectedOption === "__custom__"
-                            ? "bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 font-extrabold shadow-sm shadow-amber-500/10"
-                            : "bg-surface/50 border-border text-foreground hover:bg-amber-500/10 hover:border-amber-500/30 hover:text-amber-600 dark:hover:text-amber-400"
-                        }`}
-                      >
-                        + Custom Category
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {activeQuiz.type === "category" && showCustomCategoryInput && (
-                  <div className="w-full pt-1">
-                    <Input
-                      placeholder="Type custom category (e.g. Juice Bar)"
-                      value={customCategory}
-                      onChange={(e) => {
-                        clearDismissTimer();
-                        setCustomCategory(e.target.value);
-                      }}
-                      className="bg-surface border border-border text-foreground placeholder-muted-foreground text-xs font-semibold focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 h-8"
-                    />
-                  </div>
-                )}
-
-                {activeQuiz.type === "item_name" && (
-                  <div className="w-full flex gap-1.5 mt-2.5 pt-2.5 border-t border-border/60">
-                    <Input
-                      placeholder="Or type custom item name..."
-                      id={`floating-custom-input-${activeQuiz.id}`}
-                      className="bg-surface border border-border text-foreground placeholder-muted-foreground text-xs font-semibold focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 flex-1 h-8"
-                      onKeyDown={(e) => {
-                        clearDismissTimer();
-                        if (e.key === "Enter") {
-                          const val = (e.target as HTMLInputElement).value;
-                          if (val.trim()) {
-                            handleQuizAnswer(activeQuiz, val.trim());
-                            (e.target as HTMLInputElement).value = "";
-                          }
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => {
-                        clearDismissTimer();
-                        const el = document.getElementById(`floating-custom-input-${activeQuiz.id}`) as HTMLInputElement;
-                        if (el && el.value.trim()) {
-                          handleQuizAnswer(activeQuiz, el.value.trim());
-                          el.value = "";
-                        }
-                      }}
-                      className="px-3 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase text-[9px] rounded-lg h-8 tracking-wider cursor-pointer"
-                    >
-                      Add
-                    </button>
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-2 border-t border-border/60">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      clearDismissTimer();
-                      setIsFloatingQuizDismissed(true);
-                    }}
-                    className="flex-1 bg-transparent hover:bg-white/5 text-zinc-400 font-bold uppercase text-[10px] h-10 tracking-wider cursor-pointer border border-border"
-                  >
-                    Skip
-                  </Button>
-                  {activeQuiz.type !== "item_name" && (
-                    <Button
-                      type="button"
-                      disabled={isSubmitting || (!selectedOption && !customCategory.trim())}
-                      onClick={async () => {
-                        clearDismissTimer();
-                        const finalAnswer = selectedOption === "__custom__" ? customCategory.trim() : (selectedOption || "");
-                        if (finalAnswer) {
-                          await handleQuizAnswer(activeQuiz, finalAnswer);
-                          setIsFloatingQuizDismissed(true);
-                        }
-                      }}
-                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase text-[10px] h-10 tracking-wider cursor-pointer disabled:opacity-50 transition-all active:scale-[0.98]"
-                    >
-                      {isSubmitting ? "Submitting..." : "Submit Answer"}
-                    </Button>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          );
-        })()}
       </div>
-
-      {/* Floating Critical Meal Alert Button */}
-      {(foodGapHours >= 12 || (insights?.food?.gap_hours ?? 0) >= 12) && (
-        <div className="fixed bottom-6 right-6 z-50 animate-[bounceIn_0.5s_ease-out]">
-          <button
-            onClick={() => setShowFoodSheet(true)}
-            className="group relative bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-full p-4 shadow-2xl shadow-red-500/30 border-2 border-red-400/50 transition-all duration-300 hover:scale-105 active:scale-95 animate-pulse"
-          >
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-6 w-6 animate-bounce" />
-              <div className="text-left">
-                <div className="text-sm font-black uppercase tracking-wide">🚨 CRITICAL</div>
-                <div className="text-xs font-bold">FIND MEAL NOW</div>
-              </div>
-            </div>
-            
-            {/* Pulsing ring animation */}
-            <div className="absolute inset-0 rounded-full bg-red-500/30 animate-ping"></div>
-            <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" style={{ animationDelay: '0.5s' }}></div>
-            
-            {/* Tooltip */}
-            <div className="absolute bottom-full right-0 mb-3 px-3 py-2 bg-black/90 text-white text-xs font-bold rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              {Math.round(foodGapHours || insights?.food?.gap_hours || 0)}h without food!
-              <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-black/90"></div>
-            </div>
-          </button>
-        </div>
-      )}
     </AppShell>
   );
 }

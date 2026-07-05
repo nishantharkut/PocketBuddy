@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
-import { Smartphone, Edit3, ChevronLeft, ChevronRight, Download, CreditCard } from "lucide-react";
+import { Edit3, ChevronLeft, ChevronRight, Download, CreditCard } from "lucide-react";
+import { StatsContent } from "./stats";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -22,6 +23,9 @@ import { getStats, getProfile, updateTransaction, getCatalog, addCatalogItem, su
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: search.tab === "stats" ? "stats" : "history",
+  }),
   component: TxnsPage,
 });
 
@@ -45,17 +49,34 @@ function getCatBadgeStyles(cat?: string): string {
 }
 
 type ViewTab = "daily" | "calendar" | "monthly" | "total";
+type HistoryStatsTab = "history" | "stats";
 
 function TxnsPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const nav = useNavigate();
+  const search = Route.useSearch();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [viewTab, setViewTab] = useState<ViewTab>("daily");
+  const [activeSection, setActiveSection] = useState<HistoryStatsTab>(search.tab);
   const [editingTxn, setEditingTxn] = useState<any | null>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  useEffect(() => {
+    setActiveSection(search.tab);
+  }, [search.tab]);
+
+  function selectSection(next: HistoryStatsTab) {
+    setActiveSection(next);
+    nav({
+      to: "/transactions",
+      search: next === "stats" ? { tab: "stats" } : {},
+      replace: true,
+    });
+  }
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -158,10 +179,35 @@ function TxnsPage() {
       <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
         <div className="flex items-center gap-3 min-w-0">
           <MobileMenuButton />
-          <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">Transaction History</h1>
+          <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">History & Stats</h1>
         </div>
       </div>
 
+      <div className="mb-5 flex justify-center">
+        <div className="inline-flex rounded-xl border border-border bg-surface p-1 shadow-sm shadow-black/10">
+          {([
+            { key: "history", label: "History" },
+            { key: "stats", label: "Stats" },
+          ] as const).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => selectSection(item.key)}
+              className={`h-9 rounded-lg px-5 text-xs font-black uppercase tracking-[0.08em] transition-all cursor-pointer sm:px-6 ${
+                activeSection === item.key
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-surface-raised hover:text-foreground"
+              }`}
+              aria-pressed={activeSection === item.key}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeSection === "history" ? (
+      <>
       <div className="py-4 pb-32 space-y-5 animate-[fadeIn_0.3s_ease-out]">
 
         {/* ── Month Navigation ────────────────────────────────────────── */}
@@ -332,6 +378,10 @@ function TxnsPage() {
           )}
         </DialogContent>
       </Dialog>
+      </>
+      ) : (
+        <StatsContent embedded />
+      )}
     </AppShell>
   );
 }

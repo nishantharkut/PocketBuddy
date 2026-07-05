@@ -99,4 +99,10 @@ def _price_to_paise(value: Any) -> int:
 
 
 def load_campus_food() -> list[dict[str, Any]]:
-    return _normalize_flat_items(_read_s3_json() or _read_local_json())
+    s3_data = _read_s3_json()
+    if s3_data is not None:
+        return _normalize_flat_items(s3_data)
+    if settings.DEMO_MODE:
+        return _normalize_flat_items(_read_local_json())
+    logger.info("No configured campus food source found; local demo fallback is disabled.")
+    return []

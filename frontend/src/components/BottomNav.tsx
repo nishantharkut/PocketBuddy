@@ -1,12 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, List, ShoppingCart, Compass, BarChart3 } from "lucide-react";
+import { Activity, LayoutDashboard, List, ShoppingCart, Compass } from "lucide-react";
 
 const tabs = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
-  { to: "/transactions", label: "History", icon: List, id: "nav-transactions" },
-  { to: "/stats", label: "Stats", icon: BarChart3, id: "nav-stats" },
   { to: "/pool", label: "Pool", icon: ShoppingCart, id: "nav-pool" },
+  { to: "/runway", label: "Runway", icon: Activity, id: "nav-runway" },
   { to: "/travel", label: "Travel", icon: Compass, id: "nav-travel" },
+  { to: "/transactions", label: "History", icon: List, id: "nav-transactions" },
 ] as const;
 
 export function BottomNav() {
@@ -18,7 +18,10 @@ export function BottomNav() {
     >
       <ul className="grid h-16 grid-cols-5">
         {tabs.map((t) => {
-          const active = pathname === t.to || pathname.startsWith(t.to + "/");
+          const active =
+            pathname === t.to ||
+            pathname.startsWith(t.to + "/") ||
+            (t.to === "/transactions" && pathname === "/stats");
           const Icon = t.icon;
           return (
             <li key={t.to} className="relative">

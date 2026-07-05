@@ -409,6 +409,7 @@ function PoolDetail() {
         paid: isHostUser ? true : (payment ? payment.status === "verified" : false),
         paymentStatus: isHostUser ? "host" : (payment ? payment.status : "unpaid"),
         utr: payment ? payment.utr : "",
+        email: payment?.email ?? "",
         settlementMode: payment?.settlement_mode ?? null,
         confidence: payment?.confidence ?? null,
       };
@@ -433,6 +434,7 @@ function PoolDetail() {
         paid: isHostUser ? true : false,
         paymentStatus: isHostUser ? "host" : "unpaid",
         utr: "",
+        email: "",
         settlementMode: null,
         confidence: null,
       };

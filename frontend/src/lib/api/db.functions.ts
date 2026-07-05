@@ -206,6 +206,26 @@ export async function getWellnessInsights() {
   return apiRequest("/api/insights/wellness");
 }
 
+// ── Wellness Companion (feature 7.7) ────────────────────────────────────────
+export async function getWellnessCheckin() {
+  return apiRequest("/api/wellness/checkin");
+}
+
+export async function getWellnessHistory() {
+  return apiRequest("/api/wellness/history");
+}
+
+export async function getWellnessCoach() {
+  return apiRequest("/api/wellness/coach");
+}
+
+export async function submitWellnessCheckin({ data }: { data: { mood?: string; action?: string; response?: string; note?: string; score?: number; food_gap_hours?: number } }) {
+  return apiRequest("/api/wellness/checkin", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function getCatalog(catalogType: string) {
   return apiRequest(`/api/catalog/${catalogType}`);
 }
@@ -353,5 +373,4 @@ export async function deleteAccountData() {
 export async function confirmTransaction({ id }: { id: string }) {
   return apiRequest(`/api/transactions/${id}/confirm`, { method: "POST" });
 }
-
 

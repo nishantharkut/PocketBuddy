@@ -1,11 +1,11 @@
-"""Wellness Companion API (feature 7.7).
+"""Routine check API (feature 7.7).
 
-Turns the deterministic wellness signal engine into a supportive check-in
-experience: an AI-narrated read on the week, concrete resets, campus support
-resources, and a lightweight check-in log with streaks.
+Turns the deterministic routine signal engine into a practical check-in
+experience: an AI-narrated read on the week, concrete resets, and a lightweight
+check-in log with streaks.
 
-Framing rule (from the finals guide): "Detects risk patterns and offers a
-supportive check-in." Never diagnoses.
+Framing rule: detect routine and money signals, then offer a nudge. Never
+diagnose.
 """
 
 import datetime
@@ -19,9 +19,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.services.wellness import (
     build_reset_actions,
-    build_support_resources,
     compute_wellness,
-    generate_care_plan,
     generate_supportive_message,
 )
 
@@ -96,15 +94,13 @@ async def _streak_and_history(db, user_id: str, limit: int = 8):
 
 @router.get("/checkin")
 async def get_checkin(user_id: str = Depends(get_current_user)):
-    """The full supportive check-in package for the Wellness Companion page."""
+    """The routine check package for a compact nudge/check-in UI."""
     db = get_db()
 
     # Enforce 30-day privacy retention policy: check-in logs are automatically purged after 30 days.
     # Note: PocketBuddy enforces a strict "no cross-user aggregation" constraint to protect student privacy.
     thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
     await db.checkin_logs.delete_many({"user_id": user_id, "created_at": {"$lt": thirty_days_ago}})
-    profile = await db.profiles.find_one({"_id": user_id}) or {}
-
     package = await compute_wellness(db, user_id)
     metrics = package["metrics"]
 
@@ -113,9 +109,8 @@ async def get_checkin(user_id: str = Depends(get_current_user)):
     message, source = package["message"], "local_rules"
 
     weather = _weather_of(package["status"])
-    show_support = package["status"] == "stressed" or package["score"] < 45
 
-    # Only surface the patterns that actually need attention — gentler than a wall of metrics.
+    # Only surface the patterns that actually need attention.
     patterns = [s for s in package["signals"] if s.get("severity") in ("watch", "stressed")]
 
     streak_info = await _streak_and_history(db, user_id, limit=8)
@@ -135,8 +130,6 @@ async def get_checkin(user_id: str = Depends(get_current_user)):
         "driver_summary": package["driver_summary"],
         "patterns": patterns,
         "reset_actions": build_reset_actions(metrics),
-        "support_resources": build_support_resources(profile),
-        "show_support": show_support,
         "metrics": metrics,
         "streak": streak_info["streak"],
         "total_checkins": streak_info["total"],
@@ -146,31 +139,16 @@ async def get_checkin(user_id: str = Depends(get_current_user)):
 
 @router.get("/coach")
 async def get_coach(user_id: str = Depends(get_current_user)):
-    """AI-narrated supportive check-in line (Bedrock, deterministic fallback).
+    """AI-narrated routine check line (Bedrock, deterministic fallback).
 
-    Served on its own so the dashboard card renders instantly and the warm,
-    personalised message streams in when ready — never blocking the page.
+    Served on its own so the dashboard card renders instantly and the grounded
+    message loads when ready, never blocking the page.
     """
     db = get_db()
     profile = await db.profiles.find_one({"_id": user_id}) or {}
     package = await compute_wellness(db, user_id)
     message, source = generate_supportive_message(package, profile)
     return {"message": message, "source": source, "status": package["status"]}
-
-
-@router.get("/care-plan")
-async def get_care_plan(user_id: str = Depends(get_current_user)):
-    """On-demand AI-generated supportive care plan for the Care Plan popup.
-
-    Loaded lazily (only when the student opens the plan) so Bedrock is never on
-    the dashboard's critical path.
-    """
-    db = get_db()
-    profile = await db.profiles.find_one({"_id": user_id}) or {}
-    package = await compute_wellness(db, user_id)
-    plan = generate_care_plan(package, profile)
-    plan["show_support"] = package["status"] == "stressed" or package["score"] < 45
-    return plan
 
 
 @router.get("/history")

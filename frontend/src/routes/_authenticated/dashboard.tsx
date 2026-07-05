@@ -5,9 +5,8 @@ import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import {
-  Plus, ChevronRight, AlertTriangle, Users, Utensils, ShoppingBag,
-  Bus, Receipt, MoreHorizontal, Wallet, Timer, MessageSquare, Phone, Mail, MapPin, ExternalLink, Compass, TrendingDown,
-  Sparkles, HeartPulse, Wind, Check, Moon, ShieldCheck, Loader2
+  Plus, ChevronRight, AlertTriangle, Utensils, ShoppingBag,
+  Receipt, Wallet, Timer, MapPin, Compass, TrendingDown, X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,7 +47,7 @@ import {
   getCampusIntel,
   getWingFeed,
   getWellnessInsights,
-  getWellnessCarePlan,
+  getWellnessCoach,
   updateTransaction,
   getCatalog,
   addCatalogItem,
@@ -60,536 +59,7 @@ import {
 } from "@/lib/api/db.functions";
 
 
-const SOOTHING_QUOTES = [
-  "You are doing the best you can, and that is more than enough. 🌸",
-  "Take a slow breath. Your runway is just numbers, you are doing great. ☕",
-  "Allow yourself to rest. Resting is productive and essential. 🛋️",
-  "You are more than your grades or your wallet balance. ✨",
-  "Drop your shoulders, relax your jaw, and let go of the tension. 🍃",
-  "It is okay to have slow days. Small steps still count. 🐢"
-];
-
-// ── Guided Breathing Exercise (Box & 4-7-8 Calm) ───────────────────────────
-function BreathingExercise() {
-  const [active, setActive] = useState(false);
-  const [mode, setMode] = useState<"box" | "calming">("box");
-  const [phaseIdx, setPhaseIdx] = useState(0);
-  const [count, setCount] = useState(4);
-  const [cycles, setCycles] = useState(0);
-  const [ready, setReady] = useState(false);
-
-  // Define simplified phases (Inhale - Hold - Exhale)
-  const phases = mode === "box"
-    ? [
-        { key: "in", label: "Inhale", duration: 4 },
-        { key: "hold", label: "Hold", duration: 4 },
-        { key: "out", label: "Exhale", duration: 4 },
-      ]
-    : [
-        { key: "in", label: "Inhale", duration: 4 },
-        { key: "hold", label: "Hold", duration: 7 },
-        { key: "out", label: "Exhale", duration: 8 },
-      ];
-
-  useEffect(() => {
-    if (!active) return;
-    if (count === 0) {
-      const nextIdx = (phaseIdx + 1) % phases.length;
-      if (nextIdx === 0) setCycles((c) => c + 1);
-      setPhaseIdx(nextIdx);
-      setCount(phases[nextIdx].duration);
-      return;
-    }
-    const t = setTimeout(() => {
-      setCount((c) => c - 1);
-    }, 1000);
-    return () => clearTimeout(t);
-  }, [active, count, phaseIdx, phases]);
-
-  const phase = phases[phaseIdx];
-
-  // Circle & Text scale: small on ready, grows on inhale, stays large on hold, shrinks on exhale
-  const isExpanded = active && (phase.key === "in" || phase.key === "hold");
-  const circleScale = active ? (isExpanded ? 1 : 0.5) : ready ? 0.6 : 0.5;
-
-  // Text scale is dynamic: grows to 1.25 on inhale/hold, shrinks to 0.75 on exhale
-  const textScale = active ? (isExpanded ? 1.25 : 0.75) : 1.0;
-
-  // Transition durations matching current phase timing
-  const getDurationMs = () => {
-    if (!active) return "600ms";
-    if (phase.key === "in") return "3900ms";
-    if (phase.key === "out") {
-      return mode === "box" ? "3900ms" : "7900ms"; // slow 8s exhale for calming mode
-    }
-    return "200ms";
-  };
-  const transitionDuration = getDurationMs();
-
-  function start() {
-    setReady(true);
-    setTimeout(() => {
-      setPhaseIdx(0);
-      setCount(phases[0].duration);
-      setCycles(0);
-      setActive(true);
-      setReady(false);
-    }, 1800);
-  }
-
-  function stop() {
-    setActive(false);
-    setReady(false);
-    setPhaseIdx(0);
-    setCount(phases[0].duration);
-    setCycles(0);
-  }
-
-  const phaseLabel = ready ? "Relax" : active ? phase.label : "Relax";
-
-  return (
-    <div className="flex flex-col items-center py-1 w-full max-w-sm mx-auto">
-      {/* Segment Mode Toggle */}
-      {!active && !ready && (
-        <div className="flex rounded-lg bg-surface-raised/60 p-1 border border-border mb-4 w-full justify-center">
-          <button
-            onClick={() => { setMode("box"); setCount(4); }}
-            className={`flex-1 text-center py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-              mode === "box" ? "bg-primary text-primary-foreground shadow-md shadow-primary/10" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Box (4-4-4)
-          </button>
-          <button
-            onClick={() => { setMode("calming"); setCount(4); }}
-            className={`flex-1 text-center py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-              mode === "calming" ? "bg-primary text-primary-foreground shadow-sm shadow-primary/10" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Calming (4-7-8)
-          </button>
-        </div>
-      )}
-
-      {/* Main visual area */}
-      <div
-        className="relative w-full rounded-2xl overflow-hidden flex flex-col items-center justify-center bg-surface-raised/40 border border-border"
-        style={{
-          minHeight: "230px",
-        }}
-      >
-        {/* Dynamic Glow Aura */}
-        <div
-          className="absolute inset-0 pointer-events-none transition-all duration-1000"
-          style={{
-            background: "radial-gradient(circle at center, var(--primary) 0%, transparent 65%)",
-            opacity: active ? (isExpanded ? 0.05 : 0.01) : 0,
-            transform: `scale(${active ? (isExpanded ? 1.2 : 0.8) : 0.5})`,
-          }}
-        />
-
-        {/* Cycle counter top-right */}
-        {active && (
-          <div className="absolute top-3 right-4 text-muted-foreground text-[10px] font-black uppercase tracking-widest tabular-nums">
-            Cycle {cycles + 1}
-          </div>
-        )}
-
-        {/* Mode label top-left */}
-        <div className="absolute top-3 left-4 text-muted-foreground text-[10px] font-black uppercase tracking-widest">
-          {mode === "box" ? "Box breathing" : "4-7-8 Calm"}
-        </div>
-
-        {/* Breathing circle SVG canvas */}
-        <div className="relative flex items-center justify-center animate-[fadeIn_0.5s_ease-out]" style={{ width: 180, height: 180 }}>
-          <svg
-            width="180" height="180"
-            viewBox="0 0 180 180"
-            className="absolute inset-0 text-primary"
-            style={{ overflow: "visible" }}
-          >
-            {/* Background glow ring */}
-            <circle
-              cx="90" cy="90" r="72"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              className="text-primary/10"
-            />
-
-            {/* Main breathing circle */}
-            <circle
-              cx="90" cy="90"
-              r="62"
-              fill="rgba(99, 102, 241, 0.01)"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="text-primary"
-              style={{
-                transition: `transform ${transitionDuration} cubic-bezier(0.45,0,0.55,1)`,
-                transformOrigin: "90px 90px",
-                transform: `scale(${circleScale})`,
-                filter: "drop-shadow(0 0 8px rgba(99, 102, 241, 0.15))",
-              }}
-            />
-
-            {/* Overlapping ellipses - running continuously during active breathing inside a scaling group */}
-            {active && (
-              <g style={{
-                transition: `transform ${transitionDuration} cubic-bezier(0.45,0,0.55,1)`,
-                transformOrigin: "90px 90px",
-                transform: `scale(${circleScale})`,
-              }}>
-                <ellipse
-                  cx="90" cy="90" rx="55" ry="38"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  className="text-primary/50"
-                  style={{
-                    transformOrigin: "90px 90px",
-                    transform: "rotate(-35deg)",
-                    animation: "breathHoldSpin 6s linear infinite",
-                  }}
-                />
-                <ellipse
-                  cx="90" cy="90" rx="55" ry="38"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                  className="text-primary/25"
-                  style={{
-                    transformOrigin: "90px 90px",
-                    transform: "rotate(35deg)",
-                    animation: "breathHoldSpin2 6s linear infinite",
-                  }}
-                />
-              </g>
-            )}
-          </svg>
-
-          {/* Center text with dynamic size scale */}
-          <div
-            className="relative z-10 text-center select-none pointer-events-none"
-            style={{
-              transition: `transform ${transitionDuration} cubic-bezier(0.45,0,0.55,1)`,
-              transform: `scale(${textScale})`,
-            }}
-          >
-            <p className="text-foreground text-base font-black tracking-wide uppercase font-display" style={{ fontFamily: "inherit" }}>
-              {phaseLabel}
-            </p>
-            {active && (
-              <p className="text-primary text-xs font-black mt-1 tabular-nums font-mono">{count}s</p>
-            )}
-          </div>
-        </div>
-
-        {/* Subtle bottom hint */}
-        <p className="text-muted-foreground/60 text-[10px] mt-2 mb-4 tracking-widest uppercase font-mono">
-          {active ? `${mode === "box" ? "box breathing" : "calming cycle"} · cycle ${cycles + 1}` : "tap start to begin"}
-        </p>
-
-        {/* Keyframes injected inline - rotation only so scaling doesn't override */}
-        <style>{`
-          @keyframes breathHoldSpin {
-            from { transform: rotate(-35deg); }
-            to   { transform: rotate(325deg); }
-          }
-          @keyframes breathHoldSpin2 {
-            from { transform: rotate(35deg); }
-            to   { transform: rotate(-325deg); }
-          }
-        `}</style>
-      </div>
-
-      {/* Control button */}
-      <button
-        onClick={active ? stop : start}
-        className={`mt-4 rounded-xl px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all w-full cursor-pointer border ${
-          active 
-            ? "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15" 
-            : "border-primary/20 bg-primary text-primary-foreground hover:bg-primary/95 shadow-md shadow-primary/10"
-        }`}
-      >
-        {active ? "Stop" : ready ? "Starting…" : "Start breathing"}
-      </button>
-    </div>
-  );
-}
-
-const GROUNDING_TASKS = [
-  "Relax your jaw, drop your shoulders, and take one slow, deep breath.",
-  "Look around you and name 3 things that are blue.",
-  "Feel the physical weight of your feet firmly on the floor for 5 seconds.",
-  "Clench your fists tight for 3 seconds, then release them slowly.",
-  "Touch a nearby object (like a desk or phone) and focus on its texture.",
-  "Listen closely and name 2 distinct sounds you can hear right now."
-];
-
-// ── AI Care Plan Dialog (popup) ─────────────────────────────────────────────
-function WellnessCarePlanDialog({
-  open, onOpenChange, plan, loading, calc, onAteAction,
-}: {
-  open: boolean; onOpenChange: (v: boolean) => void;
-  plan: any; loading: boolean;
-  calc?: any;
-  onAteAction?: () => Promise<void>;
-}) {
-  const isMobile = useIsMobile();
-  const [done, setDone] = useState<Set<number>>(new Set());
-  const [groundingIdx] = useState(() => Math.floor(Math.random() * GROUNDING_TASKS.length));
-  const toggleStep = (i: number) =>
-    setDone((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
-
-  const tips = plan
-    ? [
-        { Icon: Utensils, label: "Meals", text: plan.meal_tip },
-        { Icon: Moon, label: "Rest", text: plan.rest_tip },
-        { Icon: Wallet, label: "Money", text: plan.money_tip },
-      ].filter((t) => t.text)
-    : [];
-
-  const body = (
-    <div className="space-y-5 py-1">
-      {isMobile && (
-        <div className="border-b border-border pb-4 mb-4">
-          <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider font-display text-foreground">
-            <HeartPulse className="h-4 w-4 text-primary" />
-            Wellness &amp; Support Resources
-            {plan?.source === "bedrock" && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-primary/30 bg-primary/5 text-[10px] font-bold text-primary">
-                <Sparkles className="h-3 w-3" /> AI
-              </span>
-            )}
-          </div>
-          <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground pt-1.5 font-medium">
-            <ShieldCheck className="h-3.5 w-3.5 text-pb-green shrink-0" />
-            Supportive guidance from your own patterns — not medical advice.
-          </p>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex flex-col items-center gap-3 py-10">
-          <Loader2 className="h-6 w-6 text-primary animate-spin" />
-          <p className="text-xs text-muted-foreground">Personalising your care plan…</p>
-        </div>
-      ) : plan ? (
-        <>
-          {/* Privacy Disclaimer */}
-          <div className="flex items-start gap-2.5 text-[10px] text-muted-foreground bg-surface-raised/40 p-3 rounded-xl border border-border/60 text-left">
-            <ShieldCheck className="h-4 w-4 text-success shrink-0 mt-0.5" />
-            <p>
-              <strong>Privacy Policy:</strong> Reflections and logs are confidential, saved locally to your profile, never aggregated across users, and automatically purged after 30 days.
-            </p>
-          </div>
-
-          {/* Affirmation */}
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <p className="text-sm text-foreground font-medium leading-relaxed">{plan.affirmation}</p>
-          </div>
-
-          {/* Today's focus */}
-          {plan.focus && (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Today's Focus</p>
-              <p className="text-sm text-foreground leading-relaxed">{plan.focus}</p>
-            </div>
-          )}
-
-          {/* Interactive micro-steps */}
-          {plan.steps?.length > 0 && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  <span>Self-Care Progress</span>
-                  <span className="text-primary font-bold">{done.size}/{plan.steps.length} Steps Done</span>
-                </div>
-                <div className="h-1.5 w-full bg-surface-raised border border-border rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-primary to-success transition-all duration-500 ease-out"
-                    style={{ width: `${Math.round((done.size / plan.steps.length) * 100)}%` }}
-                  />
-                </div>
-                {done.size === plan.steps.length && (
-                  <p className="text-[10px] text-success font-semibold flex items-center gap-1 animate-pulse">
-                    Perfect self-care day! Proud of you.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Three Small Steps</p>
-                <div className="space-y-3">
-                  {plan.steps.map((s: string, i: number) => {
-                    const isMealStep = s.toLowerCase().includes("meal") || s.toLowerCase().includes("eat");
-                    const isBudgetStep = s.toLowerCase().includes("spend") || s.toLowerCase().includes("limit") || s.includes("₹");
-
-                    return (
-                      <div key={i} className="rounded-xl border border-border bg-surface-raised/30 p-3.5 space-y-3 text-left">
-                        <button onClick={() => toggleStep(i)}
-                          className="w-full flex items-start gap-3 text-left transition-colors cursor-pointer font-medium">
-                          <span className={`grid place-items-center h-5 w-5 rounded-md border shrink-0 mt-0.5 transition-colors ${
-                            done.has(i) ? "bg-primary border-primary text-primary-foreground" : "border-border text-transparent"
-                          }`}>
-                            <Check className="h-3.5 w-3.5" />
-                          </span>
-                          <span className={`text-xs leading-relaxed ${done.has(i) ? "text-muted-foreground line-through font-normal" : "text-foreground font-semibold"}`}>
-                            {s}
-                          </span>
-                        </button>
-
-                        {/* Interactive sub-elements for the step if not completed */}
-                        {!done.has(i) && (
-                          <div className="pl-8 pt-1 animate-[fadeIn_0.2s_ease-out]">
-                            {isMealStep && onAteAction && (
-                              <button
-                                onClick={async () => {
-                                  await onAteAction();
-                                  toggleStep(i);
-                                }}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/5 hover:bg-success/10 text-[10px] font-bold text-success px-2.5 py-1.5 transition-all cursor-pointer"
-                              >
-                                I Ate Meal Now
-                              </button>
-                            )}
-
-                            {isBudgetStep && calc && (
-                              <div className="space-y-1.5 max-w-xs">
-                                <div className="flex justify-between text-[9px] font-mono text-muted-foreground">
-                                  <span>Spent Today: ₹{calc.spentToday.toFixed(0)}</span>
-                                  <span>Safe Target: ₹{calc.safeDailyLimit.toFixed(0)}</span>
-                                </div>
-                                <div className="h-1.5 w-full bg-surface border border-border rounded-full overflow-hidden">
-                                  <div 
-                                    className={`h-full transition-all duration-300 ${
-                                      calc.spentToday > calc.safeDailyLimit ? "bg-pb-red" : "bg-pb-green"
-                                    }`}
-                                    style={{ width: `${Math.min(100, Math.round((calc.spentToday / (calc.safeDailyLimit || 1)) * 100))}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Wellness tips */}
-          {tips.length > 0 && (
-            <div className="grid gap-2">
-              {tips.map((t, i) => (
-                <div key={i} className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3">
-                  <div className="grid place-items-center h-8 w-8 rounded-lg bg-surface-raised text-primary shrink-0"><t.Icon className="h-4 w-4" /></div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t.label}</p>
-                    <p className="text-xs text-foreground leading-relaxed mt-0.5">{t.text}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Grounding task */}
-          <div className="rounded-xl border border-border bg-surface p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Grounding Exercise</p>
-            <p className="text-sm text-foreground leading-relaxed">{GROUNDING_TASKS[groundingIdx]}</p>
-          </div>
-
-          {/* Guided breathing */}
-          <div className="rounded-xl border border-border bg-surface p-4">
-            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
-              <Wind className="h-3.5 w-3.5 text-primary" /> Guided Breathing
-            </p>
-            <BreathingExercise />
-          </div>
-
-          {/* Counseling & Support Resources */}
-          <div className="rounded-xl border border-border bg-surface overflow-hidden text-left">
-            <div className="p-4 border-b border-border bg-surface-raised/30">
-              <p className="text-xs font-bold text-foreground flex items-center gap-1.5 font-display uppercase tracking-wider">
-                <Phone className="h-3.5 w-3.5 text-primary" />
-                Confidential Support Resources
-              </p>
-            </div>
-            <div className="p-4 space-y-3.5">
-              <div>
-                <p className="text-xs font-bold text-foreground">Campus Counseling Cell</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                  Confidential &amp; free support cell. Located at Room 102, Admin Block.
-                </p>
-                <p className="text-[10px] text-zinc-400 mt-1 font-mono">
-                  Call: +91 11 2345 6789 | Email: wellness@institute.edu
-                </p>
-              </div>
-              <div className="border-t border-border/60 pt-3">
-                <p className="text-xs font-bold text-foreground mb-2">National Helpline Resources</p>
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <div>
-                      <p className="font-semibold text-foreground">Tele-MANAS Helpline</p>
-                      <p className="text-[9px] text-muted-foreground">Govt. of India 24x7 support</p>
-                    </div>
-                    <a href="tel:14416" className="font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors">14416</a>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] pt-1">
-                    <div>
-                      <p className="font-semibold text-foreground">KIRAN Helpline</p>
-                      <p className="text-[9px] text-muted-foreground">Toll-free mental health support</p>
-                    </div>
-                    <a href="tel:18005990019" className="font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors">1800-599-0019</a>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <p className="py-6 text-center text-sm text-muted-foreground">Couldn't load your plan. Please try again.</p>
-      )}
-    </div>
-  );
-
-
-  if (isMobile) {
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto bg-background text-foreground border-t border-border rounded-t-3xl px-5 pb-8 pt-6">
-          {body}
-        </SheetContent>
-      </Sheet>
-    );
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg bg-background border border-border text-foreground max-h-[88vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-wider font-display text-foreground">
-            <HeartPulse className="h-4 w-4 text-primary" />
-            Wellness &amp; Support Resources
-            {plan?.source === "bedrock" && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-primary/30 bg-primary/5 text-[10px] font-bold text-primary">
-                <Sparkles className="h-3 w-3" /> AI
-              </span>
-            )}
-          </DialogTitle>
-          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
-            <ShieldCheck className="h-3 w-3 text-pb-green shrink-0" />
-            Supportive guidance from your own patterns — not medical advice.
-          </p>
-        </DialogHeader>
-        {body}
-      </DialogContent>
-    </Dialog>
-  );
-}
+const ROUTINE_SIGNAL_KEYS = new Set(["food_gap", "late_night", "exam", "runway", "velocity"]);
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
@@ -1009,14 +479,12 @@ function Dashboard() {
     queryFn: () => getWellnessInsights(),
   });
 
-  // AI Care Plan — lazy-loaded only when the dialog is opened
-  const [carePlanOpen, setCarePlanOpen] = useState(false);
-  const { data: carePlan, isLoading: carePlanLoading } = useQuery({
-    queryKey: ["wellness-care-plan", user?.id],
-    enabled: !!user && carePlanOpen,
+  const { data: routineCoach } = useQuery({
+    queryKey: ["wellness-coach", user?.id],
+    enabled: !!user && !!wellness && (txns ?? []).length > 0,
     staleTime: 5 * 60_000,
     retry: false,
-    queryFn: () => getWellnessCarePlan(),
+    queryFn: () => getWellnessCoach(),
   });
 
   const { data: campusIntel } = useQuery({
@@ -1048,7 +516,7 @@ function Dashboard() {
   });
   const wingEvents = wingFeed?.events ?? [];
 
-  // Burnout score derived from insights
+  // Routine and runway metrics derived from insights
   const calc = useMemo(() => {
     if (!profile) return null;
     const totalAllowance = profile.monthly_allowance / 100;
@@ -1083,7 +551,7 @@ function Dashboard() {
     };
   }, [profile, txns, insights]);
 
-  // Burnout score is now calculated on the backend via /api/insights/wellness
+  // Routine check status is calculated on the backend via /api/insights/wellness
 
   // ── Survive-Until runway timestamp ─────────────────────────────────────
   const surviveUntilMs = useMemo(() => {
@@ -1258,12 +726,24 @@ function Dashboard() {
   // Exam check-in
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [checkInExpanded, setCheckInExpanded] = useState(false);
-  const [stressNote, setStressNote] = useState("");
+  const [checkInNote, setCheckInNote] = useState("");
   const checkinChecked = useRef(false);
 
-  // Red State Wellness Check-in
-  const [redCheckinText, setRedCheckinText] = useState("");
-  const [redCheckinSubmitting, setRedCheckinSubmitting] = useState(false);
+  const [dismissedRoutineNudgeKey, setDismissedRoutineNudgeKey] = useState(
+    () => localStorage.getItem("pocketbuddy_routine_nudge_dismissed_key") || ""
+  );
+  const [routineActionState, setRoutineActionState] = useState<null | {
+    kind: "ate" | "spending" | "break";
+    startedAt: number;
+    endsAt?: number;
+  }>(null);
+  const [routineTick, setRoutineTick] = useState(Date.now());
+
+  useEffect(() => {
+    if (routineActionState?.kind !== "break") return;
+    const id = window.setInterval(() => setRoutineTick(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [routineActionState?.kind]);
 
   useEffect(() => {
     if (checkinChecked.current || !profile || !txns) return;
@@ -1339,13 +819,13 @@ function Dashboard() {
       });
     }
 
-    // Exam stress
+    // Exam window
     if (insights.exam?.in_exam_period) {
       list.push({
-        id: "exam_stress",
+        id: "exam_window",
         icon: AlertTriangle,
         accent: "#ef4444",
-        title: `Exam period — ${insights.exam.days_left}d left`,
+        title: `Exam window — ${insights.exam.days_left}d left`,
         body: "Your budget matters most right now. Aim for mess meals to keep daily food cost under ₹80. Campus canteens are usually open late.",
       });
     }
@@ -1412,12 +892,12 @@ function Dashboard() {
         response: "skipped",
         food_gap_hours: foodGapHours,
         suggestion_given: suggestion,
-        stress_note: stressNote,
+        stress_note: checkInNote,
       },
     });
     localStorage.setItem("pocketbuddy_last_checkin", String(Date.now()));
     setShowCheckIn(false);
-    setStressNote("");
+    setCheckInNote("");
     setCheckInExpanded(false);
     if (bestFood) {
       toast(`${bestFood.venue_name} has ${bestFood.item_name} (${rupees(bestFood.price)}) — go grab something.`);
@@ -1430,13 +910,13 @@ function Dashboard() {
     const foodGapHoursNum = parseFloat(foodGapSig);
 
     let response = "";
-    let stress_note = "";
+    let checkin_note = "";
     let toastMsg = "";
 
     if (action === "ate") {
       response = "wellness_ate";
-      stress_note = "User tapped wellness check-in: I ate";
-      toastMsg = "Great, logged! Keep fueling through the week 💪";
+      checkin_note = "Routine check: ate a meal";
+      toastMsg = "Meal logged. Routine check updated.";
       
       try {
         await insertTransaction({
@@ -1453,23 +933,30 @@ function Dashboard() {
       }
     } else if (action === "break") {
       response = "wellness_need_break";
-      stress_note = "User tapped wellness check-in: I need a break";
-      toastMsg = "Take a breather. A 15-minute break does wonders ☕";
+      checkin_note = "Routine check: taking a 15-minute reset";
+      toastMsg = "Reset logged. Check back after the break.";
     } else {
       response = "wellness_plan_spending";
-      stress_note = "User tapped wellness check-in: I'll plan spending";
-      toastMsg = "Smart! Planning your spends keeps your runway safe 📊";
+      checkin_note = "Routine check: planning today's spending";
+      toastMsg = "Spend plan logged. Runway check updated.";
     }
 
     try {
       await insertCheckinLog({
         data: {
           response,
-          stress_note,
-          suggestion_given: "wellness_index",
+          stress_note: checkin_note,
+          suggestion_given: "routine_check",
           food_gap_hours: foodGapHoursNum,
         },
       });
+      const startedAt = Date.now();
+      setRoutineActionState({
+        kind: action,
+        startedAt,
+        endsAt: action === "break" ? startedAt + 15 * 60_000 : undefined,
+      });
+      setRoutineTick(startedAt);
       toast.success(toastMsg);
       qc.invalidateQueries({ queryKey: ["wellness-insights"] });
       qc.invalidateQueries({ queryKey: ["insights"] });
@@ -1480,30 +967,84 @@ function Dashboard() {
     }
   }
 
-  async function handleRedCheckinSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!redCheckinText.trim() || !user || !wellness) return;
-    setRedCheckinSubmitting(true);
-    try {
-      const foodGapSig = wellness.avg_food_gap_hours_7d || 0;
-      await insertCheckinLog({
-        data: {
-          response: "wellness_text_response",
-          stress_note: `User wellness check-in: ${redCheckinText}`,
-          food_gap_hours: foodGapSig,
-          suggestion_given: "wellness_index",
-        },
-      });
-      toast.success("Thank you for sharing. Hang in there!");
-      setRedCheckinText("");
-      qc.invalidateQueries({ queryKey: ["wellness-insights"] });
-      qc.invalidateQueries({ queryKey: ["insights"] });
-      qc.invalidateQueries({ queryKey: ["txns"] });
-      qc.invalidateQueries({ queryKey: ["wing-feed"] });
-    } catch (err) {
-      toast.error("Failed to submit check-in");
-    } finally {
-      setRedCheckinSubmitting(false);
+  const routineSignals = ((wellness?.signals ?? []) as any[]).filter((sig) => ROUTINE_SIGNAL_KEYS.has(sig.key));
+  const elevatedRoutineSignals = routineSignals.filter((sig) => sig.severity === "watch" || sig.severity === "stressed");
+  const primaryRoutineSignal = elevatedRoutineSignals[0] ?? routineSignals[0];
+  const shownRoutineSignals = routineSignals.slice(0, 5);
+  const routineNudgeKey = wellness
+    ? `${wellness.status}:${routineSignals.map((sig) => `${sig.key}:${sig.severity}:${sig.value}`).join("|")}`
+    : "";
+  const showRoutineNudge = !!wellness && wellness.status !== "steady" && routineNudgeKey !== dismissedRoutineNudgeKey;
+  const showRoutinePanel = showRoutineNudge || !!routineActionState;
+  const spendRoomRs = calc ? Math.max(0, calc.safeDailyLimit - calc.spentToday) : 0;
+  const resetRemainingMs = routineActionState?.kind === "break" && routineActionState.endsAt
+    ? Math.max(0, routineActionState.endsAt - routineTick)
+    : 0;
+  const resetMins = Math.floor(resetRemainingMs / 60_000);
+  const resetSecs = Math.floor((resetRemainingMs % 60_000) / 1000);
+  const routineTone =
+    wellness?.status === "steady"
+      ? { text: "text-success", border: "border-success/25", bg: "bg-success/5", dot: "bg-success", ring: "border-success/30" }
+      : wellness?.status === "watch"
+        ? { text: "text-warning", border: "border-warning/25", bg: "bg-warning/5", dot: "bg-warning", ring: "border-warning/30" }
+        : { text: "text-destructive", border: "border-destructive/25", bg: "bg-destructive/5", dot: "bg-destructive", ring: "border-destructive/30" };
+  const primarySignalKey = primaryRoutineSignal?.key;
+  const routineSuggestion = (() => {
+    if (primarySignalKey === "food_gap" || primarySignalKey === "exam") {
+      const foodText = bestFood
+        ? `${bestFood.venue_name}: ${bestFood.item_name} for ${rupees(bestFood.price)}.`
+        : "Use mess or a simple canteen plate.";
+      return {
+        title: "Close the meal gap",
+        detail: `${foodText} Keep it under today's safe spend if you are ordering outside.`,
+        cta: "Food options",
+        action: "food" as const,
+      };
+    }
+    if (primarySignalKey === "runway" || primarySignalKey === "velocity") {
+      return {
+        title: "Set today's spend ceiling",
+        detail: calc
+          ? `${rupees(calc.safeDailyLimit * 100)} safe today, ${rupees(spendRoomRs * 100)} left after current spends.`
+          : "Open runway to set a safe spend target for the rest of today.",
+        cta: "Open runway",
+        action: "runway" as const,
+      };
+    }
+    if (primarySignalKey === "late_night") {
+      return {
+        title: "Avoid a late order spiral",
+        detail: "Stock a low-cost snack or use a shared order instead of a solo delivery tonight.",
+        cta: "Plan spend",
+        action: "spending" as const,
+      };
+    }
+    return {
+      title: "Keep the day steady",
+      detail: calc
+        ? `Stay near ${rupees(calc.safeDailyLimit * 100)} today and keep meals on schedule.`
+        : "Keep meals regular and stay within today's safe spend target.",
+      cta: "Plan spend",
+      action: "spending" as const,
+    };
+  })();
+  const routineSuggestionDetail = routineCoach?.message || routineSuggestion.detail;
+
+  function dismissRoutineNudge() {
+    if (routineNudgeKey) {
+      localStorage.setItem("pocketbuddy_routine_nudge_dismissed_key", routineNudgeKey);
+      setDismissedRoutineNudgeKey(routineNudgeKey);
+    }
+    setRoutineActionState(null);
+  }
+
+  function handleRoutineSuggestionAction() {
+    if (routineSuggestion.action === "food") {
+      setShowFoodSheet(true);
+    } else if (routineSuggestion.action === "runway") {
+      nav({ to: "/runway" });
+    } else {
+      void handleWellnessAction("spending");
     }
   }
 
@@ -1546,28 +1087,21 @@ function Dashboard() {
           {/* ── Main Column ─────────────────────────────────────────────── */}
           <div className="md:col-span-7 lg:col-span-8 space-y-6 animate-[fadeIn_0.3s_ease-out]">
 
-            {/* Student Wellness Index Card */}
-            <div id="card-wellness-index" className="bg-surface rounded-2xl border border-border relative overflow-hidden transition-all duration-300 hover:border-white/10">
-              <div className="absolute top-0 left-0 w-full h-[2px]" style={{
-                background: wellness?.status === "steady" 
-                  ? "linear-gradient(to right, #10b981, #34d399)" 
-                  : wellness?.status === "watch" 
-                    ? "linear-gradient(to right, #f59e0b, #fbbf24)" 
-                    : "linear-gradient(to right, #ef4444, #f87171)"
-              }} />
-              
-              <div className="p-5 md:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase flex items-center gap-1.5 font-display">
-                    <span>Student Wellness Index</span>
-                  </p>
-                  
+            {/* Routine Check Card */}
+            <div id="card-routine-check" className="bg-surface rounded-2xl border border-border relative overflow-hidden transition-all duration-300 hover:border-primary/20">
+              <div className={`absolute top-0 left-0 h-[2px] w-full ${wellness?.status === "steady" ? "bg-success" : wellness?.status === "watch" ? "bg-warning" : "bg-destructive"}`} />
+
+              <div className="p-5 md:p-6 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold tracking-[0.2em] text-muted-foreground uppercase font-display">Routine Check</p>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      Money, meal, and timing signals from your week.
+                    </p>
+                  </div>
+
                   {wellness && (
-                    <Badge variant="outline" className="font-bold text-[10px] px-2.5 py-0.5 uppercase tracking-wider" style={{
-                      borderColor: wellness.status === "steady" ? "rgba(22,163,74,0.3)" : wellness.status === "watch" ? "rgba(217,119,6,0.3)" : "rgba(220,38,38,0.3)",
-                      color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)",
-                      background: wellness.status === "steady" ? "rgba(22,163,74,0.05)" : wellness.status === "watch" ? "rgba(217,119,6,0.05)" : "rgba(220,38,38,0.05)"
-                    }}>
+                    <Badge variant="outline" className={`font-bold text-[10px] px-2.5 py-0.5 uppercase tracking-wider ${routineTone.border} ${routineTone.bg} ${routineTone.text}`}>
                       {wellness.label}
                     </Badge>
                   )}
@@ -1575,23 +1109,23 @@ function Dashboard() {
 
                 {wellnessLoading ? (
                   <div className="space-y-3">
-                    <Skeleton className="h-6 w-1/4 bg-white/5" />
-                    <Skeleton className="h-4 w-3/4 bg-white/5" />
-                    <Skeleton className="h-12 w-full bg-white/5" />
+                    <Skeleton className="h-6 w-1/3 bg-surface-raised" />
+                    <Skeleton className="h-14 w-full bg-surface-raised" />
+                    <Skeleton className="h-16 w-full bg-surface-raised" />
                   </div>
                 ) : wellnessError ? (
                   <div className="rounded-xl border border-dashed border-destructive/20 bg-destructive/5 p-4">
-                    <p className="text-xs font-semibold text-destructive uppercase tracking-wider">Wellness metrics unavailable</p>
-                    <p className="text-xs text-zinc-500 mt-1">We couldn't load your wellness metrics. Please try again later.</p>
+                    <p className="text-xs font-semibold text-destructive uppercase tracking-wider">Routine check unavailable</p>
+                    <p className="text-xs text-muted-foreground mt-1">We could not load your routine signals. Please try again later.</p>
                   </div>
                 ) : (txns ?? []).length === 0 ? (
                   <div className="rounded-xl border border-dashed border-border bg-surface-raised/40 p-4 text-center">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No Transaction History</p>
-                    <p className="text-xs text-zinc-500 mt-1">Add a few spends to build your wellness pattern.</p>
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No transaction history</p>
+                    <p className="text-xs text-muted-foreground mt-1">Add a few spends to build your meal and runway pattern.</p>
                     <div className="mt-3">
                       <Button
                         variant="secondary"
-                        className="text-xs uppercase tracking-wider font-bold h-7 bg-surface-raised border-border"
+                        className="text-xs uppercase tracking-wider font-bold h-8 bg-surface-raised border-border"
                         onClick={() => setAdding(true)}
                       >
                         Log Transaction
@@ -1600,138 +1134,200 @@ function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-3xl md:text-4xl font-black tracking-tighter text-foreground tnum leading-none font-display" style={{
-                        color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)"
-                      }}>
-                        {wellness.score}
-                      </span>
-                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">/ 100 Wellness Score</span>
-                    </div>
-
-                    <p className="text-xs md:text-sm text-zinc-300 font-medium leading-relaxed mb-4">
-                      {wellness.message}
-                    </p>
-
-                    {/* Contributing Signals */}
-                    <div className="border-t border-border pt-4 mt-2 mb-4">
-                      <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3 font-mono">Contributing Signals</p>
-                      
-                      <div className="flex flex-wrap gap-2">
-                        {wellness.signals?.map((sig: any) => (
-                          <div key={sig.key} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-surface-raised/40 text-xs font-medium" style={{
-                            borderColor: sig.severity === "stressed" 
-                              ? "rgba(239,68,68,0.25)" 
-                              : sig.severity === "watch" 
-                                ? "rgba(245,158,11,0.25)" 
-                                : "var(--border)"
-                          }}>
-                            <span className="text-zinc-400 font-medium">{sig.label}:</span>
-                            <span className="font-bold text-foreground">{sig.value}</span>
-                            <span className="w-1.5 h-1.5 rounded-full" style={{
-                              background: sig.severity === "stressed" 
-                                ? "var(--pb-red)" 
-                                : sig.severity === "watch" 
-                                  ? "var(--pb-amber)" 
-                                  : "var(--pb-green)"
-                            }} title={sig.detail} />
+                    <div className={`rounded-xl border ${routineTone.border} ${routineTone.bg} p-4`}>
+                      <div className="grid gap-4 lg:grid-cols-[136px_1fr_auto] lg:items-center">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Routine Index</p>
+                          <div className="mt-1.5 flex items-end gap-1.5">
+                            <span className={`text-4xl md:text-5xl font-black tracking-tighter leading-none tnum font-display ${routineTone.text}`}>
+                              {wellness.score}
+                            </span>
+                            <span className="pb-1 text-xs font-black uppercase tracking-wider text-muted-foreground">/100</span>
                           </div>
-                        ))}
+                          <Progress value={wellness.score} className="mt-2 h-1.5 bg-surface-raised" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${routineTone.dot}`} />
+                            <p className={`text-[11px] font-black uppercase tracking-wider ${routineTone.text}`}>
+                              {wellness.label}
+                            </p>
+                            {routineCoach?.source === "bedrock" && (
+                              <span className="rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                                Bedrock
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1.5 text-sm font-black text-foreground leading-snug">
+                            {routineSuggestion.title}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                            {routineSuggestionDetail}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleRoutineSuggestionAction}
+                          className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer lg:min-w-[112px]"
+                        >
+                          {routineSuggestion.cta}
+                        </button>
                       </div>
                     </div>
 
-                    {/* Watch Quick Action Nudges */}
-                    {wellness.status === "watch" && (
-                      <div className="border-t border-border pt-4 flex flex-col gap-2">
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                          <span className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-1 sm:mb-0 sm:mr-2 font-mono">Routine Nudge:</span>
-                          <div className="flex flex-wrap gap-2 flex-1">
+                    <div className="flex flex-wrap gap-2">
+                      {shownRoutineSignals.map((sig: any) => (
+                        <div
+                          key={sig.key}
+                          title={sig.detail}
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-border bg-surface-raised/45 px-3 py-1.5 text-xs"
+                        >
+                          <span className="font-medium text-muted-foreground">{sig.label}:</span>
+                          <span className="font-black text-foreground tnum">{sig.value}</span>
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                              sig.severity === "stressed" ? "bg-destructive" : sig.severity === "watch" ? "bg-warning" : "bg-success"
+                            }`} />
+                        </div>
+                      ))}
+                    </div>
+
+                    {showRoutinePanel && (
+                      <div className="rounded-xl border border-border bg-background/35 px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wider text-foreground">Suggested check-in</p>
+                            <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                              {routineActionState
+                                ? "Action captured. Use the next step below to finish the loop."
+                                : "Optional. Dismiss it if meals or spending are already handled today."}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={dismissRoutineNudge}
+                            className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-surface px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-surface-raised transition-colors cursor-pointer shrink-0"
+                            aria-label="Dismiss routine nudge"
+                            title="Dismiss"
+                          >
+                            <X className="h-3 w-3" />
+                            Not now
+                          </button>
+                        </div>
+
+                        {routineActionState ? (
+                          <div className="mt-3 rounded-lg border border-border bg-surface p-3">
+                            {routineActionState.kind === "ate" && (
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-black text-success uppercase tracking-wider">Meal gap updated</p>
+                                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                                    Logged a self-reported meal for mess, home food, or canteen. The meal gap signal will refresh with your dashboard data.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowFoodSheet(true)}
+                                  className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-surface-raised px-3 text-[11px] font-bold text-foreground hover:bg-surface-interactive transition-colors cursor-pointer shrink-0"
+                                >
+                                  Find campus food
+                                </button>
+                              </div>
+                            )}
+
+                            {routineActionState.kind === "spending" && (
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="rounded-md bg-surface-raised/70 p-2">
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Safe today</p>
+                                    <p className="mt-1 text-sm font-black text-foreground tnum">{calc ? rupees(calc.safeDailyLimit * 100) : "—"}</p>
+                                  </div>
+                                  <div className="rounded-md bg-surface-raised/70 p-2">
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Spent</p>
+                                    <p className="mt-1 text-sm font-black text-foreground tnum">{calc ? rupees(calc.spentToday * 100) : "—"}</p>
+                                  </div>
+                                  <div className="rounded-md bg-surface-raised/70 p-2">
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Room left</p>
+                                    <p className={`mt-1 text-sm font-black tnum ${spendRoomRs > 0 ? "text-success" : "text-destructive"}`}>{calc ? rupees(spendRoomRs * 100) : "—"}</p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                    {spendRoomRs > 0
+                                      ? "Keep optional spends under the room left today, and prefer mess or shared orders if food is the next spend."
+                                      : "You are past today's safe room. Hold optional spends and use prepaid mess or shared orders where possible."}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => nav({ to: "/runway" })}
+                                    className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer shrink-0"
+                                  >
+                                    Open runway
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {routineActionState.kind === "break" && (
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-black text-warning uppercase tracking-wider">
+                                    {resetRemainingMs > 0 ? "Reset timer running" : "Reset window complete"}
+                                  </p>
+                                  <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                                    Step away from the screen, get water, stretch, then come back to the spend plan.
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="rounded-lg border border-warning/20 bg-warning/5 px-3 py-1.5 text-sm font-black text-warning tnum">
+                                    {String(resetMins).padStart(2, "0")}:{String(resetSecs).padStart(2, "0")}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRoutineActionState(null)}
+                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-surface-raised px-3 text-[11px] font-bold text-foreground hover:bg-surface-interactive transition-colors cursor-pointer"
+                                  >
+                                    Done
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="mt-3 flex flex-wrap gap-2">
                             <button
                               id="btn-wellness-ate"
                               onClick={() => handleWellnessAction("ate")}
-                              className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-success hover:text-success/90 bg-success/5 hover:bg-success/10 border border-success/20 hover:border-success/30 rounded-xl transition-all cursor-pointer"
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-success/20 bg-success/5 px-2.5 text-[11px] font-bold text-success hover:bg-success/10 transition-colors cursor-pointer"
                             >
-                              I Ate Meal
-                            </button>
-                            <button
-                              id="btn-wellness-break"
-                              onClick={() => handleWellnessAction("break")}
-                              className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-warning hover:text-warning/90 bg-warning/5 hover:bg-warning/10 border border-warning/20 hover:border-warning/30 rounded-xl transition-all cursor-pointer"
-                            >
-                              I Need a Break
+                              <Utensils className="h-3.5 w-3.5 shrink-0" />
+                              Ate meal
                             </button>
                             <button
                               id="btn-wellness-spending"
                               onClick={() => handleWellnessAction("spending")}
-                              className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-foreground hover:text-foreground/90 bg-white/5 hover:bg-white/10 border border-border hover:border-white/15 rounded-xl transition-all cursor-pointer"
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface-raised px-2.5 text-[11px] font-bold text-foreground hover:bg-surface-interactive transition-colors cursor-pointer"
                             >
-                              I'll Plan Spending
+                              <Wallet className="h-3.5 w-3.5 shrink-0" />
+                              Plan spend
+                            </button>
+                            <button
+                              id="btn-wellness-break"
+                              onClick={() => handleWellnessAction("break")}
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-warning/20 bg-warning/5 px-2.5 text-[11px] font-bold text-warning hover:bg-warning/10 transition-colors cursor-pointer"
+                            >
+                              <Timer className="h-3.5 w-3.5 shrink-0" />
+                              15-min reset
                             </button>
                           </div>
-                        </div>
-                        <p className="text-[10px] text-zinc-500 font-medium text-left px-1">
-                          Eating at home or prepaid mess? Click "I Ate Meal" to update your routine index without logging transactions.
-                        </p>
+                        )}
                       </div>
                     )}
-
-                    {/* Stressed Intervention Panel */}
-                    {wellness.status === "stressed" && (
-                      <div className="border-t border-border pt-4 mt-4 space-y-4">
-                        <form onSubmit={handleRedCheckinSubmit} className="space-y-3">
-                          <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase pl-1 font-mono">Confidential Self Check-in</p>
-                          <textarea 
-                            value={redCheckinText} 
-                            onChange={(e) => setRedCheckinText(e.target.value)} 
-                            placeholder="Need to vent? Jot down any stress points, schedule issues, or thoughts here. Writing them down can help bring clarity." 
-                            className="w-full min-h-[88px] bg-background/50 border border-border rounded-xl p-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 resize-none text-foreground placeholder:text-muted-foreground/50 leading-relaxed transition-all" 
-                            disabled={redCheckinSubmitting} 
-                          />
-                          <button 
-                            type="submit" 
-                            disabled={redCheckinSubmitting || !redCheckinText.trim()} 
-                            className="w-full min-h-[44px] rounded-xl bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-2"
-                          >
-                            {redCheckinSubmitting ? "Logging check-in..." : "Log Check-in"}
-                          </button>
-                        </form>
-                      </div>
-                    )}
-
-                    {/* Unified Support Resources CTA (Drawer) */}
-                    <div className="mt-4 pt-4 border-t border-border">
-                      <button
-                        id="btn-open-care-plan"
-                        onClick={() => setCarePlanOpen(true)}
-                        className="group w-full flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 px-4 py-3.5 transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="grid place-items-center h-9 w-9 rounded-lg bg-primary/15 text-primary shrink-0">
-                            <HeartPulse className="h-4 w-4" />
-                          </div>
-                          <div className="text-left">
-                            <p className="text-xs font-black text-primary uppercase tracking-wider">Support Resources</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Confidential counseling contact lines, breathing space &amp; AI care plan</p>
-                          </div>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-primary group-hover:translate-x-0.5 transition-transform shrink-0" />
-                      </button>
-                    </div>
                   </>
                 )}
               </div>
             </div>
-
-            <WellnessCarePlanDialog
-              open={carePlanOpen}
-              onOpenChange={setCarePlanOpen}
-              plan={carePlan}
-              loading={carePlanLoading}
-              calc={calc}
-              onAteAction={async () => {
-                await handleWellnessAction("ate");
-              }}
-            />
 
             {/* Runway Hero */}
             <div id="card-runway-status" className="bg-surface rounded-2xl border border-border relative overflow-hidden">
@@ -1851,9 +1447,9 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* ── Food & Wellness Strip ───────────────────────────────── */}
+            {/* ── Food & Routine Strip ───────────────────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5">
-              <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase mb-4">Food & Wellness</p>
+              <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase mb-4">Food & Routine</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {/* Food gap */}
                 <div className="flex flex-col gap-1">
@@ -2184,11 +1780,11 @@ function Dashboard() {
               <div className="relative rounded-2xl overflow-hidden border border-red-500/20 bg-red-500/5 p-5">
                 <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top, rgba(239,68,68,0.1), transparent 70%)" }} />
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-black text-red-400 uppercase tracking-widest">Exam Mode Active</span>
+                  <span className="text-xs font-black text-red-400 uppercase tracking-widest">Exam Window Active</span>
                   <span className="text-xs text-red-400 font-bold">· {insights.exam.days_left}d left</span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">
-                  Stress and skipped meals are correlated. PocketBuddy is watching your food gap — check in if you skip a meal.
+                  Meal gaps can stretch during exams. PocketBuddy is watching the food gap and spend pace so you can reset early.
                 </p>
                 <div className="mt-3 h-1 rounded-full bg-white/5 overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-red-500 to-red-400 rounded-full" style={{ width: `${Math.min(100, (insights.exam.days_left / 14) * 100)}%` }} />
@@ -2597,8 +2193,8 @@ function Dashboard() {
                     <p className="text-[12px] text-muted-foreground">What happened?</p>
                     <Input
                       id="input-checkin-note"
-                      value={stressNote}
-                      onChange={(e) => setStressNote(e.target.value)}
+                      value={checkInNote}
+                      onChange={(e) => setCheckInNote(e.target.value)}
                       placeholder="e.g., was studying, no food around, busy"
                     />
                     <Button

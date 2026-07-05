@@ -65,6 +65,8 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
     Companion feature builds resets and support decisions from.
     """
     now = datetime.datetime.utcnow()
+    retention_cutoff = now - datetime.timedelta(days=30)
+    await db.checkin_logs.delete_many({"user_id": user_id, "created_at": {"$lt": retention_cutoff}})
 
     since = now - datetime.timedelta(days=60)
     cursor = db.transactions.find(
@@ -245,16 +247,16 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
     food_gap_sev = _severity_of(avg_food_gap_hours_7d, 6, 10)
     signals.append({
         "key": "food_gap",
-        "label": "Avg food gap",
+        "label": "Meal gap",
         "value": f"{avg_food_gap_hours_7d:.1f}h" if avg_food_gap_hours_7d < 168.0 else "—",
         "severity": food_gap_sev,
-        "detail": "Long gaps between meals detected" if food_gap_sev != "ok" else "Regular meal timing",
+        "detail": "Long gap between meals" if food_gap_sev != "ok" else "Meal timing looks regular",
     })
 
     runway_sev = _severity_of(runway_days, 10, 5, invert=True)
     signals.append({
         "key": "runway",
-        "label": "Runway",
+        "label": "Runway pressure",
         "value": f"{runway_days} days",
         "severity": runway_sev,
         "detail": "Allowance may not last the cycle" if runway_sev != "ok" else "Runway looks stable",
@@ -263,10 +265,10 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
     late_sev = _severity_of(late_night_spend_7d, 1, 3)
     signals.append({
         "key": "late_night",
-        "label": "Late-night spending",
+        "label": "Late-night activity",
         "value": f"{late_night_spend_7d} txns",
         "severity": late_sev,
-        "detail": "Frequent late-night activity" if late_sev != "ok" else "Healthy nighttime routine",
+        "detail": "Frequent late-night activity" if late_sev != "ok" else "Night spend pattern is quiet",
     })
 
     vel_sev = _severity_of(spend_velocity, 1.2, 1.4)
@@ -285,10 +287,10 @@ async def compute_wellness(db, user_id: str) -> dict[str, Any]:
     exam_sev = "stressed" if in_exam_period else "ok"
     signals.append({
         "key": "exam",
-        "label": "Exam period",
-        "value": "Active" if in_exam_period else "No",
+        "label": "Exam window",
+        "value": "Active" if in_exam_period else "Clear",
         "severity": exam_sev,
-        "detail": "Active exam schedule" if in_exam_period else "No exams active",
+        "detail": "Active exam schedule" if in_exam_period else "No exam window active",
     })
 
     signals.append({
@@ -439,46 +441,7 @@ def build_reset_actions(metrics: dict[str, Any]) -> list[dict[str, Any]]:
     return actions
 
 
-# ── Campus support resources ("talk to someone") ─────────────────────────────
-# Real, verifiable India-wide student mental-health support lines. Campus
-# counsellor detail is filled from the profile when available.
-NATIONAL_SUPPORT = [
-    {
-        "name": "Tele-MANAS (Govt. of India)",
-        "detail": "24x7 national mental-health support helpline",
-        "contact": "14416",
-        "kind": "call",
-    },
-    {
-        "name": "KIRAN Mental Health Helpline",
-        "detail": "24x7 toll-free, multilingual support",
-        "contact": "1800-599-0019",
-        "kind": "call",
-    },
-    {
-        "name": "iCall Psychosocial Helpline (TISS)",
-        "detail": "Counsellor support, Mon–Sat 8am–10pm",
-        "contact": "9152987821",
-        "kind": "call",
-    },
-]
-
-
-def build_support_resources(profile: dict[str, Any]) -> list[dict[str, Any]]:
-    resources: list[dict[str, Any]] = []
-    college = (profile or {}).get("college_name")
-    if college:
-        resources.append({
-            "name": f"{college} student counselling",
-            "detail": "Most campuses offer free, confidential counselling. Check your student portal or wellness cell.",
-            "contact": None,
-            "kind": "campus",
-        })
-    resources.extend(NATIONAL_SUPPORT)
-    return resources
-
-
-# ── Bedrock supportive narration (deterministic fallback) ────────────────────
+# ── Bedrock routine narration (deterministic fallback) ───────────────────────
 def _elevated_summary(signals: list[dict[str, Any]]) -> str:
     parts = []
     for s in signals:
@@ -496,22 +459,22 @@ def generate_supportive_message(package: dict[str, Any], profile: dict[str, Any]
     if not metrics.get("has_data"):
         return (
             "There isn't much activity to read yet. Once a few days of spends come "
-            "in, I'll give you a gentle read on how your week is going.",
+            "in, I'll give you a routine read on meals, timing, and runway.",
             "local_rules",
         )
 
     elevated = _elevated_summary(signals)
     primary = package.get("primary_driver")
 
-    prompt = f"""You are PocketBuddy, a warm, supportive companion for an Indian college student.
-Write a short check-in (2-3 sentences, max 55 words) about how their week looks based strictly on spending pace, meal gaps, and study/exam routine.
+    prompt = f"""You are PocketBuddy, a practical money and routine assistant for an Indian college student.
+Write a short routine check (2 sentences, max 45 words) based strictly on spending pace, meal gaps, and study/exam routine.
 
 Rules:
 - Keep the message focused strictly on money behavior, routine signals, and simple corrective resets.
 - DO NOT use therapy-style or soothing language.
 - DO NOT diagnose, and DO NOT use clinical words like burnout, depression, anxiety, disorder, stress patterns.
 - Do not be preachy or alarmist. No emojis. No markdown.
-- Name the main source of pressure (e.g. money or meals) in plain words, then point to ONE small next step.
+- Name the main signal (e.g. money, meal gap, late-night activity, or exam window) in plain words, then point to ONE small next step.
 
 Overall read: {status}. Main pressure source: {primary or "nothing in particular"}.
 Patterns worth noting: {elevated}.
@@ -530,78 +493,3 @@ Write only the message text."""
         pass
 
     return package["message"], "local_rules"
-
-
-# ── AI Care Plan (on-demand, deeper supportive plan) ─────────────────────────
-def _fallback_care_plan(package: dict[str, Any]) -> dict[str, Any]:
-    m = package["metrics"]
-    primary = package.get("primary_driver")
-
-    steps: list[str] = []
-    if m["avg_food_gap_hours_7d"] > 6 or m["current_food_gap_hours"] > 6:
-        steps.append("Eat a proper meal in the next hour — mess, home food, or a simple canteen plate works.")
-    if m["spend_velocity"] > 1.2 or m["runway_days"] < 10:
-        steps.append(f"Pick one low-spend window today and keep spends under about ₹{int(m['safe_daily_limit_rs'])}.")
-    if m["in_exam_period"] or m["late_night_spend_7d"] > 1:
-        steps.append("Take a real 15-minute break away from screens, and aim to wind down earlier tonight.")
-    if len(steps) < 3:
-        steps.append("Message one friend or wingmate — a short chat is a good way to take a quick break.")
-    steps = steps[:3]
-
-    focus_by_driver = {
-        "money": "Ease the money pressure with one planned, low-spend day.",
-        "routine": "Get your meals and sleep back to a steady rhythm.",
-        "academic": "Protect meals and rest so exam prep stays sustainable.",
-    }
-
-    return {
-        "affirmation": "Small adjustments to your daily routine can help reset your spending and meal timing today.",
-        "focus": focus_by_driver.get(primary, "Keep your simple routine steady — meals, rest, and mindful spends."),
-        "steps": steps,
-        "meal_tip": f"It's been about {int(m['current_food_gap_hours'])}h since your last food spend — a simple meal works." if m["current_food_gap_hours"] > 5 else "Your meal timing looks okay — keep it steady.",
-        "rest_tip": "Try a screens-off wind-down 30 minutes before bed tonight." if m["late_night_spend_7d"] > 1 else "Your nights look calm — protect that sleep window.",
-        "money_tip": f"About ₹{int(m['safe_daily_limit_rs'])} keeps you on track today; shared ordering can stretch it further." if m["runway_days"] < 12 else "Your runway looks stable — no money pressure to add stress today.",
-        "source": "local_rules",
-    }
-
-
-def generate_care_plan(package: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
-    """Deeper, structured supportive plan. Bedrock writes it; rules back it up."""
-    if not package["metrics"].get("has_data"):
-        plan = _fallback_care_plan(package)
-        plan["affirmation"] = "There isn't much to read yet — log a few days of spends and I'll build you a fuller plan."
-        return plan
-
-    m = package["metrics"]
-    prompt = f"""You are PocketBuddy, a warm, supportive companion for an Indian college student.
-Create a short, practical care plan for today based strictly on spending pace, meal gaps, and study/exam routine. Output ONLY JSON (no markdown fences) with keys:
-"affirmation" (1 simple sentence focusing on small adjustments, no clinical words, no therapy-style/soothing language), "focus" (1 sentence, the single most useful focus today),
-"steps" (array of exactly 3 short, concrete actions), "meal_tip", "rest_tip", "money_tip" (each 1 short sentence).
-
-Rules: caring and encouraging, use "you", never diagnose, no words like burnout/anxiety/depression/disorder/stress patterns,
-no emojis, no markdown. Focus on concrete spending, meal, and routine signals, not therapy. Ground it in the data below.
-
-Overall read: {package['status']}. Main pressure source: {package.get('primary_driver')}.
-Food gap avg: {m['avg_food_gap_hours_7d']}h, current gap: {m['current_food_gap_hours']}h.
-Runway: {m['runway_days']} days, safe daily spend: about ₹{int(m['safe_daily_limit_rs'])}.
-Late-night activity (7d): {m['late_night_spend_7d']}. Exam period: {m['in_exam_period']}. Spend pace: {m['spend_velocity']}x."""
-
-    try:
-        from app.services.bedrock import generate_json
-
-        data = generate_json(prompt, max_tokens=500, temperature=0.5)
-        steps = data.get("steps") or []
-        if isinstance(steps, list) and len(steps) >= 2:
-            return {
-                "affirmation": str(data.get("affirmation") or "").strip() or _fallback_care_plan(package)["affirmation"],
-                "focus": str(data.get("focus") or "").strip() or _fallback_care_plan(package)["focus"],
-                "steps": [str(s).strip() for s in steps[:3] if str(s).strip()],
-                "meal_tip": str(data.get("meal_tip") or "").strip(),
-                "rest_tip": str(data.get("rest_tip") or "").strip(),
-                "money_tip": str(data.get("money_tip") or "").strip(),
-                "source": "bedrock",
-            }
-    except Exception:
-        pass
-
-    return _fallback_care_plan(package)

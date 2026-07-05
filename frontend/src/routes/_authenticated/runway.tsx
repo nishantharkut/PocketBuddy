@@ -817,7 +817,7 @@ Generated via PocketBuddy Runway Flight deck.`;
                       <span className="w-5 h-5 rounded-full bg-pb-amber/10 text-pb-amber flex items-center justify-center text-[10px] font-bold shrink-0">2</span>
                       <div className="space-y-1">
                         <p className="font-bold text-foreground">Auto-Debit Subscription Alert</p>
-                        <p className="text-[11px] text-zinc-500">You have {forecast.commitments.items.filter((i: any) => i.kind === "subscription").length} recurring subscriptions active. Temporarily pause one to reclaim breathing room.</p>
+                        <p className="text-[11px] text-zinc-500">You have {forecast.commitments.items.filter((i: any) => i.kind === "subscription").length} recurring subscriptions active. Temporarily pause one to reclaim daily room.</p>
                       </div>
                     </div>
 

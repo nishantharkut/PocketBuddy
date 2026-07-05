@@ -18,6 +18,9 @@ class CheckinReq(BaseModel):
 @router.post("")
 async def insert_checkin(req: CheckinReq, user_id: str = Depends(get_current_user)):
     db = get_db()
+    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    await db.checkin_logs.delete_many({"user_id": user_id, "created_at": {"$lt": thirty_days_ago}})
+
     log_id = str(uuid.uuid4())
     gap_hours = req.gap_hours if req.gap_hours is not None else req.food_gap_hours
     await db.checkin_logs.insert_one({

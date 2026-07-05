@@ -219,10 +219,6 @@ export async function getWellnessCoach() {
   return apiRequest("/api/wellness/coach");
 }
 
-export async function getWellnessCarePlan() {
-  return apiRequest("/api/wellness/care-plan");
-}
-
 export async function submitWellnessCheckin({ data }: { data: { mood?: string; action?: string; response?: string; note?: string; score?: number; food_gap_hours?: number } }) {
   return apiRequest("/api/wellness/checkin", {
     method: "POST",
@@ -377,5 +373,4 @@ export async function deleteAccountData() {
 export async function confirmTransaction({ id }: { id: string }) {
   return apiRequest(`/api/transactions/${id}/confirm`, { method: "POST" });
 }
-
 

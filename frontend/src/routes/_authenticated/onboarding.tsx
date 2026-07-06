@@ -9,13 +9,13 @@ import { toast } from "sonner";
 import { getProfile, updateProfile, getCatalog, addCatalogItem } from "@/lib/api/db.functions.js";
 import { Smartphone } from "lucide-react";
 
-const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification";
+const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification-v2";
 
 function getCompanionWebhookUrl() {
   if (typeof window === "undefined") return LOCAL_WEBHOOK_URL;
   const { hostname, origin } = window.location;
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification`;
+  return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification-v2`;
 }
 
 function randomPairingCode() {

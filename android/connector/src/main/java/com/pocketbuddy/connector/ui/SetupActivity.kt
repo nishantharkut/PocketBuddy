@@ -248,7 +248,7 @@ class SetupActivity : Activity() {
             addView(sectionLabel("Backend webhook URL"))
             webhookUrlInput = inputField(
                 value = configStore.webhookUrl(),
-                hint = "https://your-pocketbuddy-url/api/ingest/notification",
+                hint = "https://your-pocketbuddy-url/api/ingest/notification-v2",
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
                 minLines = 3,
                 maxLines = 4,

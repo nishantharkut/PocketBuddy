@@ -50,11 +50,13 @@ http://127.0.0.1:8000
 
 ## Android Companion Endpoint
 
-The Android connector posts normalized payment notifications to:
+New Android connector builds post sanitized payment events to:
 
 ```http
-POST /api/ingest/notification
+POST /api/ingest/notification-v2
 ```
+
+The older `/api/ingest/notification` route remains for legacy connector builds, but v2 rejects raw `text`/`body` payloads and accepts only structured transaction facts plus a masked preview.
 
 The companion UI reads sync state from:
 

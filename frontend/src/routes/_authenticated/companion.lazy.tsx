@@ -36,7 +36,7 @@ type Profile = any;
 type SyncLog = any;
 type DataConsent = any;
 
-const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification";
+const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification-v2";
 const ANDROID_APK_DOWNLOAD_URL =
   "https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk";
 
@@ -45,7 +45,7 @@ function getCompanionWebhookUrl() {
 
   const { hostname, origin } = window.location;
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification`;
+  return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification-v2`;
 }
 
 function randomPairingCode() {

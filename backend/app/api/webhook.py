@@ -208,6 +208,55 @@ def build_android_consent_id(user_id: str, device_id: Optional[str]) -> str:
     return f"android:{user_id}:{device_id or 'unknown-device'}"
 
 
+def _coerce_datetime(value) -> Optional[datetime.datetime]:
+    if isinstance(value, datetime.datetime):
+        return value
+    return None
+
+
+def pairing_rotated_after_revocation(profile: dict, consent: Optional[dict]) -> bool:
+    if not consent or consent.get("status") != "revoked":
+        return False
+
+    pairing_updated_at = _coerce_datetime(profile.get("pairing_code_updated_at"))
+    revoked_at = _coerce_datetime(consent.get("revoked_at") or consent.get("updated_at"))
+    return bool(pairing_updated_at and revoked_at and pairing_updated_at > revoked_at)
+
+
+def connector_ingest_block_reason(profile: dict, consent: Optional[dict]) -> Optional[str]:
+    if not profile.get("pairing_code"):
+        return "connector_not_paired"
+
+    if profile.get("companion_sync_enabled") is False:
+        return "sync_disabled_by_user"
+
+    consent_status = consent.get("status") if consent else None
+    if consent_status == "paused":
+        return "sync_paused_by_user"
+
+    if consent_status == "revoked" and not pairing_rotated_after_revocation(profile, consent):
+        return "consent_revoked_repair_required"
+
+    return None
+
+
+async def find_android_consent(db, user_id: str, device_id: Optional[str]) -> Optional[dict]:
+    consent = await db.data_consents.find_one({"_id": build_android_consent_id(user_id, device_id)})
+    if consent:
+        return consent
+
+    if device_id:
+        return await db.data_consents.find_one(
+            {
+                "user_id": user_id,
+                "source": "android_connector",
+                "device_id": device_id,
+            }
+        )
+
+    return None
+
+
 async def upsert_android_consent(
     db,
     *,
@@ -216,8 +265,10 @@ async def upsert_android_consent(
     req: WebhookReq,
     now: datetime.datetime,
     status: str = "active",
+    sync_observed: bool = True,
 ) -> str:
     consent_id = build_android_consent_id(user_id, device_id)
+    status_timestamps = {"last_sync_at": now} if sync_observed else {"last_blocked_at": now}
     update = {
         "$set": {
             "user_id": user_id,
@@ -234,7 +285,7 @@ async def upsert_android_consent(
             ],
             "device_id": device_id,
             "device_name": req.device_name or req.sourceApp or req.packageName or "PocketBuddy Android Connector",
-            "last_sync_at": now,
+            **status_timestamps,
             "raw_text_policy": "not_required_for_v2",
             "updated_at": now,
         },
@@ -246,7 +297,56 @@ async def upsert_android_consent(
     }
     if status == "revoked":
         update["$set"]["revoked_at"] = now
+    else:
+        update["$unset"] = {"revoked_at": ""}
     await db.data_consents.update_one({"_id": consent_id}, update, upsert=True)
+    return consent_id
+
+
+async def record_blocked_connector_event(
+    db,
+    *,
+    user_id: str,
+    device_id: Optional[str],
+    req: WebhookReq,
+    now: datetime.datetime,
+    reason: str,
+    consent_status: str,
+) -> str:
+    consent_id = await upsert_android_consent(
+        db,
+        user_id=user_id,
+        device_id=device_id,
+        req=req,
+        now=now,
+        status=consent_status,
+        sync_observed=False,
+    )
+    log_id = str(uuid.uuid4())
+    await db.companion_sync_log.insert_one(
+        {
+            "_id": log_id,
+            "user_id": user_id,
+            "device_id": device_id,
+            "device_name": req.device_name or req.sourceApp or req.packageName,
+            "notification_source": req.captureSource or req.type or req.source or "unknown",
+            "notification_preview": "Connector event blocked by your privacy controls before parsing.",
+            "processing_status": reason,
+            "package_name": req.packageName,
+            "source_app": req.sourceApp,
+            "transaction_reference": None,
+            "data_origin": "android_on_device" if req.rawTextSuppressed or req.maskedPreview else "blocked_before_parse",
+            "consent_id": consent_id,
+            "parser_version": req.parserVersion,
+            "source_confidence": clean_confidence(req.confidence),
+            "privacy_mode": "blocked_by_user_control",
+            "raw_payload_received": bool(req.text or req.body),
+            "schema_version": req.schemaVersion,
+            "client_event_id": req.clientEventId,
+            "blocked_reason": reason,
+            "created_at": now,
+        }
+    )
     return consent_id
 
 
@@ -505,13 +605,15 @@ async def ingest_notification(
         provided_token = authorization.split(" ", 1)[1].strip()
 
     client_pairing_code = provided_token or req.pairing_code
+    device_id = req.deviceId or x_pocketbuddy_device_id
 
-    if profile.get("pairing_code"):
-        if not client_pairing_code or profile["pairing_code"] != client_pairing_code:
-            raise HTTPException(status_code=403, detail="Invalid pairing code")
+    if not profile.get("pairing_code"):
+        raise HTTPException(status_code=403, detail="Connector is not paired. Start setup from PocketBuddy before syncing.")
+
+    if not client_pairing_code or profile["pairing_code"] != client_pairing_code:
+        raise HTTPException(status_code=403, detail="Invalid pairing code")
 
     if req.type == "unpair" or req.source == "unpair":
-        device_id = req.deviceId or x_pocketbuddy_device_id
         await db.profiles.update_one(
             {"_id": user_id},
             {
@@ -519,7 +621,9 @@ async def ingest_notification(
                     "companion_paired": False,
                     "companion_device_name": None,
                     "companion_last_sync": None,
-                    "companion_device_id": None
+                    "companion_device_id": None,
+                    "pairing_code": None,
+                    "pairing_code_updated_at": now,
                 }
             }
         )
@@ -535,7 +639,6 @@ async def ingest_notification(
     has_structured_event = req.amount is not None or bool(req.merchant) or bool(req.transactionId)
     notification_preview = (req.maskedPreview or "").strip() or mask_notification_text(raw_body)
     notification_source = req.captureSource or req.type or req.source or "unknown"
-    device_id = req.deviceId or x_pocketbuddy_device_id
     requested_privacy_mode = (req.privacyMode or "").strip().lower()
     if raw_payload_received:
         privacy_mode = "legacy_server_parse"
@@ -546,6 +649,21 @@ async def ingest_notification(
     data_origin = "android_on_device" if privacy_mode == "on_device_only" else "legacy_android_raw_ingest"
     source_confidence = clean_confidence(req.confidence)
     log_id = str(uuid.uuid4())
+
+    existing_consent = await find_android_consent(db, user_id, device_id)
+    block_reason = connector_ingest_block_reason(profile, existing_consent)
+    if block_reason:
+        consent_status = "paused" if block_reason in {"sync_disabled_by_user", "sync_paused_by_user"} else "revoked"
+        await record_blocked_connector_event(
+            db,
+            user_id=user_id,
+            device_id=device_id,
+            req=req,
+            now=now,
+            reason=block_reason,
+            consent_status=consent_status,
+        )
+        return {"status": "blocked", "reason": block_reason, "stored": "metadata_only"}
 
     sync_enabled = profile.get("companion_sync_enabled", True)
     consent_id = await upsert_android_consent(

@@ -175,6 +175,7 @@ function CompanionPage() {
       qc.invalidateQueries({ queryKey: ["profile"] });
       qc.invalidateQueries({ queryKey: ["sync-log", user.id] });
       qc.invalidateQueries({ queryKey: ["data-consents"] });
+      setPairing(randomPairingCode());
       toast.success("Device unpaired. Recent sync history is kept.");
     } catch (err: any) {
       toast.error(err.message || "Failed to unpair device");
@@ -694,6 +695,8 @@ function formatParsedAmount(value: unknown) {
 function humanStatus(status?: string) {
   if (status === "parsed") return "Tracked";
   if (status === "pending") return "Processing";
+  if (status === "sync_disabled_by_user" || status === "sync_paused_by_user") return "Paused by user";
+  if (status === "consent_revoked_repair_required") return "Re-pair required";
   if (status === "auto_verified") return "Pool verified";
   if (status === "received") return "Received credit";
   if (status === "incomplete") return "Needs review";
@@ -705,6 +708,7 @@ function humanStatus(status?: string) {
 function humanDataOrigin(origin?: string) {
   if (origin === "android_on_device") return "Android on-device parser";
   if (origin === "legacy_android_raw_ingest") return "Legacy Android ingest";
+  if (origin === "blocked_before_parse") return "Blocked before parsing";
   return "-";
 }
 
@@ -725,6 +729,18 @@ function StatusBadge({ status }: { status?: string }) {
     return (
       <Badge className="bg-warning/20 text-warning text-xs">
         Processing
+      </Badge>
+    );
+  if (status === "sync_disabled_by_user" || status === "sync_paused_by_user")
+    return (
+      <Badge className="bg-warning/20 text-warning text-[10px] md:text-xs">
+        Paused
+      </Badge>
+    );
+  if (status === "consent_revoked_repair_required")
+    return (
+      <Badge className="bg-destructive/15 text-destructive text-[10px] md:text-xs">
+        Re-pair
       </Badge>
     );
   if (status === "auto_verified")

@@ -234,7 +234,7 @@ function PrivacyPage() {
       toast.success(
         !syncEnabled
           ? "Instant sync resumed."
-          : "Instant sync paused. New connector events will not become transactions."
+          : "Instant sync paused. New connector events are blocked before transaction parsing."
       );
     } catch {
       toast.error("Failed to update sync setting.");
@@ -597,7 +597,7 @@ function PrivacyPage() {
                   <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
                     {syncEnabled
                       ? "Sanitized connector events can become transactions."
-                      : "New connector events are marked paused and not converted into transactions."}
+                      : "New connector events are blocked before parsing and stored as metadata-only audit entries."}
                   </p>
                 </div>
               </div>

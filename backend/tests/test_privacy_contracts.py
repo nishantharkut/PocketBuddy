@@ -10,7 +10,12 @@ os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017")
 
 from app.api.account_aggregator import aa_runtime_state, build_sandbox_records
 from app.api.auth import create_session_token
-from app.api.webhook import build_android_consent_id, clean_confidence
+from app.api.webhook import (
+    build_android_consent_id,
+    clean_confidence,
+    connector_ingest_block_reason,
+    pairing_rotated_after_revocation,
+)
 from app.core.config import Settings, settings
 from app.main import app
 
@@ -108,6 +113,39 @@ class PrivacyContractTests(unittest.TestCase):
             build_android_consent_id("user-1", None),
             "android:user-1:unknown-device",
         )
+
+    def test_connector_ingest_blocks_without_active_user_consent(self):
+        active_profile = {"pairing_code": "PB-1234", "companion_sync_enabled": True}
+
+        self.assertEqual(
+            connector_ingest_block_reason({}, None),
+            "connector_not_paired",
+        )
+        self.assertEqual(
+            connector_ingest_block_reason({"pairing_code": "PB-1234", "companion_sync_enabled": False}, None),
+            "sync_disabled_by_user",
+        )
+        self.assertEqual(
+            connector_ingest_block_reason(active_profile, {"status": "paused"}),
+            "sync_paused_by_user",
+        )
+        self.assertEqual(
+            connector_ingest_block_reason(active_profile, {"status": "revoked"}),
+            "consent_revoked_repair_required",
+        )
+        self.assertIsNone(connector_ingest_block_reason(active_profile, {"status": "active"}))
+
+    def test_rotated_pairing_code_can_start_fresh_consent_after_revocation(self):
+        revoked_at = datetime.datetime(2026, 7, 7, 10, 0, 0)
+        consent = {"status": "revoked", "revoked_at": revoked_at}
+        profile = {
+            "pairing_code": "PB-NEWA",
+            "companion_sync_enabled": True,
+            "pairing_code_updated_at": revoked_at + datetime.timedelta(minutes=5),
+        }
+
+        self.assertTrue(pairing_rotated_after_revocation(profile, consent))
+        self.assertIsNone(connector_ingest_block_reason(profile, consent))
 
 
 if __name__ == "__main__":

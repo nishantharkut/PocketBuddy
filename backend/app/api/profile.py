@@ -66,6 +66,19 @@ async def update_profile(req: ProfileUpdateReq, user_id: str = Depends(get_curre
             profile["phone"] = user.get("phone_number", "")
         return map_doc(profile)
 
+    pairing_code_supplied = "pairing_code" in updates
+
+    if pairing_code_supplied:
+        updates["pairing_code_updated_at"] = now
+
+    if updates.get("companion_paired") is False:
+        updates.setdefault("companion_device_name", None)
+        updates.setdefault("companion_last_sync", None)
+        updates.setdefault("companion_device_id", None)
+        if not pairing_code_supplied:
+            updates["pairing_code"] = None
+            updates["pairing_code_updated_at"] = now
+
     await db.profiles.update_one({"_id": user_id}, {"$set": updates})
 
     if "companion_sync_enabled" in updates:
@@ -84,7 +97,7 @@ async def update_profile(req: ProfileUpdateReq, user_id: str = Depends(get_curre
             },
         )
 
-    if updates.get("companion_paired") is False:
+    if updates.get("companion_paired") is False and not pairing_code_supplied:
         await db.data_consents.update_many(
             {
                 "user_id": user_id,

@@ -203,9 +203,29 @@ function PrivacyPage() {
     aaConsents.find((c) => c.status === "active") ??
     aaConsents.find((c) => c.status === "pending") ??
     aaConsents[0];
+  const consentLedgerRows = [...aaConsents, ...androidConsents];
   const latestAAEvent = aaStatus?.events?.[0];
   const latestAASnapshot = aaStatus?.snapshots?.[0];
   const aaTrustStatus = humanAAStatus(aaStatus, currentAAConsent);
+  const bankConsentCanStart = Boolean(aaStatus?.can_start_sandbox) && !["pending", "active"].includes(currentAAConsent?.status || "");
+  const bankConsentPrimaryAction =
+    currentAAConsent?.status === "active"
+      ? "View bank consent"
+      : currentAAConsent?.status === "pending"
+        ? "Review consent"
+        : bankConsentCanStart
+          ? "Connect bank"
+          : aaStatus?.status === "loading" || !aaStatus
+            ? "Checking bank"
+            : "Bank consent unavailable";
+
+  function focusBankConsentCard() {
+    if (typeof document === "undefined") return;
+    document.getElementById("bank-consent-section")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 
   async function toggleSync() {
     setSavingSync(true);
@@ -283,6 +303,7 @@ function PrivacyPage() {
       });
       await refreshAA();
       toast.success("Bank consent started.");
+      focusBankConsentCard();
     } catch (err: any) {
       toast.error(err.message || "Failed to start bank consent.");
     } finally {
@@ -429,9 +450,21 @@ function PrivacyPage() {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="w-fit shrink-0 text-xs" onClick={() => nav({ to: "/companion" })}>
-                  Manage sync
-                </Button>
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                  <Button
+                    size="sm"
+                    className="w-full shrink-0 text-xs sm:w-fit"
+                    disabled={Boolean(aaBusyAction) || (!bankConsentCanStart && !currentAAConsent)}
+                    variant={bankConsentCanStart ? "default" : "outline"}
+                    onClick={bankConsentCanStart ? handleStartAAConsent : focusBankConsentCard}
+                  >
+                    {aaBusyAction === "start" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                    {bankConsentPrimaryAction}
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full shrink-0 text-xs sm:w-fit" onClick={() => nav({ to: "/companion" })}>
+                    Manage sync
+                  </Button>
+                </div>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-3">
@@ -439,7 +472,13 @@ function PrivacyPage() {
                   icon={<ShieldCheck className="h-4 w-4" />}
                   label="Bank consent"
                   value={aaTrustStatus}
-                  detail={currentAAConsent ? "Consent state is recorded here" : "Ready when a bank source is connected"}
+                  detail={
+                    currentAAConsent
+                      ? "Consent state is recorded here"
+                      : bankConsentCanStart
+                        ? "Tap Connect bank to start"
+                        : "Available when bank consent is configured"
+                  }
                 />
                 <TrustMetric
                   icon={<Smartphone className="h-4 w-4" />}
@@ -510,21 +549,21 @@ function PrivacyPage() {
               Consent Ledger
             </p>
             <Badge variant="outline" className="text-[10px] text-muted-foreground">
-              {androidConsents.length || 0} source{androidConsents.length === 1 ? "" : "s"}
+              {consentLedgerRows.length || 0} source{consentLedgerRows.length === 1 ? "" : "s"}
             </Badge>
           </div>
           <Card className="overflow-hidden">
-            {androidConsents.length === 0 ? (
+            {consentLedgerRows.length === 0 ? (
               <div className="p-5 text-center">
-                <p className="text-[13px] font-semibold text-foreground">No connector consent recorded yet</p>
+                <p className="text-[13px] font-semibold text-foreground">No data source connected yet</p>
                 <p className="mx-auto mt-1 max-w-sm text-[11px] leading-relaxed text-muted-foreground">
-                  Once the Android connector syncs for the first time, its purpose, data fields, and status will appear here.
+                  Connect a bank source or phone sync when you want PocketBuddy to track payments automatically.
                 </p>
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {androidConsents.slice(0, 3).map((consent) => (
-                  <ConsentLedgerRow key={consent.id} consent={consent} />
+                {consentLedgerRows.slice(0, 4).map((consent, index) => (
+                  <ConsentLedgerRow key={consent.id || `${consent.source}-${index}`} consent={consent} />
                 ))}
               </div>
             )}
@@ -532,7 +571,7 @@ function PrivacyPage() {
         </section>
 
         {/* Bank Consent */}
-        <section>
+        <section id="bank-consent-section" className="scroll-mt-20">
           <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground mb-3">
             Bank Consent
           </p>
@@ -1244,6 +1283,11 @@ function ConsentLedgerRow({ consent }: { consent: DataConsent }) {
     : "Structured transaction fields";
   const status = humanConsentStatus(consent.status);
   const lastActivity = consent.revoked_at || consent.last_sync_at || consent.updated_at || consent.granted_at;
+  const isBankConsent = consent.source === "account_aggregator";
+  const sourceLabel = isBankConsent
+    ? consent.provider_label || "Bank consent"
+    : consent.device_name || "PocketBuddy Android Connector";
+  const purpose = consent.purpose || (isBankConsent ? "verified bank-source tracking" : "instant payment tracking");
 
   return (
     <div className="p-4">
@@ -1251,14 +1295,14 @@ function ConsentLedgerRow({ consent }: { consent: DataConsent }) {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[13px] font-semibold text-foreground">
-              {consent.device_name || "PocketBuddy Android Connector"}
+              {sourceLabel}
             </p>
             <Badge variant="outline" className="text-[9px]">
               {status}
             </Badge>
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Purpose: instant payment tracking. Fields: {categories}.
+            Purpose: {purpose}. Fields: {categories}.
           </p>
         </div>
         <div className="shrink-0 text-left sm:text-right">

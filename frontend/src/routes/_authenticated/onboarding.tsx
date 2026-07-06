@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { getProfile, updateProfile, getCatalog, addCatalogItem } from "@/lib/api/db.functions.js";
-import { Smartphone } from "lucide-react";
+import { getProfile, updateProfile, getCatalog, addCatalogItem, startAccountAggregatorSandboxConsent } from "@/lib/api/db.functions.js";
+import { ShieldCheck, Smartphone } from "lucide-react";
 
 const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification-v2";
 
@@ -86,6 +86,34 @@ function Onboarding() {
       }, 800);
     } catch (err: any) {
       toast.error(err.message || "Failed to start auto configure");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function connectBankFromOnboarding() {
+    if (!user) return;
+    setBusy(true);
+    try {
+      await startAccountAggregatorSandboxConsent({
+        data: {
+          purpose: "Verify bank transactions for PocketBuddy insights",
+          requested_range_days: 30,
+          fi_types: ["DEPOSIT"],
+        },
+      });
+      await updateProfile({
+        data: {
+          onboarding_completed: true,
+          setup_completed: true,
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["profile"] });
+      qc.invalidateQueries({ queryKey: ["aa-status", user.id] });
+      toast.success("Bank consent started. Review it from Privacy Center.");
+      nav({ to: "/privacy", replace: true });
+    } catch (err: any) {
+      toast.error(err.message || "Bank consent is unavailable right now. You can continue with phone sync or manual logging.");
     } finally {
       setBusy(false);
     }
@@ -639,6 +667,29 @@ function Onboarding() {
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 You stay in control of every source. Phone sync parses supported payment alerts on your device, sends only structured transaction fields, and can be paused or removed anytime from Privacy Center.
               </p>
+            </div>
+
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 gap-3">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-foreground">Connect bank consent</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                      Recommended for verified tracking. You can connect now or do it later from Privacy Center.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={connectBankFromOnboarding}
+                  disabled={busy}
+                  className="h-9 w-full shrink-0 bg-primary text-primary-foreground text-xs font-black uppercase tracking-wider sm:w-fit"
+                >
+                  Connect Bank
+                </Button>
+              </div>
             </div>
 
             <div className="rounded-xl border border-border bg-surface-raised p-5">

@@ -76,7 +76,7 @@ type DataConsent = {
   device_name?: string;
   device_id?: string;
   raw_text_policy?: string;
-  uses_dummy_data?: boolean;
+  uses_sandbox_data?: boolean;
   fetch_status?: string;
   fetched_records_count?: number;
   last_fetch_at?: string;
@@ -111,7 +111,7 @@ type AAEvent = {
 type AASnapshot = {
   id?: string;
   record_count?: number;
-  sandbox_dummy_data?: boolean;
+  sandbox_data?: boolean;
   created_at?: string;
   records?: Array<{
     direction?: string;
@@ -127,7 +127,7 @@ type AAStatus = {
   status?: string;
   provider?: string;
   mode?: string;
-  uses_dummy_data?: boolean;
+  uses_sandbox_data?: boolean;
   can_start_sandbox?: boolean;
   can_receive_callbacks?: boolean;
   message?: string;
@@ -206,15 +206,13 @@ function PrivacyPage() {
         ? "Raw upload off"
         : "Waiting for first sync";
   const aaConsents = aaStatus?.consents ?? dataConsents.filter((c) => c.source === "account_aggregator");
-  const currentAAConsent =
-    aaConsents.find((c) => c.status === "active") ??
-    aaConsents.find((c) => c.status === "pending") ??
-    aaConsents[0];
-  const consentLedgerRows = [...aaConsents, ...androidConsents];
+  const activeAAConsent = aaConsents.find((c) => c.status === "active");
+  const pendingAAConsent = aaConsents.find((c) => c.status === "pending");
+  const currentAAConsent = activeAAConsent ?? pendingAAConsent;
   const aaEvents = aaStatus?.events ?? [];
   const aaSnapshots = aaStatus?.snapshots ?? [];
   const aaTrustStatus = humanAAStatus(aaStatus, currentAAConsent);
-  const bankConsentCanStart = Boolean(aaStatus?.can_start_sandbox) && !["pending", "active"].includes(currentAAConsent?.status || "");
+  const bankConsentCanStart = Boolean(aaStatus?.can_start_sandbox) && !currentAAConsent;
   const bankConsentPrimaryAction =
     currentAAConsent?.status === "active"
       ? "View bank consent"
@@ -559,57 +557,62 @@ function PrivacyPage() {
 
         {/* Data Sources */}
         <section className="space-y-3">
-          <div className="flex items-start justify-between gap-3">
+          <div className="max-w-3xl">
             <div>
               <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground">
                 Data Sources
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                These are separate ways PocketBuddy can learn about transactions. Bank consent is verified and read-only; phone sync is optional on-device parsing.
+                Two separate paths can help PocketBuddy track transactions. Active sources are shown here; revoked bank consent stays only in consent activity.
               </p>
             </div>
-            <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
-              {consentLedgerRows.length || 0} connected
-            </Badge>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <ConsentSourceCard
-              icon={<ShieldCheck className="h-4 w-4" />}
+            <DataSourceStatusCard
+              icon={<Landmark className="h-4 w-4" />}
               title="Bank consent"
-              subtitle="Account Aggregator"
-              description="Use this when you want verified bank-source transactions. It is read-only, consent-based, and does not require bank passwords."
-              status={aaTrustStatus}
-              actionLabel={bankConsentCanStart ? "Connect bank" : currentAAConsent ? "Review consent" : "Unavailable"}
+              status={currentAAConsent ? humanConsentStatus(currentAAConsent.status) : bankConsentCanStart ? "Ready to connect" : "Not connected"}
+              tone={
+                currentAAConsent?.status === "active"
+                  ? "success"
+                  : currentAAConsent?.status === "pending"
+                    ? "warning"
+                    : bankConsentCanStart
+                      ? "primary"
+                      : "muted"
+              }
+              description="Verified bank-source tracking through the Account Aggregator consent framework."
+              detail={
+                currentAAConsent
+                  ? `${currentAAConsent.financial_institution_name || currentAAConsent.provider_label || "Connected bank"} · ${currentAAConsent.fetch_status || "fetch not started"}`
+                  : aaConsents.some((consent) => ["revoked", "expired", "rejected"].includes(consent.status || ""))
+                    ? "No active bank consent. Past revoked or expired requests remain visible in activity only."
+                    : "No active bank consent connected."
+              }
+              actionLabel={bankConsentCanStart ? "Connect bank" : currentAAConsent ? "Review" : "Unavailable"}
               onAction={bankConsentCanStart ? () => setBankConsentDialogOpen(true) : focusBankConsentCard}
               actionDisabled={!bankConsentCanStart && !currentAAConsent}
-            >
-              {aaConsents.length ? (
-                aaConsents.slice(0, 2).map((consent, index) => (
-                  <ConsentLedgerRow key={consent.id || `aa-${index}`} consent={consent} compact />
-                ))
-              ) : (
-                <EmptySourceState text="No bank consent has been started yet." />
-              )}
-            </ConsentSourceCard>
+              points={["Read-only", "Revocable", "No bank password"]}
+            />
 
-            <ConsentSourceCard
+            <DataSourceStatusCard
               icon={<Smartphone className="h-4 w-4" />}
               title="Phone auto-sync"
-              subtitle="Android connector"
-              description="Use this for practical UPI alert tracking. Parsing happens on the phone and PocketBuddy receives structured transaction fields."
               status={profile?.companion_paired ? (syncEnabled ? "Active" : "Paused") : "Optional"}
+              tone={profile?.companion_paired ? (syncEnabled ? "success" : "warning") : "muted"}
+              description="Optional Android connector for supported payment alerts when bank consent is not enough for instant tracking."
+              detail={
+                profile?.companion_paired
+                  ? `${profile.companion_device_name || activeAndroidConsent?.device_name || "Android connector"} · ${
+                      syncEnabled ? "new structured events allowed" : "paused before parsing"
+                    }`
+                  : "No phone connected. Pair only if you want on-device alert parsing."
+              }
               actionLabel="Manage sync"
               onAction={() => nav({ to: "/companion" })}
-            >
-              {androidConsents.length ? (
-                androidConsents.slice(0, 2).map((consent, index) => (
-                  <ConsentLedgerRow key={consent.id || `android-${index}`} consent={consent} compact />
-                ))
-              ) : (
-                <EmptySourceState text="No phone connector has synced yet." />
-              )}
-            </ConsentSourceCard>
+              points={["On-device parsing", "Structured fields", "Pause anytime"]}
+            />
           </div>
         </section>
 
@@ -1017,6 +1020,8 @@ function PrivacyPage() {
         onOpenChange={setBankConsentDialogOpen}
         onConfirm={handleStartAAConsent}
         busy={aaBusyAction === "start"}
+        existingBankName={currentAAConsent?.financial_institution_name || currentAAConsent?.provider_label}
+        existingConsentStatus={currentAAConsent?.status}
       />
     </AppShell>
   );
@@ -1078,11 +1083,12 @@ function AccountAggregatorSandboxCard({
   const canApprove = canUseLocalSandbox && consentStatus === "pending";
   const canFetch = canUseLocalSandbox && consentStatus === "active";
   const disabled = Boolean(busyAction) || runtimeStatus === "loading";
-  const latestSnapshot = snapshots[0];
-  const records = latestSnapshot?.records ?? [];
+  const hasActiveConsent = consentStatus === "active";
+  const latestSnapshot = hasActiveConsent ? snapshots[0] : undefined;
+  const records = hasActiveConsent ? latestSnapshot?.records ?? [] : [];
   const visibleRecords = showAllRecords ? records : records.slice(0, 4);
   const visibleEvents = showAllActivity ? events : events.slice(0, 4);
-  const fetchedRecordCount = latestSnapshot?.record_count || records.length || consent?.fetched_records_count || 0;
+  const fetchedRecordCount = hasActiveConsent ? latestSnapshot?.record_count || records.length || consent?.fetched_records_count || 0 : 0;
   const institutionName = consent?.financial_institution_name || consent?.provider_label || "No bank connected";
   const institutionShortName = consent?.financial_institution_short_name || consent?.financial_institution_code || "AA";
   const maskedAccountRef = records.find((record) => record.masked_account_ref)?.masked_account_ref || "Masked account";
@@ -1480,60 +1486,72 @@ function SourceRow({
   );
 }
 
-function ConsentSourceCard({
+function DataSourceStatusCard({
   icon,
   title,
-  subtitle,
-  description,
   status,
+  tone,
+  description,
+  detail,
   actionLabel,
   onAction,
   actionDisabled,
-  children,
+  points,
 }: {
   icon: ReactNode;
   title: string;
-  subtitle: string;
-  description: string;
   status: string;
+  tone: "success" | "warning" | "primary" | "muted";
+  description: string;
+  detail: string;
   actionLabel: string;
   onAction: () => void;
   actionDisabled?: boolean;
-  children: ReactNode;
+  points: string[];
 }) {
-  const active = ["Active", "Ready", "Pending"].includes(status);
   return (
-    <Card className="overflow-hidden bg-surface-raised">
-      <div className="border-b border-border p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-              {icon}
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[13px] font-semibold text-foreground">{title}</p>
-                <Badge
-                  variant="outline"
-                  className={`text-[9px] ${active ? "border-success/35 text-success" : "text-muted-foreground"}`}
-                >
-                  {status}
-                </Badge>
-              </div>
-              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-                {subtitle}
-              </p>
-            </div>
+    <Card className="bg-surface-raised p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            {icon}
           </div>
-          <Button variant="outline" size="sm" className="h-8 shrink-0 text-xs" disabled={actionDisabled} onClick={onAction}>
-            {actionLabel}
-          </Button>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[13px] font-semibold text-foreground">{title}</p>
+              <Badge variant="outline" className={`text-[9px] ${dataSourceToneClass(tone)}`}>
+                {status}
+              </Badge>
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+          </div>
         </div>
-        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+        <Button variant="outline" size="sm" className="h-8 w-full shrink-0 text-xs sm:w-fit" disabled={actionDisabled} onClick={onAction}>
+          {actionLabel}
+        </Button>
       </div>
-      <div className="divide-y divide-border">{children}</div>
+
+      <div className="mt-3 rounded-xl border border-border bg-background/70 p-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Current state</p>
+        <p className="mt-1 text-[12px] font-semibold leading-snug text-foreground">{detail}</p>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {points.map((point) => (
+          <span key={point} className="rounded-full border border-border bg-background/70 px-2 py-1 text-[10px] font-medium text-muted-foreground">
+            {point}
+          </span>
+        ))}
+      </div>
     </Card>
   );
+}
+
+function dataSourceToneClass(tone: "success" | "warning" | "primary" | "muted") {
+  if (tone === "success") return "border-success/35 text-success";
+  if (tone === "warning") return "border-warning/40 text-warning";
+  if (tone === "primary") return "border-primary/30 text-primary";
+  return "text-muted-foreground";
 }
 
 function EmptySourceState({ text }: { text: string }) {

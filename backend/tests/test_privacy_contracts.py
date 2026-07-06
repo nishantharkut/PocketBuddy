@@ -46,9 +46,9 @@ class PrivacyContractTests(unittest.TestCase):
 
         self.assertEqual(state["status"], "not_configured")
         self.assertFalse(state["can_start_sandbox"])
-        self.assertFalse(state["uses_dummy_data"])
+        self.assertFalse(state["uses_sandbox_data"])
 
-    def test_local_aa_sandbox_is_dummy_data_only(self):
+    def test_local_aa_sandbox_uses_separate_sandbox_records(self):
         settings.AA_SANDBOX_ENABLED = True
         settings.AA_SANDBOX_PROVIDER = "local"
         settings.AA_CALLBACK_SECRET = ""
@@ -58,7 +58,7 @@ class PrivacyContractTests(unittest.TestCase):
 
         self.assertEqual(state["status"], "sandbox_ready")
         self.assertTrue(state["can_start_sandbox"])
-        self.assertTrue(state["uses_dummy_data"])
+        self.assertTrue(state["uses_sandbox_data"])
         self.assertEqual(len(records), 3)
         self.assertTrue(all(record["transaction_reference"].startswith("AA-SBX-") for record in records))
         self.assertTrue(all(record["masked_account_ref"].startswith("XXXX") for record in records))

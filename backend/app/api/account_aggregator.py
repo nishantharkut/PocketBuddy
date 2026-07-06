@@ -59,8 +59,25 @@ DEFAULT_AA_INSTITUTIONS = [
     {"id": "equitas", "name": "Equitas Small Finance Bank", "short_name": "EQX", "type": "Small Finance Bank", "regulator": "RBI", "status": "Live"},
     {"id": "au-small-finance", "name": "AU Small Finance Bank", "short_name": "AU", "type": "Small Finance Bank", "regulator": "RBI", "status": "Live"},
     {"id": "ujjivan", "name": "Ujjivan Small Finance Bank", "short_name": "UJV", "type": "Small Finance Bank", "regulator": "RBI", "status": "Live"},
+    {"id": "jana-small-finance", "name": "Jana Small Finance Bank", "short_name": "JANA", "type": "Small Finance Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "utkarsh-small-finance", "name": "Utkarsh Small Finance Bank", "short_name": "UTK", "type": "Small Finance Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "esaf-small-finance", "name": "ESAF Small Finance Bank", "short_name": "ESAF", "type": "Small Finance Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "suryoday-small-finance", "name": "Suryoday Small Finance Bank", "short_name": "SURY", "type": "Small Finance Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "shivalik-small-finance", "name": "Shivalik Small Finance Bank", "short_name": "SFB", "type": "Small Finance Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "capital-small-finance", "name": "Capital Small Finance Bank", "short_name": "CSFB", "type": "Small Finance Bank", "regulator": "RBI", "status": "Available"},
     {"id": "airtel-payments", "name": "Airtel Payments Bank", "short_name": "APB", "type": "Payments Bank", "regulator": "RBI", "status": "Live-enabled"},
     {"id": "nsdl-payments", "name": "NSDL Payments Bank", "short_name": "NSDL", "type": "Payments Bank", "regulator": "RBI", "status": "Live"},
+    {"id": "india-post-payments", "name": "India Post Payments Bank", "short_name": "IPPB", "type": "Payments Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "fino-payments", "name": "Fino Payments Bank", "short_name": "FINO", "type": "Payments Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "jio-payments", "name": "Jio Payments Bank", "short_name": "JIO", "type": "Payments Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "dbs-india", "name": "DBS Bank India", "short_name": "DBS", "type": "Foreign Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "hsbc-india", "name": "HSBC India", "short_name": "HSBC", "type": "Foreign Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "standard-chartered", "name": "Standard Chartered Bank", "short_name": "SCB", "type": "Foreign Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "deutsche-bank", "name": "Deutsche Bank", "short_name": "DB", "type": "Foreign Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "dhanlaxmi", "name": "Dhanlaxmi Bank", "short_name": "DLB", "type": "Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "nainital", "name": "Nainital Bank", "short_name": "NTB", "type": "Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "cosmos-coop", "name": "Cosmos Co-operative Bank", "short_name": "COS", "type": "Co-operative Bank", "regulator": "RBI", "status": "Available"},
+    {"id": "saraswat-coop", "name": "Saraswat Co-operative Bank", "short_name": "SAR", "type": "Co-operative Bank", "regulator": "RBI", "status": "Available"},
 ]
 
 AA_INSTITUTION_DOMAINS = {
@@ -97,8 +114,25 @@ AA_INSTITUTION_DOMAINS = {
     "equitas": "equitasbank.com",
     "au-small-finance": "aubank.in",
     "ujjivan": "ujjivansfb.in",
+    "jana-small-finance": "janabank.com",
+    "utkarsh-small-finance": "utkarsh.bank",
+    "esaf-small-finance": "esafbank.com",
+    "suryoday-small-finance": "suryodaybank.com",
+    "shivalik-small-finance": "shivalikbank.com",
+    "capital-small-finance": "capitalbank.co.in",
     "airtel-payments": "airtel.in/bank",
     "nsdl-payments": "nsdlbank.com",
+    "india-post-payments": "ippbonline.com",
+    "fino-payments": "finobank.com",
+    "jio-payments": "jiopaymentsbank.com",
+    "dbs-india": "dbs.com/in",
+    "hsbc-india": "hsbc.co.in",
+    "standard-chartered": "sc.com/in",
+    "deutsche-bank": "deutschebank.co.in",
+    "dhanlaxmi": "dhanbank.com",
+    "nainital": "nainitalbank.co.in",
+    "cosmos-coop": "cosmosbank.com",
+    "saraswat-coop": "saraswatbank.com",
 }
 
 
@@ -192,7 +226,7 @@ def aa_runtime_state() -> dict:
             "status": "not_configured",
             "provider": provider,
             "mode": "disabled",
-            "uses_dummy_data": False,
+            "uses_sandbox_data": False,
             "can_start_sandbox": False,
             "can_receive_callbacks": False,
             "message": "AA sandbox is disabled. Set AA_SANDBOX_ENABLED=true to test consent flows.",
@@ -203,11 +237,11 @@ def aa_runtime_state() -> dict:
         return {
             "status": "sandbox_ready",
             "provider": "local",
-            "mode": "local_dummy_sandbox",
-            "uses_dummy_data": True,
+            "mode": "local_aa_sandbox",
+            "uses_sandbox_data": True,
             "can_start_sandbox": True,
             "can_receive_callbacks": bool(settings.AA_CALLBACK_SECRET),
-            "message": "Local AA sandbox is enabled. It uses sample sandbox data only and does not verify live bank transactions.",
+            "message": "Local AA sandbox is enabled for consent-flow testing. Sandbox records stay separate from live transactions.",
             "required_env": [],
         }
 
@@ -216,7 +250,7 @@ def aa_runtime_state() -> dict:
         "status": "provider_configured" if not missing else "misconfigured",
         "provider": provider,
         "mode": "provider_sandbox",
-        "uses_dummy_data": True,
+        "uses_sandbox_data": True,
         "can_start_sandbox": False,
         "can_receive_callbacks": bool(settings.AA_CALLBACK_SECRET),
         "message": (
@@ -235,7 +269,7 @@ def ensure_local_sandbox_enabled() -> None:
     if aa_provider() != LOCAL_SANDBOX_PROVIDER:
         raise HTTPException(
             status_code=501,
-            detail="Only the local AA sample-data sandbox lifecycle is available in this build.",
+            detail="Only the local AA sandbox lifecycle is available in this build.",
         )
 
 
@@ -374,6 +408,7 @@ async def get_aa_institutions(q: str = Query(default="", max_length=80), user_id
         "source": source_label,
         "source_url": source_url,
         "updated_hint": "Use AA_INSTITUTION_REGISTRY_URL to connect a provider-backed registry.",
+        "total_count": len(institutions_list),
         "institutions": institutions_list[:150],
     }
 
@@ -427,7 +462,7 @@ async def start_sandbox_consent(req: AASandboxConsentReq, user_id: str = Depends
         "fi_types": req.fi_types or ["DEPOSIT"],
         "requested_range_days": req.requested_range_days,
         "aa_handle": req.aa_handle,
-        "uses_dummy_data": True,
+        "uses_sandbox_data": True,
         "raw_text_policy": "not_applicable_encrypted_fi",
         "fetch_status": "not_started",
         "created_at": now,
@@ -441,7 +476,7 @@ async def start_sandbox_consent(req: AASandboxConsentReq, user_id: str = Depends
         consent_id=consent_id,
         event_type="consent_requested",
         status="pending",
-        message="AA sandbox consent request created. Sandbox uses sample data only.",
+        message="AA sandbox consent request created.",
         metadata={
             "provider": "local_sandbox",
             "requested_range_days": req.requested_range_days,
@@ -541,7 +576,7 @@ async def simulate_sandbox_consent(
             "consent_id": consent_id,
             "source": AA_SOURCE,
             "provider": "local_sandbox",
-            "sandbox_dummy_data": True,
+            "sandbox_data": True,
             "record_count": len(records),
             "records": records,
             "created_at": now,
@@ -561,13 +596,13 @@ async def simulate_sandbox_consent(
             consent_id=consent_id,
             event_type="fi_fetch_completed",
             status="completed",
-            message="AA sandbox financial information fetched. Records are sample sandbox data and were not inserted as live transactions.",
-            metadata={"record_count": len(records), "sandbox_dummy_data": True},
+            message="AA sandbox financial information fetched. Sandbox records were not inserted as live transactions.",
+            metadata={"record_count": len(records), "sandbox_data": True},
         )
         fresh = await db.data_consents.find_one({"_id": consent_id})
         return {
             "status": "completed",
-            "message": "Sandbox financial information fetched. Sample records are stored separately from live transactions.",
+            "message": "Sandbox financial information fetched. Records are stored separately from live transactions.",
             "consent": map_doc(fresh),
             "snapshot": map_doc(snapshot),
         }
@@ -580,7 +615,7 @@ async def simulate_sandbox_consent(
         event_type=event_type,
         status=update.get("status") or update.get("fetch_status") or current_status,
         message=message,
-        metadata={"sandbox_dummy_data": True},
+        metadata={"sandbox_data": True},
     )
     fresh = await db.data_consents.find_one({"_id": consent_id})
     return {"status": fresh.get("status"), "message": message, "consent": map_doc(fresh)}

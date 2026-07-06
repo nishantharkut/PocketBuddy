@@ -25,6 +25,8 @@ AA_DATA_CATEGORIES = [
 
 class AASandboxConsentReq(BaseModel):
     aa_handle: Optional[str] = Field(default=None, max_length=120)
+    bank_code: Optional[str] = Field(default=None, max_length=60)
+    bank_name: Optional[str] = Field(default=None, max_length=120)
     purpose: str = Field(default=DEFAULT_AA_PURPOSE, max_length=180)
     requested_range_days: int = Field(default=30, ge=1, le=365)
     fi_types: list[str] = Field(default_factory=lambda: ["DEPOSIT"])
@@ -260,7 +262,10 @@ async def start_sandbox_consent(req: AASandboxConsentReq, user_id: str = Depends
         "user_id": user_id,
         "source": AA_SOURCE,
         "provider": "local_sandbox",
-        "provider_label": "PocketBuddy Local AA Sandbox",
+        "provider_label": req.bank_name or "Bank consent",
+        "financial_institution_code": req.bank_code,
+        "financial_institution_name": req.bank_name,
+        "trust_framework": "RBI Account Aggregator",
         "status": "pending",
         "aa_status": "PENDING",
         "consent_handle": consent_handle,
@@ -284,7 +289,12 @@ async def start_sandbox_consent(req: AASandboxConsentReq, user_id: str = Depends
         event_type="consent_requested",
         status="pending",
         message="AA sandbox consent request created. Sandbox uses sample data only.",
-        metadata={"provider": "local_sandbox", "requested_range_days": req.requested_range_days},
+        metadata={
+            "provider": "local_sandbox",
+            "requested_range_days": req.requested_range_days,
+            "bank_code": req.bank_code,
+            "bank_name": req.bank_name,
+        },
     )
     return {
         "status": "pending",

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
+import { BankConsentDialog, type BankConsentPayload } from "@/components/privacy/BankConsentDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -65,6 +66,9 @@ type DataConsent = {
   status?: "active" | "paused" | "revoked" | string;
   provider?: string;
   provider_label?: string;
+  financial_institution_code?: string;
+  financial_institution_name?: string;
+  trust_framework?: string;
   purpose?: string;
   data_categories?: string[];
   device_name?: string;
@@ -146,6 +150,7 @@ function PrivacyPage() {
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [savingSync, setSavingSync] = useState(false);
   const [aaBusyAction, setAaBusyAction] = useState<string | null>(null);
+  const [bankConsentDialogOpen, setBankConsentDialogOpen] = useState(false);
 
   const { data: profile, refetch: refetchProfile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -291,17 +296,21 @@ function PrivacyPage() {
     }
   }
 
-  async function handleStartAAConsent() {
+  async function handleStartAAConsent(payload?: BankConsentPayload) {
     setAaBusyAction("start");
     try {
       await startAccountAggregatorSandboxConsent({
         data: {
           purpose: "Verify bank transactions for PocketBuddy insights",
-          requested_range_days: 30,
+          requested_range_days: payload?.requestedRangeDays ?? 30,
           fi_types: ["DEPOSIT"],
+          aa_handle: payload?.aaHandle || null,
+          bank_code: payload?.bankCode,
+          bank_name: payload?.bankName,
         },
       });
       await refreshAA();
+      setBankConsentDialogOpen(false);
       toast.success("Bank consent started.");
       focusBankConsentCard();
     } catch (err: any) {
@@ -456,7 +465,7 @@ function PrivacyPage() {
                     className="w-full shrink-0 text-xs sm:w-fit"
                     disabled={Boolean(aaBusyAction) || (!bankConsentCanStart && !currentAAConsent)}
                     variant={bankConsentCanStart ? "default" : "outline"}
-                    onClick={bankConsentCanStart ? handleStartAAConsent : focusBankConsentCard}
+                    onClick={bankConsentCanStart ? () => setBankConsentDialogOpen(true) : focusBankConsentCard}
                   >
                     {aaBusyAction === "start" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                     {bankConsentPrimaryAction}
@@ -581,7 +590,7 @@ function PrivacyPage() {
             latestEvent={latestAAEvent}
             latestSnapshot={latestAASnapshot}
             busyAction={aaBusyAction}
-            onStart={handleStartAAConsent}
+            onStart={() => setBankConsentDialogOpen(true)}
             onAction={handleAASandboxAction}
             onRefresh={refreshAA}
           />
@@ -893,6 +902,13 @@ function PrivacyPage() {
           </Card>
         </section>
       </div>
+
+      <BankConsentDialog
+        open={bankConsentDialogOpen}
+        onOpenChange={setBankConsentDialogOpen}
+        onConfirm={handleStartAAConsent}
+        busy={aaBusyAction === "start"}
+      />
     </AppShell>
   );
 }
@@ -1285,7 +1301,7 @@ function ConsentLedgerRow({ consent }: { consent: DataConsent }) {
   const lastActivity = consent.revoked_at || consent.last_sync_at || consent.updated_at || consent.granted_at;
   const isBankConsent = consent.source === "account_aggregator";
   const sourceLabel = isBankConsent
-    ? consent.provider_label || "Bank consent"
+    ? consent.financial_institution_name || consent.provider_label || "Bank consent"
     : consent.device_name || "PocketBuddy Android Connector";
   const purpose = consent.purpose || (isBankConsent ? "verified bank-source tracking" : "instant payment tracking");
 

@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
+import { BankConsentDialog, type BankConsentPayload } from "@/components/privacy/BankConsentDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -56,6 +57,7 @@ function Onboarding() {
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [busy, setBusy] = useState(false);
+  const [bankConsentDialogOpen, setBankConsentDialogOpen] = useState(false);
 
   const isAndroid = typeof window !== "undefined" && /android/i.test(window.navigator.userAgent);
 
@@ -91,15 +93,18 @@ function Onboarding() {
     }
   }
 
-  async function connectBankFromOnboarding() {
+  async function connectBankFromOnboarding(payload: BankConsentPayload) {
     if (!user) return;
     setBusy(true);
     try {
       await startAccountAggregatorSandboxConsent({
         data: {
           purpose: "Verify bank transactions for PocketBuddy insights",
-          requested_range_days: 30,
+          requested_range_days: payload.requestedRangeDays,
           fi_types: ["DEPOSIT"],
+          aa_handle: payload.aaHandle || null,
+          bank_code: payload.bankCode,
+          bank_name: payload.bankName,
         },
       });
       await updateProfile({
@@ -110,6 +115,7 @@ function Onboarding() {
       });
       qc.invalidateQueries({ queryKey: ["profile"] });
       qc.invalidateQueries({ queryKey: ["aa-status", user.id] });
+      setBankConsentDialogOpen(false);
       toast.success("Bank consent started. Review it from Privacy Center.");
       nav({ to: "/privacy", replace: true });
     } catch (err: any) {
@@ -683,7 +689,7 @@ function Onboarding() {
                   </div>
                 </div>
                 <Button
-                  onClick={connectBankFromOnboarding}
+                  onClick={() => setBankConsentDialogOpen(true)}
                   disabled={busy}
                   className="h-9 w-full shrink-0 bg-primary text-primary-foreground text-xs font-black uppercase tracking-wider sm:w-fit"
                 >
@@ -775,6 +781,13 @@ function Onboarding() {
           </div>
         )}
       </div>
+
+      <BankConsentDialog
+        open={bankConsentDialogOpen}
+        onOpenChange={setBankConsentDialogOpen}
+        onConfirm={connectBankFromOnboarding}
+        busy={busy}
+      />
     </div>
   );
 }

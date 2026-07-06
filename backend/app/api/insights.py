@@ -27,7 +27,8 @@ async def get_insights(user_id: str = Depends(get_current_user)):
     # Fetch last 60 days of transactions
     since = datetime.datetime.utcnow() - datetime.timedelta(days=60)
     cursor = db.transactions.find({"user_id": user_id, "created_at": {"$gte": since}}).sort("created_at", -1)
-    txns = await cursor.to_list(length=2000)
+    all_txns = await cursor.to_list(length=2000)
+    txns = [t for t in all_txns if t.get("direction", "debit") != "credit"]
 
     # Fetch profile for exam dates
     profile = await db.profiles.find_one({"_id": user_id})

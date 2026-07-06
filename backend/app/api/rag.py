@@ -213,29 +213,38 @@ async def get_runway_intel(user_id: str = Depends(get_current_user)):
     ask_amount = forecast["projection"]["ask_home_amount"] // 100
     commitments_total = forecast["commitments"]["total"] // 100
     remaining = forecast["current_cycle"]["remaining"] // 100
+    food_routine = forecast.get("food_routine") or {}
+    decision_engine = forecast.get("decision_engine") or {}
+    next_action = decision_engine.get("next_best_action") or forecast.get("action") or {}
+    food_label = str(food_routine.get("label") or "Meal routine")
+    food_pace = int(food_routine.get("food_daily_pace") or 0) // 100
+    food_cap = int(food_routine.get("recommended_daily_food_cap") or 0) // 100
+    next_action_title = str(next_action.get("title") or "Keep runway stable")
+    next_action_detail = str(next_action.get("detail") or "Keep discretionary spend inside the safe daily limit.")
+    decision_summary = str(decision_engine.get("summary") or "")
 
     # Build local fallback
     if status == "shortfall":
         fallback_summary = (
             f"Based on your current spending pace, you will run out of allowance in {broke_days} days "
             f"({days_left - broke_days} days before the cycle ends). "
-            f"We recommend asking home for ₹{ask_amount:,} to cover your shortfall and reducing discretionary expenses."
+            f"Ask home for Rs {ask_amount:,} and follow this next action: {next_action_detail}"
         )
     elif status == "watch" or shortfall_prob >= 0.35:
         fallback_summary = (
             f"Your remaining runway is tight (shortfall probability: {shortfall_prob * 100:.0f}%). "
-            f"Try to keep daily discretionary spending under ₹{safe_daily}, as your current projected pace is ₹{projected_daily}/day."
+            f"Keep daily spend under Rs {safe_daily}; your {food_label.lower()} is currently Rs {food_pace}/day against a suggested food cap of Rs {food_cap}/day."
         )
     else:
         fallback_summary = (
-            f"Great job! You're on track to finish this cycle with a healthy balance. "
-            f"You have ₹{safe_daily}/day safe limit left. Maintain your pace of ₹{projected_daily}/day to stay green."
+            f"You are on track to finish this cycle with a healthy balance. "
+            f"Safe/day is Rs {safe_daily}; keep food near Rs {food_cap}/day and review any new pool or subscription commitments before spending."
         )
 
     # Try Bedrock
     if settings.BEDROCK_ENABLED:
         try:
-            prompt = f"""You are PocketBuddy, an AI financial wellness advisor for college students.
+            prompt = f"""You are PocketBuddy, a student budget advisor for college students.
 Here is the student's runway forecast details:
 - Cycle days left: {days_left} days
 - Safe daily spend limit: Rs {safe_daily}
@@ -245,8 +254,13 @@ Here is the student's runway forecast details:
 - Days until broke: {broke_days} (out of {days_left} days left)
 - Ask home amount needed: Rs {ask_amount}
 - Upcoming commitments total: Rs {commitments_total}
+- Meal routine: {food_label}
+- Food pace: Rs {food_pace}/day
+- Suggested food cap: Rs {food_cap}/day
+- Decision engine summary: {decision_summary}
+- Next best action: {next_action_title} — {next_action_detail}
 
-Generate exactly 2 concise, highly personalized, and action-oriented sentences. Be direct, address the student directly, reference their specific numbers, and suggest concrete actions (e.g. eat at mess, join pool, negotiate travel fares, or budget request home). No emojis. No preamble."""
+Generate exactly 2 concise, personalized, and action-oriented sentences. Be direct, reference the specific numbers, and suggest concrete actions that match their meal routine. Do not invent phone numbers, contacts, merchant names, or guarantees. No emojis. No preamble."""
 
             text = generate_text(prompt, max_tokens=150, temperature=0.25)
             if text:
@@ -255,4 +269,3 @@ Generate exactly 2 concise, highly personalized, and action-oriented sentences. 
             logger.warning("Bedrock runway-intel failed: %s", exc)
 
     return {"summary": fallback_summary, "source": "local_fallback"}
-

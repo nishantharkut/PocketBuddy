@@ -204,15 +204,15 @@ function TxnsPage() {
         {/* ── Summary Bar ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-2 bg-surface rounded-xl border border-border p-3">
           <div className="text-center">
-            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Income</p>
+            <p className="text-[9px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground">Income</p>
             <p className="text-xs font-black tnum text-[#5DADE2]">{rupees(stats?.summary?.income ?? 0)}</p>
           </div>
           <div className="text-center border-x border-border/50">
-            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Expenses</p>
+            <p className="text-[9px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground">Expenses</p>
             <p className="text-xs font-black tnum text-[#FF6B4A]">{rupees(stats?.summary?.expenses ?? 0)}</p>
           </div>
           <div className="text-center">
-            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Total</p>
+            <p className="text-[9px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground">Total</p>
             <p className="text-xs font-black tnum text-foreground">{rupees(Math.abs(stats?.summary?.net ?? 0))}</p>
           </div>
         </div>
@@ -367,16 +367,16 @@ function DailyView({
           <div className="flex items-center justify-between px-4 py-2.5 bg-surface-raised/50 border-b border-border/50">
             <div className="flex items-center gap-2.5">
               <span className="text-lg font-black text-foreground tnum">{group.day}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                 {group.weekday}
               </span>
-              <span className="text-[10px] font-semibold text-muted-foreground tnum">
+              <span className="text-[10px] md:text-xs font-semibold text-muted-foreground tnum">
                 {String(month).padStart(2, "0")}.{year}
               </span>
             </div>
             <div className="flex items-center gap-3 text-right">
-              <span className="text-[10px] font-bold tnum text-[#5DADE2]">{rupees(group.income)}</span>
-              <span className="text-[10px] font-bold tnum text-[#FF6B4A]">{rupees(group.expenses)}</span>
+              <span className="text-[10px] md:text-xs font-bold tnum text-[#5DADE2]">{rupees(group.income)}</span>
+              <span className="text-[10px] md:text-xs font-bold tnum text-[#FF6B4A]">{rupees(group.expenses)}</span>
             </div>
           </div>
 
@@ -396,13 +396,13 @@ function DailyView({
                       {t.mapped_merchant_name ?? t.raw_merchant_string}
                     </p>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[10px] md:text-xs text-muted-foreground">
                         {isCompanion ? "Companion" : "Manual"}
                       </span>
                       {t.needs_verification && (
                         <>
-                          <span className="text-[10px] text-zinc-600 font-bold">•</span>
-                          <span className="text-[9px] font-black text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                          <span className="text-[10px] md:text-xs text-zinc-600 font-bold">•</span>
+                          <span className="text-[9px] md:text-xs font-black text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
                             Verify Parser
                           </span>
                         </>
@@ -541,7 +541,7 @@ function MonthlyView({
                   {m.month_name}
                 </span>
                 {isCurrent && hasData && (
-                  <p className="text-[9px] text-muted-foreground mt-0.5 tnum">
+                  <p className="text-[9px] md:text-xs text-muted-foreground mt-0.5 tnum">
                     {m.month}.1 ~ {m.month}.{new Date(2026, m.month, 0).getDate()}
                   </p>
                 )}
@@ -579,11 +579,11 @@ function MonthlyView({
                     <div className="flex items-center gap-3 sm:gap-4 justify-end">
                       <div className="flex flex-col items-end">
                         <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground">Income</span>
-                        <span className="text-[10px] tnum font-semibold text-[#5DADE2]">{rupees(w.income)}</span>
+                        <span className="text-[10px] md:text-xs tnum font-semibold text-[#5DADE2]">{rupees(w.income)}</span>
                       </div>
                       <div className="flex flex-col items-end border-l border-border/30 pl-2.5">
                         <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground">Expenses</span>
-                        <span className="text-[10px] tnum font-semibold text-[#FF6B4A]">{rupees(w.expenses)}</span>
+                        <span className="text-[10px] md:text-xs tnum font-semibold text-[#FF6B4A]">{rupees(w.expenses)}</span>
                       </div>
                       <div className="flex flex-col items-end border-l border-border/30 pl-2.5">
                         <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground">Balance</span>
@@ -630,7 +630,7 @@ function TotalView({
           <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground font-display flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" /> Accounts
           </h3>
-          <span className="text-[10px] font-semibold text-muted-foreground tnum">
+          <span className="text-[10px] md:text-xs font-semibold text-muted-foreground tnum">
             {month(monthName)}.1.{String(year).slice(2)} ~ {month(monthName)}.{stats?.days_in_month ?? 30}.{String(year).slice(2)}
           </span>
         </div>
@@ -824,7 +824,7 @@ function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: 
               onChange={(e) => setCustomCat(e.target.value)}
               placeholder="e.g., Laundry, Books, Printing"
             />
-            <p className="text-[10px] text-zinc-500 pl-1">This category will be saved and available for future transactions.</p>
+            <p className="text-[10px] md:text-xs text-zinc-500 pl-1">This category will be saved and available for future transactions.</p>
           </div>
         )}
       </div>

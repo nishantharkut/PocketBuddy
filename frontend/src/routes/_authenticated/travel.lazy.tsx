@@ -167,34 +167,34 @@ const getInitialDateTimeLocal = (): string => {
 
 function getTimeOfDaySurge() {
   const h = new Date().getHours();
-  if (h >= 7 && h < 10) return { label: "Morning Rush", factor: 1.2, color: "text-amber-400", hint: "Auto prices tend to be 15-25% higher. Try booking via app." };
-  if (h >= 17 && h < 21) return { label: "Evening Rush", factor: 1.35, color: "text-red-400", hint: "Peak hour. Surge pricing likely on Ola/Uber. Consider waiting 20 min." };
-  if (h >= 21 || h < 6) return { label: "Night Hours", factor: 1.15, color: "text-blue-400", hint: "Late night. Use app-booked rides only. Avoid unknown shared autos." };
-  return { label: "Off-Peak", factor: 1.0, color: "text-green-400", hint: "Best time to travel. Normal fares apply." };
+  if (h >= 7 && h < 10) return { label: "Morning Rush", factor: 1.2, color: "text-amber-600 dark:text-amber-400", hint: "Auto prices tend to be 15-25% higher. Try booking via app." };
+  if (h >= 17 && h < 21) return { label: "Evening Rush", factor: 1.35, color: "text-rose-600 dark:text-red-400", hint: "Peak hour. Surge pricing likely on Ola/Uber. Consider waiting 20 min." };
+  if (h >= 21 || h < 6) return { label: "Night Hours", factor: 1.15, color: "text-indigo-600 dark:text-indigo-400", hint: "Late night. Use app-booked rides only. Avoid unknown shared autos." };
+  return { label: "Off-Peak", factor: 1.0, color: "text-emerald-600 dark:text-emerald-400", hint: "Best time to travel. Normal fares apply." };
 }
 
 function SourceBadge({ label }: { label?: string }) {
   const l = label?.toLowerCase() || "";
   if (l === "stale")
-    return <Badge className="text-[8px] bg-red-500/10 border border-red-500/20 text-red-400 py-0 px-1.5 font-bold uppercase shrink-0">Stale Fares</Badge>;
+    return <Badge className="text-[8px] bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 py-0 px-1.5 font-bold uppercase shrink-0">Stale Fares</Badge>;
   if (l === "community median" || l === "community" || l === "user_added")
-    return <Badge className="text-[8px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 py-0 px-1.5 font-bold uppercase shrink-0">Community Median</Badge>;
+    return <Badge className="text-[8px] bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-600 dark:text-indigo-400 py-0 px-1.5 font-bold uppercase shrink-0">Community Median</Badge>;
   if (l === "recent student report" || l === "recent report")
-    return <Badge className="text-[8px] bg-amber-500/10 border border-amber-500/20 text-amber-400 py-0 px-1.5 font-bold uppercase shrink-0">Recent Report</Badge>;
+    return <Badge className="text-[8px] bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400 py-0 px-1.5 font-bold uppercase shrink-0">Recent Report</Badge>;
   if (l === "official" || l === "seeded")
-    return <Badge className="text-[8px] bg-green-500/10 border border-green-500/20 text-green-400 py-0 px-1.5 font-bold uppercase shrink-0">Official</Badge>;
-  return <Badge className="text-[8px] bg-zinc-700/30 border border-zinc-700/50 text-zinc-500 py-0 px-1.5 font-bold uppercase shrink-0">Estimated</Badge>;
+    return <Badge className="text-[8px] bg-green-500/10 border border-green-200 dark:border-green-500/20 text-green-600 dark:text-green-400 py-0 px-1.5 font-bold uppercase shrink-0">Official</Badge>;
+  return <Badge className="text-[8px] bg-zinc-700/10 dark:bg-zinc-700/30 border border-zinc-200 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-500 py-0 px-1.5 font-bold uppercase shrink-0">Estimated</Badge>;
 }
 
 function ConfidenceBadge({ confidence }: { confidence?: string }) {
   const c = confidence?.toLowerCase() || "low";
   if (c === "high") {
-    return <Badge className="text-[8px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 py-0 px-1.5 font-bold uppercase shrink-0">High Trust</Badge>;
+    return <Badge className="text-[8px] bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 py-0 px-1.5 font-bold uppercase shrink-0">High Trust</Badge>;
   }
   if (c === "medium") {
-    return <Badge className="text-[8px] bg-blue-500/15 border border-blue-500/30 text-blue-400 py-0 px-1.5 font-bold uppercase shrink-0">Medium Trust</Badge>;
+    return <Badge className="text-[8px] bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 py-0 px-1.5 font-bold uppercase shrink-0">Medium Trust</Badge>;
   }
-  return <Badge className="text-[8px] bg-amber-500/10 border border-amber-500/25 text-amber-500/80 py-0 px-1.5 font-bold uppercase shrink-0">Low Trust</Badge>;
+  return <Badge className="text-[8px] bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 text-amber-600 dark:text-amber-500/80 py-0 px-1.5 font-bold uppercase shrink-0">Low Trust</Badge>;
 }
 
 function TravelPage() {
@@ -721,21 +721,16 @@ function TravelPage() {
             <span className="truncate sm:whitespace-nowrap">Campus Fare Guard</span>
           </h1>
         </div>
-        <div className="flex w-full items-center justify-end gap-2 md:w-auto md:shrink-0">
+        <div className="flex w-full items-center justify-end gap-3 md:w-auto md:shrink-0">
           <div className={`hidden sm:flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${timeContext.color}`}>
             <Clock className="h-3.5 w-3.5" />
             <span>{timeContext.label}</span>
           </div>
           {savings && savings.total_saved > 0 && (
-            <div className="flex flex-col items-end">
-              <Badge variant="outline" className="flex items-center gap-1 border-green-500/20 bg-green-500/5 px-2.5 py-1 font-mono text-xs font-bold text-green-400">
-                <TrendingDown className="h-3 w-3" />
-                <span>Saved ₹{savings.total_saved}</span>
-              </Badge>
-              <span className="text-[9px] text-green-400/80 font-bold block mt-0.5 tracking-wider uppercase">
-                ≈ {Math.max(1, Math.floor(savings.total_saved / 15))} cups of tapri chai! ☕
-              </span>
-            </div>
+            <Badge variant="outline" className="flex items-center gap-1 border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-500/5 px-2.5 py-1 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              <TrendingDown className="h-3 w-3" />
+              <span>Saved ₹{savings.total_saved}</span>
+            </Badge>
           )}
         </div>
       </div>
@@ -743,13 +738,13 @@ function TravelPage() {
       <div className="pb-24 max-w-5xl mx-auto space-y-5">
 
         {/* Time-of-Day Alert */}
-        <div className={`flex items-start gap-3 p-3.5 rounded-xl border ${timeContext.factor >= 1.3 ? "bg-red-500/5 border-red-500/20" : timeContext.factor >= 1.1 ? "bg-amber-500/5 border-amber-500/20" : "bg-green-500/5 border-green-500/20"}`}>
+        <div className={`flex items-start gap-3 p-3.5 rounded-xl border ${timeContext.factor >= 1.3 ? "bg-red-500/5 border-red-200 dark:border-red-500/20" : timeContext.factor >= 1.1 ? "bg-amber-500/5 border-amber-200 dark:border-amber-500/20" : "bg-emerald-500/5 border-emerald-200 dark:border-green-500/20"}`}>
           <Clock className={`h-4 w-4 shrink-0 mt-0.5 ${timeContext.color}`} />
           <div className="min-w-0">
             <p className={`text-xs font-black uppercase tracking-wider ${timeContext.color}`}>
               {timeContext.label}{timeContext.factor > 1 ? ` — ~${Math.round((timeContext.factor - 1) * 100)}% price increase expected` : " — Normal fares"}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{timeContext.hint}</p>
+            <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">{timeContext.hint}</p>
           </div>
         </div>
 
@@ -788,7 +783,7 @@ function TravelPage() {
                 />
               )}
             </div>
-            <Button onClick={() => setIsNewRouteOpen(true)} className="h-9 text-[10px] font-black uppercase tracking-wider bg-primary text-primary-foreground flex items-center gap-1.5 shrink-0">
+            <Button onClick={() => setIsNewRouteOpen(true)} className="h-9 text-[10px] md:text-xs font-black uppercase tracking-wider bg-primary text-primary-foreground flex items-center gap-1.5 shrink-0">
               <Plus className="h-3.5 w-3.5" />
               Add Route
             </Button>
@@ -802,7 +797,7 @@ function TravelPage() {
             <div className="text-center py-8 space-y-2">
               <Compass className="h-8 w-8 text-muted-foreground mx-auto animate-pulse" />
               <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">No routes for this campus yet</p>
-              <p className="text-[11px] text-muted-foreground/60">Click Add Route to seed estimated fares for {activeCollege}.</p>
+              <p className="text-[11px] md:text-xs text-muted-foreground/60">Click Add Route to seed estimated fares for {activeCollege}.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -814,15 +809,15 @@ function TravelPage() {
                 >
                   {selectedRouteId === r.id && <span className="absolute top-0 left-0 w-full h-[2px] bg-primary" />}
                   <div className="flex justify-between items-start gap-1 mb-1.5">
-                    <p className="text-[11px] font-black text-foreground uppercase tracking-wider truncate flex-1">{r.name.split("→")[0].trim()}</p>
+                    <p className="text-[11px] md:text-xs font-black text-foreground uppercase tracking-wider truncate flex-1">{r.name.split("→")[0].trim()}</p>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <SourceBadge label={r.source} />
                       <ConfidenceBadge confidence={r.confidence} />
                     </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground truncate">{r.name.split("→")[1]?.trim() || activeCollege}</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground truncate">{r.name.split("→")[1]?.trim() || activeCollege}</p>
                   {r.distance_km && (
-                    <p className="text-[10px] font-mono text-primary mt-1">{r.distance_km} km away</p>
+                    <p className="text-[10px] md:text-xs font-mono text-primary mt-1">{r.distance_km} km away</p>
                   )}
                 </button>
               ))}
@@ -841,17 +836,17 @@ function TravelPage() {
               <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-foreground truncate">Estimate Fare for Any Route</span>
               <Badge className="text-[8px] sm:text-[9px] bg-primary/10 border border-primary/20 text-primary font-bold uppercase py-0 px-1.5 shrink-0">Live</Badge>
             </div>
-            <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0 pl-2">{showCalculator ? "Hide" : "Open"}</span>
+            <span className="text-[10px] md:text-xs sm:text-xs text-muted-foreground shrink-0 pl-2">{showCalculator ? "Hide" : "Open"}</span>
           </button>
 
           {showCalculator && (
             <div className="px-4 pb-5 space-y-4 border-t border-border animate-[fadeIn_0.2s_ease-out]">
-              <p className="text-[11px] text-muted-foreground pt-3">
+              <p className="text-[11px] md:text-xs text-muted-foreground pt-3">
                 Going somewhere not in the list? Type any place and instantly see expected fares.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">From</label>
+                  <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">From</label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
@@ -865,7 +860,7 @@ function TravelPage() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">To</label>
+                  <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">To</label>
                   <div className="relative">
                     <Compass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
@@ -880,10 +875,10 @@ function TravelPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest self-center">Quick:</span>
+                <span className="text-[9px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest self-center">Quick:</span>
                 {["Railway Station", "Airport", "Bus Stand", "City Centre"].map((q) => (
                   <button key={q} onClick={() => setDynamicOrigin(q)}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-full border border-border bg-surface-raised text-muted-foreground hover:text-primary hover:border-primary/40 transition-all cursor-pointer">
+                    className="text-[10px] md:text-xs font-bold px-2.5 py-1 rounded-full border border-border bg-surface-raised text-muted-foreground hover:text-primary hover:border-primary/40 transition-all cursor-pointer">
                     {q}
                   </button>
                 ))}
@@ -912,9 +907,9 @@ function TravelPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                     {estimatedResult.modes.map((m) => (
                       <div key={m.mode} className="bg-surface-raised border border-border/60 rounded-xl p-3 space-y-1">
-                        <p className="text-[10px] font-black uppercase tracking-wider text-foreground">{m.mode.split(" ")[0]}</p>
+                        <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-foreground">{m.mode.split(" ")[0]}</p>
                         <p className="text-base font-black text-primary font-mono">₹{m.min_fare}–{m.max_fare}</p>
-                        <p className="text-[9px] text-muted-foreground">Median ₹{m.median_fare}</p>
+                        <p className="text-[9px] md:text-xs text-muted-foreground">Median ₹{m.median_fare}</p>
                       </div>
                     ))}
                   </div>
@@ -939,7 +934,7 @@ function TravelPage() {
                         }
                       });
                     }}
-                    className="w-full h-9 text-[10px] font-black uppercase tracking-wider border border-primary/30 bg-primary/5 text-primary hover:bg-primary hover:text-white transition-all rounded-lg flex items-center justify-center gap-1.5 cursor-pointer">
+                    className="w-full h-9 text-[10px] md:text-xs font-black uppercase tracking-wider border border-primary/30 bg-primary/5 text-primary hover:bg-primary hover:text-white transition-all rounded-lg flex items-center justify-center gap-1.5 cursor-pointer">
                     <ArrowRight className="h-3.5 w-3.5" /> Save Route & Open AI Coach
                   </button>
                 </div>
@@ -979,48 +974,48 @@ function TravelPage() {
             <Card className="bg-surface border border-border p-4 sm:p-5 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-primary animate-pulse" />
-                  <h3 className="text-xs font-black uppercase tracking-wider text-foreground">Dynamic Surge Forecasting & Travel Times</h3>
+                  <Clock className="h-4 w-4 text-zinc-400 animate-[fadeIn_0.3s_ease-out]" />
+                  <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase">Surge Forecasting</h3>
                 </div>
-                <Badge className="bg-primary/10 border border-primary/20 text-primary font-mono text-[9px] px-2 py-0.5 font-bold uppercase tracking-wider">Surge Projections</Badge>
+                <span className="text-[9px] md:text-xs font-black uppercase tracking-wider text-muted-foreground">Historical Ranges</span>
               </div>
               
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
                 {([
-                  { label: "Morning Rush", time: "08:00 - 11:00", factor: 1.20, active: timeContext.label === "Morning Rush", colorClass: "text-amber-400 border-amber-500/20 bg-amber-500/5", badgeLabel: "1.2x Surge" },
-                  { label: "Off-Peak", time: "11:00 - 17:00", factor: 1.0, active: timeContext.label === "Off-Peak", colorClass: "text-green-400 border-green-500/20 bg-green-500/5", badgeLabel: "Baseline" },
-                  { label: "Evening Rush", time: "17:00 - 21:00", factor: 1.35, active: timeContext.label === "Evening Rush", colorClass: "text-red-400 border-red-500/20 bg-red-500/5", badgeLabel: "1.35x Peak" },
-                  { label: "Night Hours", time: "21:00 - 08:00", factor: 1.15, active: timeContext.label === "Night Hours", colorClass: "text-indigo-400 border-indigo-500/20 bg-indigo-500/5", badgeLabel: "1.15x Night" }
+                  { label: "Morning Rush", time: "08:00 - 11:00", factor: 1.20, active: timeContext.label === "Morning Rush", badgeLabel: "1.2x Surge" },
+                  { label: "Off-Peak", time: "11:00 - 17:00", factor: 1.0, active: timeContext.label === "Off-Peak", badgeLabel: "Baseline" },
+                  { label: "Evening Rush", time: "17:00 - 21:00", factor: 1.35, active: timeContext.label === "Evening Rush", badgeLabel: "1.35x Peak" },
+                  { label: "Night Hours", time: "21:00 - 08:00", factor: 1.15, active: timeContext.label === "Night Hours", badgeLabel: "1.15x Night" }
                 ]).map((h) => {
                   const modeDetails = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
                   const currentFare = Math.round(modeDetails.median_fare * h.factor);
                   return (
                     <div
                       key={h.label}
-                      className={`p-3 rounded-xl border transition-all flex flex-col justify-between space-y-2 relative overflow-hidden ${
+                      className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between space-y-2 relative overflow-hidden ${
                         h.active
-                          ? "bg-primary/5 border-primary shadow-[0_0_15px_rgba(99,102,241,0.15)] animate-[pulse_2s_infinite]"
-                          : "bg-surface-raised/40 border-border/60 opacity-85 hover:opacity-100 hover:bg-surface-raised/70"
+                          ? "bg-surface-raised border-primary text-foreground ring-1 ring-primary/20 shadow-sm"
+                          : "bg-surface border-border/60 opacity-80 hover:opacity-100 hover:bg-surface-raised/40"
                       }`}
                     >
                       {h.active && (
-                        <div className="absolute top-0 right-0 bg-primary text-primary-foreground font-mono text-[6px] sm:text-[7px] font-black uppercase tracking-widest px-1.5 sm:px-2.5 py-0.5 rounded-bl-lg">
-                          Live Now
+                        <div className="absolute top-0 right-0 bg-primary text-primary-foreground font-mono text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-bl-lg">
+                          Active
                         </div>
                       )}
                       <div>
-                        <p className="text-[10px] sm:text-[11px] text-muted-foreground font-black uppercase tracking-wider">{h.label}</p>
-                        <p className="text-[8px] sm:text-[9px] text-muted-foreground/60">{h.time}</p>
+                        <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-foreground/90">{h.label}</p>
+                        <p className="text-[9px] text-zinc-500 font-medium">{h.time}</p>
                       </div>
 
                       <div className="flex justify-between items-end pt-1">
                         <div>
                           <p className="text-base sm:text-xl font-mono font-black text-foreground">₹{currentFare}</p>
-                          <p className="text-[7px] sm:text-[8px] text-muted-foreground/80 font-bold uppercase">Est. Fare</p>
+                          <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">Est. Fare</p>
                         </div>
-                        <Badge variant="outline" className={`text-[7px] sm:text-[8px] font-bold py-0.5 px-1.5 ${h.colorClass} shrink-0`}>
+                        <span className="text-[8px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded border border-border bg-surface-raised font-mono text-zinc-400">
                           {h.badgeLabel.split(" ")[0]}
-                        </Badge>
+                        </span>
                       </div>
                     </div>
                   );
@@ -1033,22 +1028,15 @@ function TravelPage() {
                 const surgePrice = Math.round(modeDetails.median_fare * timeContext.factor);
                 const isHighSurge = timeContext.factor >= 1.3;
                 const isMildSurge = timeContext.factor >= 1.15;
-                const bannerColor = isHighSurge
-                  ? "bg-red-500/5 border-red-500/15 text-red-400"
-                  : isMildSurge
-                  ? "bg-amber-500/5 border-amber-500/15 text-amber-400"
-                  : "bg-green-500/5 border-green-500/15 text-green-400";
                 
                 return (
-                  <div className={`p-4 border rounded-2xl flex items-start gap-3 ${bannerColor} animate-[fadeIn_0.2s_ease-out]`}>
-                    <span className="text-[10px] uppercase font-black tracking-widest shrink-0 mt-0.5 bg-background px-2.5 py-1 rounded-lg border border-current">
-                      Nudge
-                    </span>
+                  <div className="p-4 border border-border/80 bg-surface-raised/40 rounded-2xl flex items-start gap-3 shadow-sm">
+                    <div className="w-1.5 h-3.5 bg-primary rounded-full shrink-0 mt-1" />
                     <div className="space-y-1">
-                      <p className="text-xs font-bold uppercase tracking-wider text-foreground">
-                        Current Surge Estimate: ₹{surgePrice} ({selectedMode.split(" ")[0]})
+                      <p className="text-xs font-black uppercase tracking-wider text-foreground">
+                        Surge Alert: ₹{surgePrice} ({selectedMode.split(" ")[0]})
                       </p>
-                      <p className="text-[11px] text-muted-foreground/90 leading-relaxed">
+                      <p className="text-xs text-muted-foreground/90 leading-relaxed">
                         {isHighSurge
                           ? "Heavy peak surge pricing is active. Direct autos will quote flat rates of ₹" + Math.round(surgePrice * 1.2) + "+. Walk 100m away from the exit or pool a ride to save."
                           : isMildSurge
@@ -1101,8 +1089,8 @@ function TravelPage() {
                 </div>
 
                 {showCheckInfo && (
-                  <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-1.5 animate-[fadeIn_0.15s_ease-out] text-[11px] text-muted-foreground">
-                    <p className="font-bold text-foreground uppercase tracking-wider text-[10px]">How we calculate the "Fair Zone":</p>
+                  <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-1.5 animate-[fadeIn_0.15s_ease-out] text-[11px] md:text-xs text-muted-foreground">
+                    <p className="font-bold text-foreground uppercase tracking-wider text-[10px] md:text-xs">How we calculate the "Fair Zone":</p>
                     <ul className="list-disc pl-4 space-y-1">
                       <li>We fetch the exact driving distance via the <span className="font-semibold text-primary">Distance API</span>.</li>
                       <li>We apply local transport regulator tariffs (e.g. ₹60 base + ₹9.5/km).</li>
@@ -1113,12 +1101,12 @@ function TravelPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Driver Quote (₹)</label>
+                    <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Driver Quote (₹)</label>
                     <Input id="input-driver-quote" type="number" placeholder="e.g. 350" value={driverQuote}
                       onChange={(e) => setDriverQuote(e.target.value)} className="bg-surface-raised border-border text-sm font-bold h-11" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Normal Range for {selectedMode.split(" ")[0]}</label>
+                    <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Normal Range for {selectedMode.split(" ")[0]}</label>
                     <div className="h-11 bg-surface-raised border border-border rounded-lg flex items-center px-3">
                       {(() => {
                         const md = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
@@ -1157,20 +1145,20 @@ function TravelPage() {
                         <div className="absolute top-0.5 bottom-0.5 w-1.5 rounded-full bg-white shadow"
                           style={{ left: `${Math.min(95, (parseFloat(driverQuote) / Math.max(parseFloat(driverQuote), overchargeAnalysis.normalMax + 50)) * 90)}%` }} />
                       </div>
-                      <div className="flex justify-between text-[9px] text-muted-foreground font-bold">
+                      <div className="flex justify-between text-[9px] md:text-xs text-muted-foreground font-bold">
                         <span>Fair zone ₹{overchargeAnalysis.normalMin}–₹{overchargeAnalysis.normalMax}</span>
                         <span>Your quote ₹{driverQuote}</span>
                       </div>
                     </div>
                     {overchargeAnalysis.isOvercharged && (
                       <div className="pt-2 border-t border-border/30">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">You negotiated it down?</p>
+                        <p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">You negotiated it down?</p>
                         <div className="flex gap-2">
                           <Input id="input-negotiated-amount" type="number" placeholder="Amount you actually paid (₹)"
                             value={negotiatedAmount} onChange={(e) => setNegotiatedAmount(e.target.value)}
                             className="bg-background border-border text-xs h-9 flex-1" />
                           <Button id="btn-log-savings" disabled={!negotiatedAmount || logSavingsMutation.isPending} onClick={handleLogSavings}
-                            className="bg-green-600 text-white hover:bg-green-500 text-[10px] font-bold uppercase tracking-wider h-9 shrink-0">
+                            className="bg-green-600 text-white hover:bg-green-500 text-[10px] md:text-xs font-bold uppercase tracking-wider h-9 shrink-0">
                             Log Savings
                           </Button>
                         </div>
@@ -1203,7 +1191,7 @@ function TravelPage() {
                         </span>
                       </div>
 
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
                         Auto drivers quote high rates for long direct trips to campus. Break your journey into two shorter hops at a major intermediate junction to save money.
                       </p>
 
@@ -1258,22 +1246,22 @@ function TravelPage() {
                               </div>
                               <div className="text-center font-bold text-primary font-mono text-sm border-y sm:border-y-0 sm:border-x border-border/80 px-4 py-1 sm:py-0">
                                 Direct Auto Trip
-                                <span className="block text-[9px] text-muted-foreground">₹{directFare} flat fare</span>
+                                <span className="block text-[9px] md:text-xs text-muted-foreground">₹{directFare} flat fare</span>
                               </div>
                               <span className="font-bold text-foreground">Destination Terminal</span>
                             </div>
                           ) : (
-                            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-[11px]">
+                            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-[11px] md:text-xs">
                               {/* Leg 1 */}
                               <div className="flex-1 bg-surface-raised border border-border/85 rounded-xl p-3 flex flex-col justify-between space-y-1 relative">
                                 <span className="text-[8px] font-black uppercase text-primary tracking-wider">Hop 1</span>
                                 <p className="font-bold text-foreground">{splitInfo.leg1.split("➔")[0].trim()}</p>
-                                <p className="text-[10px] text-muted-foreground">to {splitInfo.stopName}</p>
+                                <p className="text-[10px] md:text-xs text-muted-foreground">to {splitInfo.stopName}</p>
                                 <p className="font-black text-primary font-mono mt-1 text-xs">₹{splitHopMode === "shared" ? splitInfo.shared1 : splitInfo.direct1}</p>
                               </div>
 
                               <div className="flex lg:flex-col items-center justify-center text-muted-foreground select-none py-1 lg:py-0">
-                                <span className="text-[9px] font-black uppercase text-amber-400 bg-amber-400/5 px-2 py-0.5 border border-amber-500/20 rounded-md">
+                                <span className="text-[9px] md:text-xs font-black uppercase text-amber-400 bg-amber-400/5 px-2 py-0.5 border border-amber-500/20 rounded-md">
                                   Change at {splitInfo.stopName}
                                 </span>
                                 <ArrowRight className="h-4 w-4 rotate-90 lg:rotate-0 text-muted-foreground mt-1 hidden sm:block" />
@@ -1283,7 +1271,7 @@ function TravelPage() {
                               <div className="flex-1 bg-surface-raised border border-border/85 rounded-xl p-3 flex flex-col justify-between space-y-1">
                                 <span className="text-[8px] font-black uppercase text-primary tracking-wider">Hop 2</span>
                                 <p className="font-bold text-foreground">{splitInfo.stopName}</p>
-                                <p className="text-[10px] text-muted-foreground">to destination terminal</p>
+                                <p className="text-[10px] md:text-xs text-muted-foreground">to destination terminal</p>
                                 <p className="font-black text-primary font-mono mt-1 text-xs">₹{splitHopMode === "shared" ? splitInfo.shared2 : splitInfo.direct2}</p>
                               </div>
                             </div>
@@ -1295,18 +1283,18 @@ function TravelPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
                           <div className="p-3.5 bg-green-500/5 border border-green-500/15 rounded-xl flex items-center justify-between">
                             <div>
-                              <p className="text-[9px] font-bold text-green-400 uppercase tracking-widest">Total Split Savings</p>
+                              <p className="text-[9px] md:text-xs font-bold text-green-400 uppercase tracking-widest">Total Split Savings</p>
                               <p className="text-lg font-black text-green-400 font-mono">₹{savings}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Tea Cups Saved</p>
+                              <p className="text-[9px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Tea Cups Saved</p>
                               <p className="text-xs font-bold text-muted-foreground">
                                 {chaiSaved} cups of tea
                               </p>
                             </div>
                           </div>
 
-                          <div className="p-3 bg-surface-raised border border-border rounded-xl text-[10px] text-muted-foreground/85 leading-relaxed">
+                          <div className="p-3 bg-surface-raised border border-border rounded-xl text-[10px] md:text-xs text-muted-foreground/85 leading-relaxed">
                             <span className="font-black text-foreground uppercase block text-[8px] tracking-widest mb-0.5 font-bold">Route Insider Tip</span>
                             {splitInfo.tip}
                           </div>
@@ -1328,16 +1316,16 @@ function TravelPage() {
                       return (
                         <div key={m.mode} className={`p-3.5 rounded-xl border transition-all ${isTarget ? "bg-primary/5 border-primary/40" : "bg-surface-raised border-border"}`}>
                           <div className="flex justify-between items-start gap-1">
-                            <p className="text-[11px] font-bold text-foreground uppercase tracking-wider">{m.mode.split(" ")[0]} Booking</p>
+                            <p className="text-[11px] md:text-xs font-bold text-foreground uppercase tracking-wider">{m.mode.split(" ")[0]} Booking</p>
                             {isTarget && <Badge className="text-[8px] bg-primary text-primary-foreground font-bold uppercase py-0 px-1 shrink-0">Active</Badge>}
                           </div>
                           <div className="flex justify-between items-baseline mt-2">
                             <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Ola/Uber Range</p>
+                              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Ola/Uber Range</p>
                               <p className="text-base font-black text-foreground font-mono">₹{m.min_fare} - ₹{m.max_fare}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Counter Anchor</p>
+                              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider font-bold">Counter Anchor</p>
                               <p className="text-xs font-mono font-bold text-primary">₹{m.median_fare}</p>
                             </div>
                           </div>
@@ -1348,7 +1336,7 @@ function TravelPage() {
                 </div>
 
                 <div className="space-y-3 pt-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Detailed Fare Distribution Ranges</p>
+                  <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-muted-foreground">Detailed Fare Distribution Ranges</p>
                   {selectedRoute.modes.map((m) => (
                     <div key={m.mode} className="space-y-1.5 border-b border-border/30 pb-3 last:border-0 last:pb-0">
                       <div className="flex justify-between items-center">
@@ -1361,33 +1349,47 @@ function TravelPage() {
                         <div className="absolute w-2 h-2 bg-white border border-primary rounded-full top-0 -translate-x-1/2"
                           style={{ left: `${(m.median_fare / 800) * 100}%` }} />
                       </div>
-                      <div className="flex justify-between text-[9px] text-muted-foreground font-bold">
+                      <div className="flex justify-between text-[9px] md:text-xs text-muted-foreground font-bold">
                         <span>Min ₹{m.min_fare}</span><span>Median ₹{m.median_fare}</span><span>Max ₹{m.max_fare}</span>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {selectedRoute.scam_warnings && (
-                    <div className="p-3.5 bg-red-500/5 border border-red-500/15 rounded-xl space-y-1">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-red-400 flex items-center gap-1.5"><AlertOctagon className="h-3.5 w-3.5" /> Local Trap Alert</p>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">{selectedRoute.scam_warnings}</p>
-                    </div>
-                  )}
-                  {selectedRoute.cheapest_route_combo && (
-                    <div className="p-3.5 bg-green-500/5 border border-green-500/15 rounded-xl space-y-1">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-green-400 flex items-center gap-1.5"><CircleDollarSign className="h-3.5 w-3.5" /> Cheapest Option</p>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">{selectedRoute.cheapest_route_combo}</p>
-                    </div>
-                  )}
-                </div>
-                {selectedRoute.safety_score_night && (
-                  <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-xl flex gap-2.5 items-start">
-                    <Clock className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-                    <div><p className="text-[10px] font-black uppercase tracking-wider text-blue-400">Night Safety</p>
-                    <p className="text-[11px] text-muted-foreground">{selectedRoute.safety_score_night}</p></div>
+                <div className="space-y-4 pt-4 border-t border-border/40">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="w-1.5 h-3.5 bg-primary rounded-full" />
+                    <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase">Route Guidelines</h3>
                   </div>
-                )}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {selectedRoute.scam_warnings && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-zinc-400">
+                          <AlertOctagon className="h-4 w-4 text-red-500/70 shrink-0" />
+                          <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Scam Warnings</h4>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed pl-5.5">{selectedRoute.scam_warnings}</p>
+                      </div>
+                    )}
+                    {selectedRoute.cheapest_route_combo && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-zinc-400">
+                          <CircleDollarSign className="h-4 w-4 text-green-500/70 shrink-0" />
+                          <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Cheapest Combo</h4>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed pl-5.5">{selectedRoute.cheapest_route_combo}</p>
+                      </div>
+                    )}
+                    {selectedRoute.safety_score_night && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-zinc-400">
+                          <Clock className="h-4 w-4 text-blue-500/70 shrink-0" />
+                          <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Night Safety</h4>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed pl-5.5">{selectedRoute.safety_score_night}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </Card>
             )}
 
@@ -1400,7 +1402,7 @@ function TravelPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Transport Mode</label>
+                    <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Transport Mode</label>
                     <div className="flex flex-wrap gap-2">
                       {selectedRoute.modes.map((m) => (
                         <button key={m.mode} onClick={() => setSplitMode(m.mode)}
@@ -1411,7 +1413,7 @@ function TravelPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Number of People</label>
+                    <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Number of People</label>
                     <div className="flex gap-2">
                       {[2, 3, 4, 5].map((n) => (
                         <button key={n} onClick={() => setSplitPeople(n)}
@@ -1424,7 +1426,7 @@ function TravelPage() {
                 </div>
                 {splitFareData && (
                   <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 text-center space-y-1">
-                    <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest">Each person pays</p>
+                    <p className="text-[11px] md:text-xs text-muted-foreground font-bold uppercase tracking-widest">Each person pays</p>
                     <p className="text-4xl font-black text-primary font-mono">₹{splitFareData.perPerson}</p>
                     <p className="text-xs text-muted-foreground">Based on median fare ₹{splitFareData.median} / {splitPeople} people</p>
                     <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
@@ -1434,7 +1436,7 @@ function TravelPage() {
                   </div>
                 )}
                 <div className="p-3.5 bg-surface-raised border border-border rounded-xl">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground mb-1">Pro Tip</p>
+                  <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-muted-foreground mb-1">Pro Tip</p>
                   <p className="text-xs text-muted-foreground/80 leading-relaxed">Pool a cab with roommates. One person books, others pay via UPI. Saves ₹30–50 each vs separate autos.</p>
                 </div>
 
@@ -1452,14 +1454,14 @@ function TravelPage() {
                       <div className="flex flex-col sm:flex-row gap-2.5">
                         <Button
                           onClick={() => setTravelTimingPrompt("early_or_night")}
-                          className="w-full sm:flex-1 bg-primary text-primary-foreground font-black uppercase tracking-wider text-[10px] h-9"
+                          className="w-full sm:flex-1 bg-primary text-primary-foreground font-black uppercase tracking-wider text-[10px] md:text-xs h-9"
                         >
                           Yes, Peak / Night
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => setTravelTimingPrompt("regular")}
-                          className="w-full sm:flex-1 border-border text-foreground font-black uppercase tracking-wider text-[10px] h-9"
+                          className="w-full sm:flex-1 border-border text-foreground font-black uppercase tracking-wider text-[10px] md:text-xs h-9"
                         >
                           No, Regular Hours
                         </Button>
@@ -1469,7 +1471,7 @@ function TravelPage() {
                     <div className="space-y-4 animate-[fadeIn_0.2s_ease-out]">
                       {/* Interactive Advice Banner */}
                       <div className="p-4 bg-background/50 border border-border/80 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        <p className="text-[11px] md:text-xs text-muted-foreground leading-relaxed">
                           {travelTimingPrompt === "early_or_night"
                             ? "Auto and Cab prices have night charges active and direct travel is expensive. We highly recommend joining or creating a campus ride pool group below."
                             : "Baseline fare window is active. Direct travel is cheap and easily available. However, if you still want to split costs, active pools are listed below."}
@@ -1477,7 +1479,7 @@ function TravelPage() {
                         <button
                           type="button"
                           onClick={() => setTravelTimingPrompt("unanswered")}
-                          className="text-[9px] font-bold text-primary hover:underline uppercase tracking-wider shrink-0 cursor-pointer"
+                          className="text-[9px] md:text-xs font-bold text-primary hover:underline uppercase tracking-wider shrink-0 cursor-pointer"
                         >
                           Change timing
                         </button>
@@ -1493,7 +1495,7 @@ function TravelPage() {
                             setPoolMode(splitMode.split(" ")[0]);
                             setIsCreatePoolOpen(true);
                           }}
-                          className="h-8 text-[10px] font-black uppercase tracking-wider bg-primary hover:bg-primary/95 text-primary-foreground flex items-center gap-1 shrink-0"
+                          className="h-8 text-[10px] md:text-xs font-black uppercase tracking-wider bg-primary hover:bg-primary/95 text-primary-foreground flex items-center gap-1 shrink-0"
                         >
                           <Plus className="h-3.5 w-3.5" /> Publish Pool
                         </Button>
@@ -1504,7 +1506,7 @@ function TravelPage() {
                       ) : !ridePools || ridePools.length === 0 ? (
                         <div className="p-5 border border-dashed border-border rounded-2xl text-center space-y-1.5 bg-surface-raised/40">
                           <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">No active ride pools for this route</p>
-                          <p className="text-[10px] text-muted-foreground/60 leading-relaxed">Planning to head out? Create a ride pool so students at {activeCollege} can join and split fares with you!</p>
+                          <p className="text-[10px] md:text-xs text-muted-foreground/60 leading-relaxed">Planning to head out? Create a ride pool so students at {activeCollege} can join and split fares with you!</p>
                         </div>
                       ) : (
                         <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
@@ -1523,14 +1525,14 @@ function TravelPage() {
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <Badge className="bg-primary/10 border-primary/20 text-primary text-[8px] font-mono py-0 px-1.5 font-bold uppercase">{p.mode}</Badge>
                                       <span className="font-bold text-foreground">{p.departure_time}</span>
-                                      <span className="text-[11px] text-muted-foreground font-semibold">({p.co_passengers.length}/{p.max_passengers} joined)</span>
+                                      <span className="text-[11px] md:text-xs text-muted-foreground font-semibold">({p.co_passengers.length}/{p.max_passengers} joined)</span>
                                     </div>
-                                    {p.description && <p className="text-[11px] text-muted-foreground italic">"{p.description}"</p>}
+                                    {p.description && <p className="text-[11px] md:text-xs text-muted-foreground italic">"{p.description}"</p>}
                                     <div className="space-y-1.5 pt-1.5 border-t border-border/30 mt-2">
-                                      <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">Seat Occupancy Map</p>
+                                      <p className="text-[9px] md:text-xs text-muted-foreground uppercase font-black tracking-widest">Seat Occupancy Map</p>
                                       <div className="flex gap-2 flex-wrap pt-0.5">
                                         {/* Host Seat */}
-                                        <div className="flex items-center gap-1.5 bg-primary/10 border border-primary/30 text-primary rounded-lg py-1 px-2.5 text-[10px] font-bold">
+                                        <div className="flex items-center gap-1.5 bg-primary/10 border border-primary/30 text-primary rounded-lg py-1 px-2.5 text-[10px] md:text-xs font-bold">
                                           <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                                           <span>{p.host_name.split(" ")[0]} (Host)</span>
                                         </div>
@@ -1540,14 +1542,14 @@ function TravelPage() {
                                           const passenger = p.co_passengers.filter((cp: any) => cp.user_id !== p.host_id)[idx];
                                           if (passenger) {
                                             return (
-                                              <div key={idx} className="flex items-center gap-1.5 bg-zinc-800 border border-border text-foreground rounded-lg py-1 px-2.5 text-[10px] font-bold">
+                                              <div key={idx} className="flex items-center gap-1.5 bg-zinc-800 border border-border text-foreground rounded-lg py-1 px-2.5 text-[10px] md:text-xs font-bold">
                                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                                 <span>{passenger.full_name.split(" ")[0]}</span>
                                               </div>
                                             );
                                           } else {
                                             return (
-                                              <div key={idx} className="flex items-center gap-1.5 bg-surface/50 border border-dashed border-border/60 text-muted-foreground/60 rounded-lg py-1 px-2.5 text-[10px] font-medium select-none">
+                                              <div key={idx} className="flex items-center gap-1.5 bg-surface/50 border border-dashed border-border/60 text-muted-foreground/60 rounded-lg py-1 px-2.5 text-[10px] md:text-xs font-medium select-none">
                                                 <span className="h-1.5 w-1.5 rounded-full bg-zinc-700" />
                                                 <span>Available</span>
                                               </div>
@@ -1566,7 +1568,7 @@ function TravelPage() {
                                         )}`}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="h-8 px-2.5 rounded-lg border border-green-600/35 bg-green-500/5 hover:bg-green-500/10 text-green-400 font-bold uppercase tracking-wider text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer"
+                                        className="h-8 px-2.5 rounded-lg border border-green-600/35 bg-green-500/5 hover:bg-green-500/10 text-green-400 font-bold uppercase tracking-wider text-[10px] md:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
                                       >
                                         Coordinate
                                       </a>
@@ -1583,7 +1585,7 @@ function TravelPage() {
                                     </button>
                                     
                                     {p.status === "completed" ? (
-                                      <Badge className="bg-green-500/10 text-green-400 border border-green-500/20 font-bold uppercase text-[9px] py-1 px-2 shrink-0">
+                                      <Badge className="bg-green-500/10 text-green-400 border border-green-500/20 font-bold uppercase text-[9px] md:text-xs py-1 px-2 shrink-0">
                                         Ride Finalized
                                       </Badge>
                                     ) : (
@@ -1595,7 +1597,7 @@ function TravelPage() {
                                               setPoolFinalFare(String(splitFareData?.median || 150));
                                               setIsCompletePoolOpen(true);
                                             }}
-                                            className="h-8 text-[10px] font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 text-white shrink-0"
+                                            className="h-8 text-[10px] md:text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 text-white shrink-0"
                                           >
                                             Finalize & Split
                                           </Button>
@@ -1605,7 +1607,7 @@ function TravelPage() {
                                             variant="outline"
                                             onClick={() => leavePoolMutation.mutate(p.id)}
                                             disabled={leavePoolMutation.isPending}
-                                            className="h-8 text-[10px] font-black uppercase tracking-wider border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/10 shrink-0"
+                                            className="h-8 text-[10px] md:text-xs font-black uppercase tracking-wider border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/10 shrink-0"
                                           >
                                             {isHost ? "Cancel" : "Leave"}
                                           </Button>
@@ -1613,7 +1615,7 @@ function TravelPage() {
                                           <Button
                                             onClick={() => joinPoolMutation.mutate(p.id)}
                                             disabled={isFull || joinPoolMutation.isPending}
-                                            className="h-8 text-[10px] font-black uppercase tracking-wider bg-green-600 hover:bg-green-500 text-white shrink-0"
+                                            className="h-8 text-[10px] md:text-xs font-black uppercase tracking-wider bg-green-600 hover:bg-green-500 text-white shrink-0"
                                           >
                                             {isFull ? "Full" : "Join"}
                                           </Button>
@@ -1625,7 +1627,7 @@ function TravelPage() {
     
                                 {p.status === "completed" && p.splits && (
                                   <div className="w-full bg-background/50 border border-border/60 rounded-xl p-3 space-y-2.5">
-                                    <div className="flex justify-between items-center text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                                    <div className="flex justify-between items-center text-[9px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">
                                       <span>Split Ledger (₹{p.split_amount} each)</span>
                                       <span className="text-primary font-mono">Total Paid: ₹{p.final_amount}</span>
                                     </div>
@@ -1738,8 +1740,8 @@ function TravelPage() {
                 </div>
 
                 {showCoachInfo && (
-                  <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl space-y-1.5 animate-[fadeIn_0.15s_ease-out] text-[11px] text-muted-foreground">
-                    <p className="font-bold text-foreground uppercase tracking-wider text-[10px]">What the Coach does:</p>
+                  <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl space-y-1.5 animate-[fadeIn_0.15s_ease-out] text-[11px] md:text-xs text-muted-foreground">
+                    <p className="font-bold text-foreground uppercase tracking-wider text-[10px] md:text-xs">What the Coach does:</p>
                     <ul className="list-disc pl-4 space-y-1">
                       <li>Translates target fair prices into street-smart, polite Hindi scripts.</li>
                       <li>Incorporate specific contexts like heavy luggage, pouring rain, or night safety.</li>
@@ -1749,12 +1751,12 @@ function TravelPage() {
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Ola/Uber App Price (₹)</label>
+                    <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Ola/Uber App Price (₹)</label>
                     <Input id="input-ai-app-quote" type="number" placeholder="What is the app showing now?"
                       value={appQuote} onChange={(e) => setAppQuote(e.target.value)} className="bg-surface-raised border-border text-xs h-10" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Your Situation (Optional)</label>
+                    <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Your Situation (Optional)</label>
                     <Input id="input-ai-situation" placeholder="e.g. Raining, heavy bags, late night..."
                       value={userSituation} onChange={(e) => setUserSituation(e.target.value)} className="bg-surface-raised border-border text-xs h-10" />
                   </div>
@@ -1769,7 +1771,7 @@ function TravelPage() {
                         <p className={`text-xs font-black ${surgeFactor > 1.5 ? "text-red-400" : "text-amber-400"}`}>
                           {surgeFactor > 1.5 ? "High Surge Detected" : "Mild Surge"} — {Math.round(surgeFactor * 100 - 100)}% above community median (₹{md.median_fare})
                         </p>
-                        <p className="text-[11px] text-muted-foreground">{surgeFactor > 1.5 ? "Consider waiting 15–20 min or use a shared auto." : `Counter with ₹${md.median_fare} as your anchor.`}</p>
+                        <p className="text-[11px] md:text-xs text-muted-foreground">{surgeFactor > 1.5 ? "Consider waiting 15–20 min or use a shared auto." : `Counter with ₹${md.median_fare} as your anchor.`}</p>
                       </div>
                     </div>
                   );
@@ -1782,7 +1784,7 @@ function TravelPage() {
                 {selectedRoute.negotiation_helper && !aiCoachResult && (
                   <div className="bg-surface-raised border border-border/80 rounded-2xl p-4.5 space-y-3 relative overflow-hidden animate-[fadeIn_0.2s_ease-out]">
                     <div className="flex justify-between items-center">
-                      <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Suggested Pitch</span>
+                      <span className="text-[9px] md:text-xs bg-primary/10 text-primary border border-primary/20 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Suggested Pitch</span>
                       <button onClick={() => copyScriptToClipboard(selectedRoute.negotiation_helper)}
                         className="text-muted-foreground hover:text-foreground p-1.5 bg-surface border border-border rounded-md transition-all cursor-pointer">
                         {copiedScript ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -1791,7 +1793,7 @@ function TravelPage() {
                     <div className="relative bg-background border border-border/60 rounded-xl rounded-tl-none p-3.5 max-w-[90%]">
                       <p className="text-xs font-bold text-foreground leading-relaxed italic pr-2">&ldquo;{selectedRoute.negotiation_helper}&rdquo;</p>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">Tap the copy icon to copy the local campus counter-offer script.</p>
+                    <p className="text-[10px] md:text-xs text-muted-foreground">Tap the copy icon to copy the local campus counter-offer script.</p>
                   </div>
                 )}
                 {aiCoachResult && (
@@ -1802,12 +1804,12 @@ function TravelPage() {
                           {aiCoachResult.surge_factor > 1.0 ? `${aiCoachResult.surge_factor}x surge` : "No surge"}
                         </Badge>
                         {aiCoachResult.community_median && (
-                          <Badge className="bg-white/5 border border-border text-muted-foreground font-mono text-[9px] py-0.5 px-1.5">
+                          <Badge className="bg-white/5 border border-border text-muted-foreground font-mono text-[9px] md:text-xs py-0.5 px-1.5">
                             Community median ₹{aiCoachResult.community_median}
                           </Badge>
                         )}
                         {aiCoachResult.report_count !== undefined && (
-                          <Badge className="bg-white/5 border border-border text-muted-foreground text-[9px] py-0.5 px-1.5">
+                          <Badge className="bg-white/5 border border-border text-muted-foreground text-[9px] md:text-xs py-0.5 px-1.5">
                             {aiCoachResult.report_count} student reports
                           </Badge>
                         )}
@@ -1815,7 +1817,7 @@ function TravelPage() {
                     )}
                     <div className="bg-surface-raised border border-border/80 rounded-2xl p-4.5 space-y-3 relative overflow-hidden">
                       <div className="flex justify-between items-center">
-                        <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">AI Negotiator Says</span>
+                        <span className="text-[9px] md:text-xs bg-primary/10 text-primary border border-primary/20 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">AI Negotiator Says</span>
                         <button onClick={() => copyScriptToClipboard(aiCoachResult.script)}
                           className="text-muted-foreground hover:text-foreground p-1.5 bg-surface border border-border rounded-md transition-all cursor-pointer">
                           {copiedScript ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -1824,10 +1826,10 @@ function TravelPage() {
                       <div className="relative bg-background border border-border/60 rounded-xl rounded-tl-none p-3.5 max-w-[90%]">
                         <p className="text-xs font-bold text-foreground leading-relaxed italic pr-2">&ldquo;{aiCoachResult.script}&rdquo;</p>
                       </div>
-                      <p className="text-[10px] text-muted-foreground">Tap the copy icon to copy the generated script to show the driver.</p>
+                      <p className="text-[10px] md:text-xs text-muted-foreground">Tap the copy icon to copy the generated script to show the driver.</p>
                     </div>
                     <div className="space-y-1.5">
-                      <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Tactical Tips</p>
+                      <p className="text-[9px] md:text-xs text-muted-foreground font-bold uppercase tracking-widest">Tactical Tips</p>
                       <ul className="space-y-1.5">
                         {aiCoachResult.tactics.map((tip, idx) => (
                           <li key={idx} className="flex gap-2 items-start text-xs text-foreground/80">
@@ -1838,7 +1840,7 @@ function TravelPage() {
                       </ul>
                     </div>
                     {aiCoachResult.safety && (
-                      <div className="p-3 bg-red-500/5 border border-red-500/15 rounded-lg text-[11px] text-foreground">
+                      <div className="p-3 bg-red-500/5 border border-red-500/15 rounded-lg text-[11px] md:text-xs text-foreground">
                         <span className="font-bold text-red-400 uppercase tracking-wide mr-1.5">Safety:</span>
                         {aiCoachResult.safety}
                       </div>
@@ -1862,7 +1864,7 @@ function TravelPage() {
                           const md = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
                           startNegotiationGame(md.median_fare);
                         }}
-                        className="bg-primary hover:bg-primary/95 text-[10px] font-black uppercase tracking-wider px-4 py-1.5 h-8 mx-auto"
+                        className="bg-primary hover:bg-primary/95 text-[10px] md:text-xs font-black uppercase tracking-wider px-4 py-1.5 h-8 mx-auto"
                       >
                         Start Simulator Game
                       </Button>
@@ -1871,7 +1873,7 @@ function TravelPage() {
                     <div className="bg-surface-raised border border-border rounded-xl p-4.5 space-y-3 animate-[fadeIn_0.2s_ease-out]">
                       <div className="flex justify-between items-center">
                         <div className="flex flex-col">
-                          <span className="text-[9px] font-black text-muted-foreground uppercase">Negotiating with:</span>
+                          <span className="text-[9px] md:text-xs font-black text-muted-foreground uppercase">Negotiating with:</span>
                           <span className="text-xs font-bold text-foreground">{gameDriverName}</span>
                         </div>
                         <Badge className={`text-[9px] font-bold uppercase ${
@@ -1891,7 +1893,7 @@ function TravelPage() {
                       {/* Student Dialogue Options */}
                       {gameStep === 1 && (
                         <div className="space-y-2 pt-2">
-                          <p className="text-[9px] text-muted-foreground uppercase font-bold">Pick your negotiation tactic:</p>
+                          <p className="text-[9px] md:text-xs text-muted-foreground uppercase font-bold">Pick your negotiation tactic:</p>
                           <div className="flex flex-col gap-2">
                             {(() => {
                               const md = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
@@ -1901,28 +1903,28 @@ function TravelPage() {
                                     onClick={() => playNegotiationOption("app", md.median_fare)}
                                     className="text-left w-full p-2.5 rounded-lg border border-border bg-surface hover:border-primary transition-all text-xs text-foreground cursor-pointer"
                                   >
-                                    <span className="text-indigo-400 font-bold block text-[9px] uppercase tracking-wider mb-0.5">App Benchmark</span>
+                                    <span className="text-indigo-400 font-bold block text-[9px] md:text-xs uppercase tracking-wider mb-0.5">App Benchmark</span>
                                     <span>"Bhaiya, app par ₹{md.median_fare} dikha raha hai, chalo na."</span>
                                   </button>
                                   <button
                                     onClick={() => playNegotiationOption("firm", md.median_fare)}
                                     className="text-left w-full p-2.5 rounded-lg border border-border bg-surface hover:border-primary transition-all text-xs text-foreground cursor-pointer"
                                   >
-                                    <span className="text-green-400 font-bold block text-[9px] uppercase tracking-wider mb-0.5">Student rate appeal</span>
+                                    <span className="text-green-400 font-bold block text-[9px] md:text-xs uppercase tracking-wider mb-0.5">Student rate appeal</span>
                                     <span>"Regular student rate ₹{md.median_fare + 10} chalo, daily ka hai."</span>
                                   </button>
                                   <button
                                     onClick={() => playNegotiationOption("walk", md.median_fare)}
                                     className="text-left w-full p-2.5 rounded-lg border border-border bg-surface hover:border-primary transition-all text-xs text-foreground cursor-pointer"
                                   >
-                                    <span className="text-amber-400 font-bold block text-[9px] uppercase tracking-wider mb-0.5">Power Move (Walk Away)</span>
+                                    <span className="text-amber-400 font-bold block text-[9px] md:text-xs uppercase tracking-wider mb-0.5">Power Move (Walk Away)</span>
                                     <span>"[Walk Away] Acha theek hai, main koi doosri auto dekh leta hoon."</span>
                                   </button>
                                   <button
                                     onClick={() => playNegotiationOption("low", md.median_fare)}
                                     className="text-left w-full p-2.5 rounded-lg border border-border bg-surface hover:border-primary transition-all text-xs text-foreground cursor-pointer"
                                   >
-                                    <span className="text-red-400 font-bold block text-[9px] uppercase tracking-wider mb-0.5">Lowball offer</span>
+                                    <span className="text-red-400 font-bold block text-[9px] md:text-xs uppercase tracking-wider mb-0.5">Lowball offer</span>
                                     <span>"₹{Math.round(md.median_fare * 0.7)} chaloge kya?"</span>
                                   </button>
                                 </>
@@ -1938,13 +1940,13 @@ function TravelPage() {
                           <p className="text-xs text-muted-foreground">{gameFeedback}</p>
                           {gameSuccess && (
                             <div className="p-3 bg-green-500/5 border border-green-500/20 rounded-xl text-center">
-                              <p className="text-[10px] font-bold text-green-400 uppercase">You Negotiated Successfully!</p>
+                              <p className="text-[10px] md:text-xs font-bold text-green-400 uppercase">You Negotiated Successfully!</p>
                               <p className="text-lg font-black text-foreground font-mono mt-1">₹{gameFinalPrice}</p>
                             </div>
                           )}
                           <Button
                             onClick={() => setGameStep(0)}
-                            className="w-full bg-white/5 border border-border text-foreground hover:bg-white/10 text-[10px] font-black uppercase tracking-wider h-8"
+                            className="w-full bg-white/5 border border-border text-foreground hover:bg-white/10 text-[10px] md:text-xs font-black uppercase tracking-wider h-8"
                           >
                             Play Again
                           </Button>
@@ -1964,11 +1966,11 @@ function TravelPage() {
                     <h3 className="text-sm font-black uppercase tracking-wider text-foreground">Community Reports</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">{reports ? reports.length + " real fare" + (reports.length !== 1 ? "s" : "") + " reported by students" : "Real fares paid by students"}</p>
                   </div>
-                  <Button onClick={() => setIsReportOpen(true)} className="h-8 text-[10px] font-black uppercase tracking-wider bg-white/5 border border-border hover:bg-white/10 text-foreground flex items-center gap-1.5">
+                  <Button onClick={() => setIsReportOpen(true)} className="h-8 text-[10px] md:text-xs font-black uppercase tracking-wider bg-white/5 border border-border hover:bg-white/10 text-foreground flex items-center gap-1.5">
                     <Plus className="h-3.5 w-3.5" /> Report Your Fare
                   </Button>
                 </div>
-                <div className="p-3 bg-primary/5 border border-primary/15 rounded-xl text-[11px] text-muted-foreground">
+                <div className="p-3 bg-primary/5 border border-primary/15 rounded-xl text-[11px] md:text-xs text-muted-foreground">
                   Every fare you report updates the live community median — making this more accurate for every student who comes after you.
                 </div>
                 <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -1978,14 +1980,14 @@ function TravelPage() {
                     <div className="text-center py-8 space-y-2">
                       <Users className="h-8 w-8 text-muted-foreground mx-auto" />
                       <p className="text-xs text-muted-foreground font-bold">No reports yet — be the first!</p>
-                      <p className="text-[11px] text-muted-foreground/60">Your report helps the next student avoid getting overcharged.</p>
+                      <p className="text-[11px] md:text-xs text-muted-foreground/60">Your report helps the next student avoid getting overcharged.</p>
                     </div>
                   ) : (
                     reports.map((r) => (
                       <div key={r.id} className="p-3 bg-surface-raised rounded-xl border border-border/80 flex justify-between items-start gap-2">
                         <div className="space-y-0.5 min-w-0">
                           <p className="text-xs font-black text-foreground uppercase tracking-wider">{r.mode.split(" ")[0]}</p>
-                          <p className="text-[10px] text-muted-foreground">By {r.user_name} · {r.time_of_day}</p>
+                          <p className="text-[10px] md:text-xs text-muted-foreground">By {r.user_name} · {r.time_of_day}</p>
                           {r.luggage && <Badge className="text-[8px] bg-primary/10 border-primary/20 text-primary py-0 px-1">With luggage</Badge>}
                           
                           {/* Crowdsourcing Vote Buttons */}
@@ -2019,7 +2021,7 @@ function TravelPage() {
                         <div className="text-right shrink-0">
                           <p className="text-sm font-black text-foreground font-mono">₹{r.amount_paid}</p>
                           {r.driver_quote > r.amount_paid && (
-                            <p className="text-[10px] text-green-400 font-bold">Saved ₹{r.driver_quote - r.amount_paid}</p>
+                            <p className="text-[10px] md:text-xs text-green-400 font-bold">Saved ₹{r.driver_quote - r.amount_paid}</p>
                           )}
                         </div>
                       </div>
@@ -2033,12 +2035,12 @@ function TravelPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex gap-2.5 items-center p-3.5 bg-surface border border-border rounded-xl">
                   <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div><p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Drop Point</p>
+                  <div><p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Drop Point</p>
                   <p className="text-xs font-bold text-foreground">{selectedRoute.campus_landmark}</p></div>
                 </div>
                 <div className="flex gap-2.5 items-center p-3.5 bg-surface border border-border rounded-xl">
                   <PhoneCall className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div><p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Campus Security</p>
+                  <div><p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Campus Security</p>
                   <a href="tel:+917512449800" className="text-xs font-bold text-primary hover:underline font-mono">+91 751 244 9800</a></div>
                 </div>
               </div>
@@ -2063,16 +2065,16 @@ function TravelPage() {
             });
           }} className="space-y-4 py-2 text-xs">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Final Amount Paid to Driver (₹)</label>
+              <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Final Amount Paid to Driver (₹)</label>
               <Input id="input-pool-final-amount" type="number" placeholder="e.g. 150" value={poolFinalFare} onChange={(e) => setPoolFinalFare(e.target.value)} className="bg-surface border-border" required />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Your UPI ID (to receive splits)</label>
+              <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Your UPI ID (to receive splits)</label>
               <Input id="input-pool-host-upi" placeholder="e.g. name@upi or 9876543210@paytm" value={poolHostUpi} onChange={(e) => setPoolHostUpi(e.target.value)} className="bg-surface border-border" required />
             </div>
 
-            <div className="p-3 bg-surface-raised border border-border rounded-xl text-[11px] text-muted-foreground leading-relaxed">
+            <div className="p-3 bg-surface-raised border border-border rounded-xl text-[11px] md:text-xs text-muted-foreground leading-relaxed">
               When finalized, PocketBuddy will automatically split this amount equally among all riders. It will generate direct-pay UPI intent links for them and auto-log this travel expense in your budget ledger.
             </div>
 
@@ -2091,7 +2093,7 @@ function TravelPage() {
           <DialogHeader><DialogTitle className="text-sm font-black uppercase tracking-wider">Report Fare You Paid</DialogTitle></DialogHeader>
           <form onSubmit={handlePostReport} className="space-y-4 py-2 text-xs">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Mode</label>
+              <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Mode</label>
               <div className="flex flex-wrap gap-1.5">
                 {(selectedRoute?.modes || []).map((m) => (
                   <button key={m.mode} type="button" onClick={() => setReportMode(m.mode)}
@@ -2103,16 +2105,16 @@ function TravelPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Driver Quoted (₹)</label>
+                <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Driver Quoted (₹)</label>
                 <Input id="input-report-quote" type="number" placeholder="e.g. 300" value={reportQuote} onChange={(e) => setReportQuote(e.target.value)} className="bg-surface border-border" required />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">You Paid (₹)</label>
+                <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">You Paid (₹)</label>
                 <Input id="input-report-paid" type="number" placeholder="e.g. 160" value={reportPaid} onChange={(e) => setReportPaid(e.target.value)} className="bg-surface border-border" required />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Time of Day</label>
+              <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Time of Day</label>
               <div className="flex gap-1">
                 {["Morning", "Afternoon", "Evening", "Night"].map((t) => (
                   <button key={t} type="button" onClick={() => setReportTime(t)}
@@ -2148,20 +2150,20 @@ function TravelPage() {
           <DialogHeader><DialogTitle className="text-sm font-black uppercase tracking-wider">Add Travel Route</DialogTitle></DialogHeader>
           <form onSubmit={handleCreateRoute} className="space-y-4 py-2 text-xs">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Route Name</label>
+              <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Route Name</label>
               <Input id="input-route-name" placeholder="e.g. Railway Station to BITS Campus" value={newRouteName} onChange={(e) => setNewRouteName(e.target.value)} className="bg-surface border-border" required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Distance (km)</label>
+                <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Distance (km)</label>
                 <Input id="input-route-distance" type="number" step="0.1" placeholder="e.g. 12.5" value={newRouteDistance} onChange={(e) => setNewRouteDistance(e.target.value)} className="bg-surface border-border" required />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Drop Landmark</label>
+                <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Drop Landmark</label>
                 <Input id="input-route-landmark" placeholder="e.g. Main Gate" value={newRouteLandmark} onChange={(e) => setNewRouteLandmark(e.target.value)} className="bg-surface border-border" />
               </div>
             </div>
-            <div className="p-3 bg-surface-raised border border-border rounded-xl text-[11px] text-muted-foreground">
+            <div className="p-3 bg-surface-raised border border-border rounded-xl text-[11px] md:text-xs text-muted-foreground">
               Fares for Auto, Cab, and Bike are auto-estimated from the distance. Community reports will improve accuracy over time.
             </div>
             <DialogFooter>
@@ -2192,11 +2194,11 @@ function TravelPage() {
           }} className="space-y-4 py-2 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Departure Time</label>
+                <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Departure Time</label>
                 <Input id="input-pool-time" type="datetime-local" value={poolTime} onChange={(e) => setPoolTime(e.target.value)} className="bg-surface border-border cursor-pointer" required />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Max Passengers</label>
+                <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Max Passengers</label>
                 <Select value={String(poolMaxPassengers)} onValueChange={(v) => setPoolMaxPassengers(Number(v))}>
                   <SelectTrigger className="bg-surface border-border text-xs">
                     <SelectValue />
@@ -2211,7 +2213,7 @@ function TravelPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Transport Mode</label>
+              <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Transport Mode</label>
               <div className="flex gap-2">
                 {["Auto", "Cab", "Shared"].map((m) => (
                   <button key={m} type="button" onClick={() => setPoolMode(m)}
@@ -2223,11 +2225,11 @@ function TravelPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Notes / Context (Optional)</label>
+              <label className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Notes / Context (Optional)</label>
               <Input id="input-pool-desc" placeholder="e.g. Have 1 suitcase, direct cab. Let's split!" value={poolDescription} onChange={(e) => setPoolDescription(e.target.value)} className="bg-surface border-border" />
             </div>
 
-            <div className="p-3 bg-surface-raised border border-border rounded-xl text-[11px] text-muted-foreground">
+            <div className="p-3 bg-surface-raised border border-border rounded-xl text-[11px] md:text-xs text-muted-foreground">
               This pool group will be visible to all students at {activeCollege}. You can copy a shareable invitation pitch for your hostel/mess WhatsApp groups.
             </div>
 
@@ -2257,14 +2259,14 @@ function TravelPage() {
             </div>
           )}
           
-          <p className="text-[10px] text-muted-foreground text-center leading-relaxed font-medium">
+          <p className="text-[10px] md:text-xs text-muted-foreground text-center leading-relaxed font-medium">
             Scan this QR code with GPay, PhonePe, Paytm, or any BHIM UPI app on your phone to complete your split payment.
           </p>
           
           <Button
             type="button"
             onClick={() => setActiveQrUpiLink(null)}
-            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-wider h-8"
+            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] md:text-xs font-black uppercase tracking-wider h-8"
           >
             Close
           </Button>

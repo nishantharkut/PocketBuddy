@@ -260,7 +260,7 @@ function CompanionPage() {
                   One-Tap Auto Configure
                 </Button>
               ) : (
-                <div className="rounded-lg bg-card border border-border p-3 text-[11px] text-muted-foreground leading-normal">
+                <div className="rounded-lg bg-card border border-border p-3 text-[11px] md:text-xs text-muted-foreground leading-normal">
                   💡 <b>Opening this on Desktop?</b> Log in to PocketBuddy on your Android phone's web browser, navigate to settings/companion, and click this button to auto-configure instantly.
                 </div>
               )}
@@ -341,7 +341,7 @@ function CompanionPage() {
                   One-Tap Auto Configure
                 </Button>
               ) : (
-                <div className="rounded-lg bg-card border border-border p-3 text-[11px] text-muted-foreground leading-normal">
+                <div className="rounded-lg bg-card border border-border p-3 text-[11px] md:text-xs text-muted-foreground leading-normal">
                   💡 <b>Opening this on Desktop?</b> Log in to PocketBuddy on your Android phone's web browser, navigate to settings/companion, and click this button to auto-configure instantly.
                 </div>
               )}
@@ -354,7 +354,7 @@ function CompanionPage() {
               <p className="mx-auto mt-1 max-w-sm text-[12px] leading-relaxed text-muted-foreground">
                 PocketBuddy creates a private setup key and includes it when you copy the Android config. You do not need to type or remember it.
               </p>
-              <Badge variant={isPairingSaved ? "outline" : "secondary"} className="mt-2 text-[10px]">
+              <Badge variant={isPairingSaved ? "outline" : "secondary"} className="mt-2 text-[10px] md:text-xs">
                 {isPairingSaved ? "Setup key saved" : "Setup key will save before copy"}
               </Badge>
             </div>
@@ -426,7 +426,7 @@ function CompanionPage() {
                     </div>
                     <div className="shrink-0 text-right">
                       <StatusBadge status={l.processing_status} />
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="mt-1 text-[11px] md:text-xs text-muted-foreground">
                         {relativeTime(l.created_at)}
                       </p>
                     </div>
@@ -507,7 +507,7 @@ function SyncLogDetails({ log }: { log: SyncLog }) {
       <div className="grid gap-2 sm:grid-cols-2">
         {details.map(([label, value]) => (
           <div key={label} className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {label}
             </p>
             <p className="mt-0.5 break-words text-[12px] text-foreground">
@@ -518,7 +518,7 @@ function SyncLogDetails({ log }: { log: SyncLog }) {
       </div>
 
       <div className="mt-3 border-t border-border pt-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Masked notification preview
         </p>
         <p className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-muted-foreground">
@@ -562,25 +562,25 @@ function StatusBadge({ status }: { status?: string }) {
     );
   if (status === "auto_verified")
     return (
-      <Badge className="bg-success/20 text-success text-[10px]">
+      <Badge className="bg-success/20 text-success text-[10px] md:text-xs">
         Pool verified
       </Badge>
     );
   if (status === "received")
     return (
-      <Badge className="bg-primary/15 text-primary text-[10px]">
+      <Badge className="bg-primary/15 text-primary text-[10px] md:text-xs">
         Received
       </Badge>
     );
   if (status === "incomplete")
     return (
-      <Badge className="bg-warning/20 text-warning text-[10px]">
+      <Badge className="bg-warning/20 text-warning text-[10px] md:text-xs">
         Needs review
       </Badge>
     );
   if (status === "duplicate")
     return (
-      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+      <Badge variant="outline" className="text-[10px] md:text-xs text-muted-foreground">
         Duplicate
       </Badge>
     );
@@ -591,7 +591,7 @@ function StatusBadge({ status }: { status?: string }) {
       </Badge>
     );
   return (
-    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+    <Badge variant="outline" className="text-[10px] md:text-xs text-muted-foreground">
       Ignored
     </Badge>
   );

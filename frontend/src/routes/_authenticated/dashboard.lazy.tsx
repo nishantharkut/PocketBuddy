@@ -6,7 +6,8 @@ import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import {
   Plus, ChevronRight, AlertTriangle, Users, Utensils, ShoppingBag,
-  Bus, Receipt, MoreHorizontal, Wallet, Timer, MessageSquare, Phone, Mail, MapPin, ExternalLink, Compass, TrendingDown
+  Bus, Receipt, MoreHorizontal, Wallet, Timer, MessageSquare, Phone, Mail, MapPin, ExternalLink, Compass, TrendingDown, Calendar,
+  ChevronDown, ChevronUp
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ import {
   insertCheckinLog,
   identifyMerchant,
   getDashboardInsights,
+  getRunwayForecast,
   getCampusIntel,
   getWingFeed,
   getWellnessInsights,
@@ -68,6 +70,17 @@ type Food = any;
 type Sub = any;
 type Pool = any;
 type PoolItem = any;
+
+const isPoolFullyPaid = (p: any) => {
+  if (p.status !== "completed") return false;
+  const breakdown = p.split_breakdown ?? {};
+  const roommates = Object.keys(breakdown).filter((rName) => {
+    const isHost = rName.toLowerCase() === "you" || rName.toLowerCase() === (p.created_by_name ?? "").toLowerCase();
+    return !isHost;
+  });
+  if (roommates.length === 0) return true;
+  return roommates.every((rName) => breakdown[rName].paid);
+};
 
 const FALLBACK_CATEGORIES = [
   { v: "food", l: "Food" },
@@ -160,7 +173,7 @@ function BurnoutGauge({ score }: { score: number }) {
           <path d={fillPath} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
             style={{ filter: `drop-shadow(0 0 6px ${color}88)`, transition: "all 1s ease" }} />
         )}
-        <text x={cx} y={cy - 6} textAnchor="middle" fill={color} fontSize="26" fontWeight="900" fontFamily="monospace">{score}</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" fill={color} fontSize="26" fontWeight="900" fontFamily="var(--font-sans)">{score}</text>
         <text x={cx} y={cy + 14} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="700" letterSpacing="2">{label}</text>
       </svg>
     </div>
@@ -196,7 +209,7 @@ function SurviveCountdown({ runwayMs }: { runwayMs: number }) {
           >
             {part.value}
           </span>
-          <span className="text-[11px] text-zinc-400 font-black leading-none">{part.label}</span>
+          <span className="text-[11px] md:text-xs text-zinc-400 font-black leading-none">{part.label}</span>
         </span>
       ))}
     </div>
@@ -239,8 +252,8 @@ function CategoryDonut({ breakdown }: { breakdown: { category: string; pct: numb
         {top5.map((seg) => (
           <div key={seg.category} className="flex items-center gap-2 min-w-0">
             <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CAT_COLORS[seg.category] ?? "#6b7280" }} />
-            <span className="text-[10px] text-zinc-400 capitalize truncate">{seg.category}</span>
-            <span className="text-[10px] font-bold text-foreground ml-auto">{seg.pct}%</span>
+            <span className="text-[10px] md:text-xs text-zinc-400 capitalize truncate">{seg.category}</span>
+            <span className="text-[10px] md:text-xs font-bold text-foreground ml-auto">{seg.pct}%</span>
           </div>
         ))}
       </div>
@@ -329,13 +342,13 @@ function SpendingSmartCheck({ calc }: { calc: any }) {
             )}
           </p>
           <div className="flex gap-2 flex-wrap">
-            <Link to="/pool" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+            <Link to="/pool" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
               Join Swiggy Pool
             </Link>
-            <Link to="/runway" className="h-8 rounded-lg bg-surface border border-border text-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-surface-raised transition-all">
+            <Link to="/runway" className="h-8 rounded-lg bg-surface border border-border text-foreground px-3 flex items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-wider hover:bg-surface-raised transition-all">
               Runway Sandbox
             </Link>
-            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] md:text-xs font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
               Change
             </button>
           </div>
@@ -354,10 +367,10 @@ function SpendingSmartCheck({ calc }: { calc: any }) {
             Awesome! You've already prepaid for the hostel mess. Eating at the mess today saves ₹250 of discretionary money, helping extend your runway length.
           </p>
           <div className="flex gap-2 flex-wrap">
-            <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+            <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
               Track Projections
             </Link>
-            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] md:text-xs font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
               Change
             </button>
           </div>
@@ -376,10 +389,10 @@ function SpendingSmartCheck({ calc }: { calc: any }) {
             Budget saver! Spending only ~₹40 for tea or late night Maggi helps you stay well below your daily pace, building a safe buffer for unexpected campus expenses.
           </p>
           <div className="flex gap-2 flex-wrap">
-            <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+            <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
               Check Runway
             </Link>
-            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+            <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] md:text-xs font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
               Change
             </button>
           </div>
@@ -436,6 +449,189 @@ function SpendingSmartCheck({ calc }: { calc: any }) {
   );
 }
 
+function MealRunwayCheck({ calc, runwayView }: { calc: any; runwayView?: any }) {
+  const [selectedPlan, setSelectedPlan] = useState<null | "delivery" | "routine" | "shared">(null);
+  const routine = runwayView?.foodRoutine ?? {};
+  const safeDailyPaise = runwayView?.safeDailyPaise ?? Math.round((calc?.safeDailyLimit ?? 200) * 100);
+  const foodCapPaise = routine?.recommended_daily_food_cap ?? safeDailyPaise;
+  const deliveryCostPaise = routine?.delivery?.avg_order || 25_000;
+  const routineType = routine?.type ?? "mixed";
+  const routineMeta: Record<string, { label: string; option: string; detail: string }> = {
+    hostel_mess: {
+      label: "Hostel mess / campus meals",
+      option: "Use mess or campus meal",
+      detail: "Best when your mess is prepaid or predictable. It keeps delivery from eating into the safe/day number.",
+    },
+    pg_cooking: {
+      label: "PG cooking / groceries",
+      option: "Cook or heat PG meal",
+      detail: "Use groceries or a prepped PG meal before delivery. This is the strongest lever for students outside hostel mess.",
+    },
+    day_scholar: {
+      label: "Day scholar meals",
+      option: "Packed/home meal + campus snack",
+      detail: "Keep one predictable packed or campus meal so commute snacks do not quietly shrink runway.",
+    },
+    mixed: {
+      label: "Mixed meal routine",
+      option: "Choose routine campus meal",
+      detail: "Pick the repeatable low-cost meal first, then use delivery only when the daily limit can absorb it.",
+    },
+  };
+  const activeRoutine = routineMeta[routineType] ?? routineMeta.mixed;
+  const routineMealCostPaise =
+    routine?.routine_meal_cost ||
+    Math.max(4_000, Math.min(foodCapPaise || 14_000, Math.round((foodCapPaise || 14_000) / 2)));
+  const sharedCostPaise = Math.max(
+    4_000,
+    Math.min(deliveryCostPaise, Math.round((deliveryCostPaise + routineMealCostPaise) / 2))
+  );
+  const plans = [
+    {
+      id: "routine" as const,
+      label: activeRoutine.option,
+      cost: routineMealCostPaise,
+      icon: Utensils,
+      tone: "text-pb-green",
+      border: "border-pb-green/20",
+      bg: "bg-pb-green/5",
+      detail: activeRoutine.detail,
+    },
+    {
+      id: "shared" as const,
+      label: routineType === "pg_cooking" ? "Split groceries with roommate" : "Pool / shared campus order",
+      cost: sharedCostPaise,
+      icon: Users,
+      tone: "text-primary",
+      border: "border-primary/20",
+      bg: "bg-primary/5",
+      detail:
+        routineType === "pg_cooking"
+          ? "A shared grocery run reduces per-meal cost without forcing hostel-mess assumptions."
+          : "Pooling cuts delivery fees and keeps the order closer to your safe food cap.",
+    },
+    {
+      id: "delivery" as const,
+      label: "Individual delivery order",
+      cost: deliveryCostPaise,
+      icon: ShoppingBag,
+      tone: "text-pb-red",
+      border: "border-pb-red/20",
+      bg: "bg-pb-red/5",
+      detail: "Convenient, but this is usually the fastest way food pace starts reducing runway.",
+    },
+  ];
+  const selected = plans.find((plan) => plan.id === selectedPlan);
+  const savedVsDelivery = selected ? Math.max(0, deliveryCostPaise - selected.cost) : 0;
+  const safeUsage = selected && safeDailyPaise > 0 ? Math.round((selected.cost / safeDailyPaise) * 100) : 0;
+  const capGap = selected ? selected.cost - foodCapPaise : 0;
+  const SelectedIcon = selected?.icon;
+
+  if (selected && SelectedIcon) {
+    return (
+      <Card id="card-interactive-runway-check" className={`bg-surface border ${selected.border} p-4 relative overflow-hidden transition-all duration-300`}>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.04), transparent 65%)" }} />
+        <div className="relative space-y-4">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={`w-fit ${selected.border} ${selected.bg} ${selected.tone} text-[10px] uppercase tracking-wider font-semibold`}>
+                {activeRoutine.label}
+              </Badge>
+              <Badge variant="outline" className="w-fit border-border bg-surface-raised text-[10px] md:text-xs uppercase tracking-wider font-semibold">
+                {rupees(selected.cost)} today
+              </Badge>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 h-10 w-10 rounded-xl border ${selected.border} ${selected.bg} ${selected.tone} flex items-center justify-center shrink-0`}>
+                <SelectedIcon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-sm sm:text-base font-semibold text-foreground">{selected.label}</h4>
+                <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed">{selected.detail}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-surface-raised/60 p-3 text-xs leading-relaxed text-muted-foreground">
+              {capGap > 0 ? (
+                <>
+                  This is <span className="font-semibold text-pb-amber">{rupees(capGap)} above</span> your food cap of{" "}
+                  <span className="font-semibold text-foreground">{rupees(foodCapPaise)}</span>. Choose lighter spends for the rest of today.
+                </>
+              ) : (
+                <>
+                  This stays within your food cap of <span className="font-semibold text-foreground">{rupees(foodCapPaise)}</span> and uses{" "}
+                  <span className="font-semibold text-foreground">{safeUsage}%</span> of your safe daily limit.
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border/70 pt-3">
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              {savedVsDelivery > 0
+                ? `Choosing this instead of individual delivery keeps about ${rupees(savedVsDelivery)} inside your runway today.`
+                : "This option is useful only when today's safe/day can absorb the full cost."}
+            </p>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+                Full Runway
+              </Link>
+              <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] md:text-xs font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
+                Change
+              </button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card id="card-interactive-runway-check" className="bg-surface border border-border rounded-2xl p-4 relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.04), transparent 65%)" }} />
+      <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <Compass className="h-4.5 w-4.5 text-primary" />
+            <p className="text-xs font-bold tracking-[0.15em] text-zinc-500 uppercase">Meal check</p>
+          </div>
+          <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed font-medium max-w-2xl">
+            Pick the likely meal and see if it fits today.
+          </p>
+        </div>
+        <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary text-[10px] md:text-xs uppercase tracking-wider font-semibold">
+          Food cap {rupees(foodCapPaise)}
+        </Badge>
+      </div>
+
+      <div className="relative grid grid-cols-1 md:grid-cols-3 gap-3">
+        {plans.map((plan) => {
+          const Icon = plan.icon;
+          const saved = Math.max(0, deliveryCostPaise - plan.cost);
+          return (
+            <button
+              key={plan.id}
+              onClick={() => setSelectedPlan(plan.id)}
+              className="w-full text-left p-3 rounded-xl border border-border bg-surface-raised/60 hover:bg-surface hover:border-primary/35 transition-all cursor-pointer group"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 shrink-0 ${plan.tone}`} />
+                    <span className="text-xs font-semibold text-foreground">{plan.label}</span>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-foreground tnum">{rupees(plan.cost)}</p>
+                  {saved > 0 && <p className="text-[10px] md:text-xs font-bold text-pb-green">Saves {rupees(saved)} vs delivery</p>}
+                </div>
+                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-primary transition-transform group-hover:translate-x-0.5 shrink-0" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 function Dashboard() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -461,6 +657,14 @@ function Dashboard() {
     enabled: !!user,
     staleTime: 60_000,
     queryFn: () => getDashboardInsights(),
+  });
+
+  const { data: runwayForecast } = useQuery({
+    queryKey: ["runway-forecast", user?.id],
+    enabled: !!user,
+    staleTime: 30_000,
+    retry: false,
+    queryFn: () => getRunwayForecast(),
   });
 
   const { data: wellness, isLoading: wellnessLoading, isError: wellnessError } = useQuery({
@@ -505,7 +709,7 @@ function Dashboard() {
     const totalAllowance = profile.monthly_allowance / 100;
     const cycleStart = getCycleStart(profile.cycle_start_day);
     const cycleEnd = getCycleEnd(cycleStart);
-    const cycleTxns = (txns ?? []).filter((t) => new Date(t.created_at) >= cycleStart);
+    const cycleTxns = (txns ?? []).filter((t) => new Date(t.created_at) >= cycleStart && t.direction !== "credit");
     const unpaidPoolDebt = (insights?.unpaid_pool_debt_paise ?? 0) / 100;
     const totalSpent = (cycleTxns.reduce((s, t) => s + t.amount, 0) / 100) + unpaidPoolDebt;
     const remaining = Math.max(0, totalAllowance - totalSpent);
@@ -518,7 +722,7 @@ function Dashboard() {
     const todayStr = today.toDateString();
     const spentToday =
       (txns ?? [])
-        .filter((t) => new Date(t.created_at).toDateString() === todayStr)
+        .filter((t) => new Date(t.created_at).toDateString() === todayStr && t.direction !== "credit")
         .reduce((s, t) => s + t.amount, 0) / 100;
     return {
       totalAllowance,
@@ -535,6 +739,33 @@ function Dashboard() {
   }, [profile, txns, insights]);
 
   // Burnout score is now calculated on the backend via /api/insights/wellness
+
+  const runwayView = useMemo(() => {
+    if (!runwayForecast && !calc) return null;
+    const currentCycle = runwayForecast?.current_cycle;
+    const projection = runwayForecast?.projection;
+    const foodRoutine = runwayForecast?.food_routine;
+    const decision = runwayForecast?.decision_engine;
+    const allowancePaise = currentCycle?.available_funding ?? Math.round((calc?.totalAllowance ?? 0) * 100);
+    const spentPaise = currentCycle?.spent ?? Math.round((calc?.totalSpent ?? 0) * 100);
+    const pct = allowancePaise > 0 ? Math.min(100, Math.round((spentPaise / allowancePaise) * 100)) : calc?.pct ?? 0;
+    return {
+      days: projection?.days_until_broke ?? calc?.runwayDays ?? 0,
+      safeDailyPaise: projection?.safe_daily_spend ?? Math.round((calc?.safeDailyLimit ?? 0) * 100),
+      remainingPaise: currentCycle?.remaining ?? Math.round((calc?.remaining ?? 0) * 100),
+      spentTodayPaise: Math.round((calc?.spentToday ?? 0) * 100),
+      allowancePaise,
+      cycleEnd: currentCycle?.end ? new Date(currentCycle.end) : calc?.cycleEnd,
+      daysLeft: currentCycle?.days_left ?? calc?.daysLeft ?? 0,
+      projectedDailyPaise: projection?.projected_daily_spend ?? 0,
+      shortfallProbability: projection?.shortfall_probability ?? 0,
+      nextAction: decision?.next_best_action,
+      pct,
+      status: runwayForecast?.status ?? "healthy",
+      foodRoutine,
+      decision,
+    };
+  }, [runwayForecast, calc]);
 
   // ── Survive-Until runway timestamp ─────────────────────────────────────
   const surviveUntilMs = useMemo(() => {
@@ -584,13 +815,20 @@ function Dashboard() {
     return foods[0];
   }, [foods]);
 
-  const runwayColor = calc
-    ? calc.runwayDays >= 15
+  const runwayColor = runwayView
+    ? runwayView.days >= 15
       ? "var(--success)"
-      : calc.runwayDays >= 7
+      : runwayView.days >= 7
         ? "var(--warning)"
         : "var(--destructive)"
     : "var(--primary)";
+  const runwayStatusLabel = runwayView?.status === "shortfall" ? "Shortfall" : runwayView?.status === "watch" ? "Watch" : "Healthy";
+  const runwayStatusClass =
+    runwayView?.status === "shortfall"
+      ? "bg-destructive/10 border-destructive/25 text-destructive"
+      : runwayView?.status === "watch"
+        ? "bg-warning/10 border-warning/25 text-warning"
+        : "bg-success/10 border-success/25 text-success";
 
   // Companion indicator
   const compStatus = useMemo(() => {
@@ -627,13 +865,14 @@ function Dashboard() {
     return calc.daysLeft > 0 ? Math.max(0, Math.round((calc.remaining - totalAmount / 100) / calc.daysLeft)) : 0;
   }, [collisions, calc]);
 
-  const recent = (txns ?? []).slice(0, 8);
+  const recent = (txns ?? []).slice(0, 5);
 
   // Dialogs
   const [identifying, setIdentifying] = useState<Txn | null>(null);
   const [editingTxn, setEditingTxn] = useState<Txn | null>(null);
   const [adding, setAdding] = useState(false);
   const [showFoodSheet, setShowFoodSheet] = useState(false);
+  const [isWellnessExpanded, setIsWellnessExpanded] = useState(false);
 
   // Food scanner and crowdsourced verification state & hooks
   const [foodTab, setFoodTab] = useState<"menus" | "scan" | "verify">("menus");
@@ -760,7 +999,7 @@ function Dashboard() {
         icon: Wallet,
         accent: "#8C7853",
         title: "Welcome to PocketBuddy",
-        body: "Your AI spending guard is active. Start logging transactions or pair the Android companion to begin tracking automatically.",
+        body: "Your spending tracker is active. Start logging transactions or pair the Android companion to begin tracking automatically.",
       });
       return list;
     }
@@ -774,7 +1013,7 @@ function Dashboard() {
         icon: Utensils,
         accent: "#FC8019",
         title: "Heavy on delivery apps",
-        body: `You've ordered ${delivCount}× via delivery this month vs ${messCount} mess visits. Switching 3 meals/week to mess saves ~₹${Math.round(delivCount * 35)} monthly.`,
+        body: runwayView?.foodRoutine?.action?.detail ?? `You've ordered ${delivCount}× via delivery this month. Keep food near ${rupees(runwayView?.foodRoutine?.recommended_daily_food_cap ?? 0)}/day to protect runway.`,
       });
     }
 
@@ -797,7 +1036,7 @@ function Dashboard() {
         icon: AlertTriangle,
         accent: "#ef4444",
         title: `Exam period — ${insights.exam.days_left}d left`,
-        body: "Your budget matters most right now. Aim for mess meals to keep daily food cost under ₹80. Campus canteens are usually open late.",
+        body: runwayView?.foodRoutine?.action?.detail ?? "Your budget matters most right now. Keep meals predictable and avoid using exam buffer for routine food.",
       });
     }
 
@@ -815,7 +1054,7 @@ function Dashboard() {
 
     // Subscription bleed
     const subBleed = (insights.subscriptions?.monthly_bleed_paise ?? 0) / 100;
-    if (subBleed > 300 && calc && calc.safeDailyLimit < 150) {
+    if (subBleed > 300 && runwayView && runwayView.safeDailyPaise < 15_000) {
       list.push({
         id: "sub_bleed",
         icon: Receipt,
@@ -826,7 +1065,7 @@ function Dashboard() {
     }
 
     return list;
-  }, [insights, calc]);
+  }, [insights, calc, runwayView]);
 
   const visibleNudges = nudges.filter((n) => !dismissedNudges.has(n.id)).slice(0, 2);
 
@@ -968,7 +1207,7 @@ function Dashboard() {
             Dashboard
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden">
           <button
             onClick={() => nav({ to: "/companion" })}
             title={compStatus === "green" ? "Companion syncing" : compStatus === "amber" ? "Companion idle" : "No companion"}
@@ -976,7 +1215,7 @@ function Dashboard() {
           >
             <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${compStatus === "green" ? "bg-success" : compStatus === "amber" ? "bg-warning" : "bg-destructive"}`} />
           </button>
-          <Badge variant="outline" id="badge-wing" className="bg-white/5 border-border text-foreground font-bold text-[10px]">
+          <Badge variant="outline" id="badge-wing" className="bg-white/5 border-border text-foreground font-bold text-[10px] md:text-xs">
             {profile?.wing_label ?? "—"}
           </Badge>
         </div>
@@ -1007,254 +1246,350 @@ function Dashboard() {
                     : "linear-gradient(to right, #ef4444, #f87171)"
               }} />
               
-              <div className="p-5 md:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase flex items-center gap-1.5 font-display">
-                    <span>Student Wellness Index</span>
-                  </p>
-                  
-                  {wellness && (
-                    <Badge variant="outline" className="font-bold text-xs px-2 py-0.5" style={{
-                      borderColor: wellness.status === "steady" ? "rgba(22,163,74,0.3)" : wellness.status === "watch" ? "rgba(217,119,6,0.3)" : "rgba(220,38,38,0.3)",
-                      color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)",
-                      background: wellness.status === "steady" ? "rgba(22,163,74,0.05)" : wellness.status === "watch" ? "rgba(217,119,6,0.05)" : "rgba(220,38,38,0.05)"
-                    }}>
-                      {wellness.status === "steady" ? "STEADY" : wellness.status === "watch" ? "WATCH" : "STRESSED"}
-                    </Badge>
-                  )}
+              {wellnessLoading ? (
+                <div className="p-4 md:p-5 space-y-3">
+                  <Skeleton className="h-5 w-1/4" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-10 w-full" />
                 </div>
-
-                {wellnessLoading ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-6 w-1/4" />
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-12 w-full" />
+              ) : wellnessError ? (
+                <div className="p-4 md:p-5 rounded-xl border border-dashed border-destructive/20 bg-destructive/5">
+                  <p className="text-xs font-semibold text-destructive uppercase tracking-wider">Wellness metrics unavailable</p>
+                  <p className="text-xs text-zinc-500 mt-1">We couldn't load your wellness metrics. Please try again later.</p>
+                </div>
+              ) : (txns ?? []).length === 0 ? (
+                <div className="p-4 md:p-5 rounded-xl border border-dashed border-border bg-surface-raised/40 text-center">
+                  <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No Transaction History</p>
+                  <p className="text-xs text-zinc-500 mt-1">Add a few spends to build your wellness pattern.</p>
+                  <div className="mt-3">
+                    <Button
+                      variant="secondary"
+                      className="text-xs uppercase tracking-wider font-bold h-7 bg-surface-raised border-border"
+                      onClick={() => setAdding(true)}
+                    >
+                      Log Transaction
+                    </Button>
                   </div>
-                ) : wellnessError ? (
-                  <div className="rounded-xl border border-dashed border-destructive/20 bg-destructive/5 p-4">
-                    <p className="text-xs font-semibold text-destructive uppercase tracking-wider">Wellness metrics unavailable</p>
-                    <p className="text-xs text-zinc-500 mt-1">We couldn't load your wellness metrics. Please try again later.</p>
+                </div>
+              ) : (wellness?.status === "steady" && !isWellnessExpanded) ? (
+                <div 
+                  className="p-4 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-white/[0.02] transition-colors"
+                  onClick={() => setIsWellnessExpanded(true)}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-[var(--pb-green)] shrink-0 animate-pulse" />
+                    <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase font-mono shrink-0">Student Wellness Index:</p>
+                    <span className="text-sm font-black text-[var(--pb-green)] tnum shrink-0">{wellness.score}</span>
+                    <Badge variant="outline" className="font-bold text-[9px] px-1.5 py-0 tracking-wider uppercase bg-[rgba(22,163,74,0.05)] border-[rgba(22,163,74,0.3)] text-[var(--pb-green)] shrink-0">
+                      Steady
+                    </Badge>
+                    <span className="text-xs text-zinc-400 font-medium truncate hidden sm:inline ml-2">
+                      {wellness.message || "Your spending and meal habits are currently steady and within safe bounds."}
+                    </span>
                   </div>
-                ) : (txns ?? []).length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-border bg-surface-raised/40 p-4 text-center">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No Transaction History</p>
-                    <p className="text-xs text-zinc-500 mt-1">Add a few spends to build your wellness pattern.</p>
-                    <div className="mt-3">
-                      <Button
-                        variant="secondary"
-                        className="text-xs uppercase tracking-wider font-bold h-7 bg-surface-raised border-border"
-                        onClick={() => setAdding(true)}
-                      >
-                        Log Transaction
-                      </Button>
+                  <div className="flex items-center gap-1 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0">
+                    <span className="text-[10px] uppercase font-bold tracking-widest font-mono hidden sm:inline">Details</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-5 md:p-6">
+                  {/* Expanded Header: restore large prominent score numbers and badge side-by-side */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-border/40 pb-3">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase font-mono">
+                        Student Wellness Index
+                      </p>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl md:text-4xl font-black tracking-tighter text-foreground tnum leading-none font-display" style={{
+                          color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)"
+                        }}>{wellness.score}</span>
+                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">/ 100 Wellness Score</span>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-3xl md:text-4xl font-black tracking-tighter text-foreground tnum leading-none font-display" style={{
-                        color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)"
+                    
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="font-bold text-xs px-2.5 py-1 tracking-wider uppercase" style={{
+                        borderColor: wellness.status === "steady" ? "rgba(22,163,74,0.3)" : wellness.status === "watch" ? "rgba(217,119,6,0.3)" : "rgba(220,38,38,0.3)",
+                        color: wellness.status === "steady" ? "var(--pb-green)" : wellness.status === "watch" ? "var(--pb-amber)" : "var(--pb-red)",
+                        background: wellness.status === "steady" ? "rgba(22,163,74,0.05)" : wellness.status === "watch" ? "rgba(217,119,6,0.05)" : "rgba(220,38,38,0.05)"
                       }}>
-                        {wellness.score}
-                      </span>
-                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest font-mono">/ 100 Wellness Score</span>
-                    </div>
-
-                    <p className="text-xs md:text-sm text-zinc-300 font-medium leading-relaxed mb-4">
-                      {wellness.status === "stressed" 
-                        ? "We noticed a stack of stressful signals today. Remember, your runway and meals don't define you. Taking it one step at a time is enough. You can do this." 
-                        : wellness.message}
-                    </p>
-
-                    {/* Contributing Signals */}
-                    <div className="border-t border-border pt-4 mt-2 mb-4">
-                      <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-3 font-mono">Contributing Signals</p>
+                        {wellness.status === "steady" ? "STEADY" : wellness.status === "watch" ? "WATCH" : "STRESSED"}
+                      </Badge>
                       
-                      <div className="flex flex-wrap gap-2">
-                        {wellness.signals?.map((sig: any) => (
-                          <div key={sig.key} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-surface-raised/40 text-xs font-medium" style={{
-                            borderColor: sig.severity === "stressed" 
-                              ? "rgba(239,68,68,0.25)" 
+                      {wellness?.status === "steady" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsWellnessExpanded(false);
+                          }}
+                          className="p-1 hover:bg-white/5 rounded transition-colors text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                          title="Collapse Card"
+                        >
+                          <ChevronUp className="w-4.5 h-4.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-xs md:text-sm text-zinc-300 font-medium leading-relaxed mb-4">
+                    {wellness.status === "stressed" 
+                      ? "We noticed a stack of stressful signals today. Remember, your runway and meals don't define you. Taking it one step at a time is enough. You can do this." 
+                      : wellness.message}
+                  </p>
+
+                  <div className="border-t border-border/40 pt-3 mt-1 mb-3">
+                    <p className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase mb-2 font-mono">Contributing Signals</p>
+                    
+                    <div className="flex flex-wrap gap-1.5">
+                      {wellness.signals?.map((sig: any) => (
+                        <div key={sig.key} className="flex items-center gap-1.5 px-2 py-0.5 rounded-md border bg-surface-raised/20 text-[10px] font-medium" style={{
+                          borderColor: sig.severity === "stressed" 
+                            ? "rgba(239,68,68,0.15)" 
+                            : sig.severity === "watch" 
+                              ? "rgba(245,158,11,0.15)" 
+                              : "var(--border)"
+                        }} title={sig.detail}>
+                          <span className="text-zinc-500">{sig.label}:</span>
+                          <span className="font-semibold text-foreground">{sig.value}</span>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{
+                            background: sig.severity === "stressed" 
+                              ? "var(--pb-red)" 
                               : sig.severity === "watch" 
-                                ? "rgba(245,158,11,0.25)" 
-                                : "var(--border)"
-                          }}>
-                            <span className="text-zinc-400 font-medium">{sig.label}:</span>
-                            <span className="font-bold text-foreground">{sig.value}</span>
-                            <span className="w-1.5 h-1.5 rounded-full" style={{
-                              background: sig.severity === "stressed" 
-                                ? "var(--pb-red)" 
-                                : sig.severity === "watch" 
-                                  ? "var(--pb-amber)" 
-                                  : "var(--pb-green)"
-                            }} title={sig.detail} />
-                          </div>
-                        ))}
+                                ? "var(--pb-amber)" 
+                                : "var(--pb-green)"
+                          }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {wellness.status === "watch" && (
+                    <div className="border-t border-border/40 pt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <span className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-1 sm:mb-0 sm:mr-2 font-mono">Quick Check-in:</span>
+                      <div className="flex flex-wrap gap-2 flex-1">
+                        <button
+                          id="btn-wellness-ate"
+                          onClick={() => handleWellnessAction("ate")}
+                          className="flex-1 min-h-[38px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-success hover:text-success/90 bg-success/5 hover:bg-success/10 border border-success/20 hover:border-success/30 rounded-xl transition-all cursor-pointer"
+                        >
+                          I Ate Meal
+                        </button>
+                        <button
+                          id="btn-wellness-break"
+                          onClick={() => handleWellnessAction("break")}
+                          className="flex-1 min-h-[38px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-warning hover:text-warning/90 bg-warning/5 hover:bg-warning/10 border border-warning/20 hover:border-warning/30 rounded-xl transition-all cursor-pointer"
+                        >
+                          I Need a Break
+                        </button>
+                        <button
+                          id="btn-wellness-spending"
+                          onClick={() => handleWellnessAction("spending")}
+                          className="flex-1 min-h-[38px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-foreground hover:text-foreground/90 bg-white/5 hover:bg-white/10 border border-border hover:border-white/15 rounded-xl transition-all cursor-pointer"
+                        >
+                          I'll Plan Spending
+                        </button>
                       </div>
                     </div>
+                  )}
 
-                    {/* Conditional layouts based on status */}
-                    {wellness.status === "watch" && (
-                      <div className="border-t border-border pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <span className="text-xs font-bold tracking-widest text-zinc-500 uppercase mb-1 sm:mb-0 sm:mr-2 font-mono">Quick Check-in:</span>
-                        <div className="flex flex-wrap gap-2 flex-1">
-                          <button
-                            id="btn-wellness-ate"
-                            onClick={() => handleWellnessAction("ate")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-success hover:text-success/90 bg-success/5 hover:bg-success/10 border border-success/20 hover:border-success/30 rounded-xl transition-all cursor-pointer"
-                          >
-                            I Ate Meal
-                          </button>
-                          <button
-                            id="btn-wellness-break"
-                            onClick={() => handleWellnessAction("break")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-warning hover:text-warning/90 bg-warning/5 hover:bg-warning/10 border border-warning/20 hover:border-warning/30 rounded-xl transition-all cursor-pointer"
-                          >
-                            I Need a Break
-                          </button>
-                          <button
-                            id="btn-wellness-spending"
-                            onClick={() => handleWellnessAction("spending")}
-                            className="flex-1 min-h-[44px] px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-foreground hover:text-foreground/90 bg-white/5 hover:bg-white/10 border border-border hover:border-white/15 rounded-xl transition-all cursor-pointer"
-                          >
-                            I'll Plan Spending
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {wellness.status === "stressed" && (
-                      <div className="border-t border-border pt-4 mt-4 space-y-4">
-                        <form onSubmit={handleRedCheckinSubmit} className="space-y-3">
-                          <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase pl-1 font-mono">Submit Feedback Check-in</p>
+                  {wellness.status === "stressed" && (
+                    <div className="border-t border-border/40 pt-4 mt-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Column 1: Check-in Form */}
+                        <form onSubmit={handleRedCheckinSubmit} className="space-y-2.5">
+                          <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase pl-0.5 font-mono">Submit Feedback Check-in</p>
                           <textarea 
                             value={redCheckinText} 
                             onChange={(e) => setRedCheckinText(e.target.value)} 
                             placeholder="How are you feeling today? Write down any notes, feelings or stress points..." 
-                            className="w-full min-h-[88px] bg-background/50 border border-border rounded-xl p-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 resize-none text-foreground placeholder:text-muted-foreground/50 leading-relaxed transition-all" 
+                            className="w-full min-h-[96px] bg-background/50 border border-border rounded-xl p-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary/40 resize-none text-foreground placeholder:text-muted-foreground/50 leading-relaxed transition-all" 
                             disabled={redCheckinSubmitting} 
                           />
                           <button 
                             type="submit" 
                             disabled={redCheckinSubmitting || !redCheckinText.trim()} 
-                            className="w-full min-h-[44px] rounded-xl bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-2"
+                            className="w-full min-h-[38px] rounded-xl bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-2"
                           >
                             {redCheckinSubmitting ? "Submitting..." : "Submit Check-in"}
                           </button>
                         </form>
 
-                        <div className="rounded-xl border border-red-950/40 bg-red-950/10 p-4 space-y-2.5">
-                          <p className="text-xs font-bold tracking-[0.15em] text-red-400 uppercase flex items-center gap-1.5 font-mono">
-                            <Phone className="h-3.5 w-3.5" />
-                            <span>Campus Counseling Services</span>
-                          </p>
-                          <p className="text-xs text-zinc-400 leading-relaxed">
-                            If you feel overwhelmed, please reach out to the campus support team. It is completely confidential, free, and designed for students.
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-500 font-medium pt-1">
+                        {/* Column 2: Counseling Services Info */}
+                        <div className="rounded-xl border border-red-950/40 bg-red-950/10 p-3.5 flex flex-col justify-between space-y-2">
+                          <div>
+                            <p className="text-xs font-bold tracking-[0.15em] text-red-400 uppercase flex items-center gap-1.5 font-mono mb-1.5">
+                              <Phone className="h-3.5 w-3.5 text-red-400" />
+                              <span>Campus Counseling Services</span>
+                            </p>
+                            <p className="text-xs text-zinc-400 leading-relaxed">
+                              If you feel overwhelmed, please reach out to the campus support team. It is completely confidential and free for all students.
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-1 gap-1.5 text-xs text-zinc-500 font-medium pt-1 border-t border-red-950/20">
                             <div className="flex items-center gap-1.5">
-                              <MapPin className="h-3 w-3 shrink-0 text-zinc-600" />
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
                               <span>Wellness Cell, Room 102, Admin Block</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <Phone className="h-3 w-3 shrink-0 text-zinc-600" />
+                              <Phone className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
                               <a href="tel:+911123456789" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
                                 +91 11 2345 6789
-                                <ExternalLink className="h-2 w-2" />
+                                <ExternalLink className="h-2.5 w-2.5" />
                               </a>
                             </div>
-                            <div className="flex items-center gap-1.5 col-span-full">
-                              <Mail className="h-3 w-3 shrink-0 text-zinc-600" />
+                            <div className="flex items-center gap-1.5">
+                              <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
                               <a href="mailto:wellness@institute.edu" className="hover:text-primary transition-colors hover:underline flex items-center gap-0.5">
                                 wellness@institute.edu
-                                <ExternalLink className="h-2 w-2" />
+                                <ExternalLink className="h-2.5 w-2.5" />
                               </a>
                             </div>
                           </div>
                         </div>
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Runway Hero */}
             <div id="card-runway-status" className="bg-surface rounded-2xl border border-border relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-accent-bronze via-accent-amber to-accent-copper opacity-80" />
               <div className="p-6 md:p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Runway Status</p>
-                  <div className="hidden md:flex items-center gap-3">
-                    <Badge variant="outline" className="bg-white/5 border-border text-foreground font-bold text-xs px-2.5 py-0.5">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
+                  <div>
+                    <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Runway Status</p>
+                    <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                      How long your money can last at the current pace.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 sm:justify-end">
+                    {runwayView && (
+                      <Badge variant="outline" className={`${runwayStatusClass} font-semibold text-[10px] uppercase tracking-wider px-2.5 py-0.5`}>
+                        {runwayStatusLabel}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="hidden">
                       {profile?.wing_label ?? "—"}
                     </Badge>
                     <button
                       onClick={() => nav({ to: "/companion" })}
                       title="Companion Status"
-                      className="flex items-center justify-center w-6 h-6 rounded-full bg-surface-raised border border-border hover:border-white/15 transition-all"
+                      className="hidden"
                     >
                       <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${compStatus === "green" ? "bg-success" : compStatus === "amber" ? "bg-warning" : "bg-destructive"}`} />
                     </button>
                   </div>
                 </div>
 
-                {!calc ? (
+                {!runwayView ? (
                   <Skeleton className="mt-2 h-20 w-full max-w-xs" />
                 ) : (
                   <>
-                    <div className="flex items-baseline gap-2.5">
-                      <h2 className="text-[56px] md:text-[76px] font-black tracking-tighter text-foreground tnum leading-none" style={{ color: runwayColor }}>
-                        <CountUp to={calc.runwayDays} />
-                      </h2>
-                      <span className="text-[16px] md:text-[20px] font-bold tracking-widest text-zinc-500 uppercase">Days</span>
-                    </div>
-                    <p className="mt-3 max-w-full text-[13px] md:text-sm text-zinc-400 font-medium leading-6 tracking-normal">
-                      Remaining allowance until <span className="text-foreground font-bold">{rupees(calc.totalAllowance * 100)}</span> resets on <span className="text-foreground font-bold">{shortDate(calc.cycleEnd)}</span>
-                    </p>
+                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-stretch">
+                      <div className="min-w-0">
+                        <div className="flex items-baseline gap-2.5">
+                          <h2 className="text-[56px] sm:text-[70px] md:text-[80px] font-bold tracking-tighter text-foreground tnum leading-none" style={{ color: runwayColor }}>
+                            <CountUp to={runwayView.days} />
+                          </h2>
+                          <span className="text-[16px] md:text-[20px] font-bold tracking-widest text-zinc-500 uppercase">Days</span>
+                        </div>
+                        <p className="mt-3 max-w-2xl text-[13px] md:text-sm text-zinc-400 font-medium leading-6 tracking-normal">
+                          You can safely spend <span className="text-foreground font-bold">{rupees(runwayView.safeDailyPaise)}/day</span> until your allowance resets.
+                        </p>
+                        <p className="mt-2 text-[11px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">
+                          Reset in {runwayView.daysLeft} days{runwayView.cycleEnd ? ` (${shortDate(runwayView.cycleEnd)})` : ""}
+                        </p>
+                        <p className="hidden">
+                          Reset in {runwayView.daysLeft} days{runwayView.cycleEnd ? ` · ${shortDate(runwayView.cycleEnd)}` : ""}
+                        </p>
+                        <p className="hidden">
+                          {runwayView.daysLeft} days until reset · {Math.round((runwayView.shortfallProbability ?? 0) * 100)}% shortfall risk
+                        </p>
+                      </div>
 
-                    <div className="mt-8 grid grid-cols-3 gap-2 md:gap-6 border-t border-border pt-6">
-                      <div className="flex min-w-0 flex-col gap-1">
-                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Balance</p>
-                        <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.remaining * 100)}</p>
-                      </div>
-                      <div className="flex min-w-0 flex-col gap-1 border-l border-border pl-3 md:pl-6">
-                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Safe limit</p>
-                        <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.safeDailyLimit * 100)}</p>
-                      </div>
-                      <div className="flex min-w-0 flex-col gap-1 border-l border-border pl-3 md:pl-6">
-                        <p className="text-xs text-zinc-500 font-bold whitespace-nowrap">Today</p>
-                        <p className="text-[18px] md:text-[22px] font-black text-foreground tnum">{rupees(calc.spentToday * 100)}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-8">
-                      <Progress id="progress-runway" value={calc.pct} className="h-1 bg-surface-raised" />
-                      <div className="mt-3 text-xs text-muted-foreground flex flex-col md:flex-row md:items-center justify-between gap-2 font-medium">
-                        {profile?.companion_paired ? (
-                          <span className="flex items-center gap-1.5 text-zinc-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-                            Auto-tracking via {profile.companion_device_name ?? "companion"}
-                          </span>
-                        ) : (
-                          <Link to="/companion" className="text-warning flex items-center gap-1.5 hover:underline">
-                            <span className="w-1.5 h-1.5 bg-warning rounded-full" /> Manual tracking mode
+                      <div className="xl:border-l xl:border-border/70 xl:pl-6 flex flex-col justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.2em] text-primary">Next best action</p>
+                          <h3 className="mt-2 text-sm sm:text-base font-semibold text-foreground">
+                            {runwayView.nextAction?.title ?? "Keep your current pace"}
+                          </h3>
+                          <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                            {runwayView.nextAction?.detail ?? "Your current runway can reach reset if today stays inside the safe daily limit."}
+                          </p>
+                        </div>
+                        <div>
+                          <Link to="/runway" className="inline-flex h-8 rounded-lg bg-primary text-primary-foreground px-3 items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
+                            Open Runway
                           </Link>
-                        )}
-                        {calc.unpaidPoolDebt > 0 && (
-                          <span className="text-amber-500 flex items-center gap-1.5 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                            ⚠️ Includes {rupees(calc.unpaidPoolDebt * 100)} unpaid pool debt
-                          </span>
-                        )}
-                        <span className="font-bold text-foreground">{calc.pct}% Spent</span>
+                        </div>
                       </div>
                     </div>
+
+                    <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4 border-t border-border pt-5">
+                      <div className="min-w-0">
+                        <p className="text-[10px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">Balance</p>
+                        <p className="mt-1 text-[17px] md:text-[20px] font-semibold text-foreground tnum">{rupees(runwayView.remainingPaise)}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] md:text-xs text-primary font-semibold uppercase tracking-wider">Safe/day</p>
+                        <p className="mt-1 text-[17px] md:text-[20px] font-semibold text-foreground tnum">{rupees(runwayView.safeDailyPaise)}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">Food pace</p>
+                        <p className="mt-1 text-[17px] md:text-[20px] font-semibold text-foreground tnum">{rupees(runwayView.foodRoutine?.food_daily_pace ?? 0)}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">Today</p>
+                        <p className="mt-1 text-[17px] md:text-[20px] font-semibold text-foreground tnum">{rupees(runwayView.spentTodayPaise)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5">
+                      <Progress id="progress-runway" value={runwayView.pct} className="h-1 bg-surface-raised" />
+                      <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground font-medium sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {profile?.companion_paired ? (
+                            <span className="flex items-center gap-1.5 text-zinc-400">
+                              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                              Auto-tracking via {profile.companion_device_name ?? "companion"}
+                            </span>
+                          ) : (
+                            <Link to="/companion" className="text-warning flex items-center gap-1.5 hover:underline">
+                              <span className="w-1.5 h-1.5 bg-warning rounded-full" /> Manual tracking mode
+                            </Link>
+                          )}
+                          {(calc?.unpaidPoolDebt ?? 0) > 0 && (
+                            <span className="inline-flex items-center rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] md:text-xs font-semibold text-amber-500">
+                              Pool dues included {rupees((calc?.unpaidPoolDebt ?? 0) * 100)}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-bold text-foreground">{runwayView.pct}% Spent</span>
+                      </div>
+                    </div>
+
+                    {false && runwayView?.decision?.absorbed?.length ? (
+                      <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+                        {runwayView?.decision?.absorbed?.map((factor: any) => (
+                          <div key={factor.kind} className="rounded-xl border border-border/70 bg-surface-raised/60 p-3 min-w-0">
+                            <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-zinc-500 truncate">{factor.label}</p>
+                            <p className="mt-1 text-sm font-black text-foreground tnum">
+                              {rupees(factor.daily_amount ?? factor.amount)}
+                              {factor.daily_amount ? <span className="text-[9px] md:text-xs text-zinc-500">/day</span> : null}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </>
                 )}
               </div>
             </div>
 
-            {calc && <SpendingSmartCheck calc={calc} />}
+            {runwayView && <MealRunwayCheck calc={calc} runwayView={runwayView} />}
 
             {/* ── Behaviour Analytics Row ─────────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1276,7 +1611,7 @@ function Dashboard() {
                     {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
                       <div key={i} className="flex flex-col items-center gap-1 flex-1">
                         <div className="w-full rounded-sm bg-white/10" style={{ height: `${20 + Math.random() * 60}%`, minHeight: "8px" }} />
-                        <span className="text-[10px] text-zinc-600 font-bold">{d}</span>
+                        <span className="text-[10px] md:text-xs text-zinc-600 font-bold">{d}</span>
                       </div>
                     ))}
                   </div>
@@ -1299,11 +1634,23 @@ function Dashboard() {
 
             {/* ── Food & Wellness Strip ───────────────────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5">
-              <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase mb-4">Food & Wellness</p>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
+                <div>
+                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Food & Wellness</p>
+                  <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                    Meal gaps, delivery, groceries, and subscriptions feed directly into runway.
+                  </p>
+                </div>
+                {runwayView?.foodRoutine?.label && (
+                  <Badge variant="outline" className="w-fit border-border bg-surface-raised text-[10px] md:text-xs uppercase tracking-wider font-black">
+                    {runwayView.foodRoutine.label}
+                  </Badge>
+                )}
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {/* Food gap */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Last meal</p>
+                  <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider font-bold">Last meal</p>
                   {insights ? (
                     <p className={`text-[16px] font-black tnum ${insights.food.gap_hours > 12 ? "text-destructive" : insights.food.gap_hours > 6 ? "text-warning" : "text-success"}`}>
                       {insights.food.gap_hours > 0 ? `${Math.round(insights.food.gap_hours)}h ago` : "—"}
@@ -1316,16 +1663,18 @@ function Dashboard() {
 
                 {/* Delivery vs mess */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Delivery</p>
+                  <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider font-bold">Delivery</p>
                   <p className="text-[16px] font-black text-foreground">
-                    {insights?.food?.delivery_count_30d ?? "—"}×
+                    {runwayView?.foodRoutine?.delivery?.count ?? insights?.food?.delivery_count_30d ?? "—"}×
                   </p>
-                  <p className="text-xs text-zinc-600">vs {insights?.food?.mess_count_30d ?? "—"} mess visits</p>
+                  <p className="text-xs text-zinc-600">
+                    {runwayView?.foodRoutine ? `${rupees(runwayView.foodRoutine.food_daily_pace ?? 0)}/day food pace` : `vs ${insights?.food?.mess_count_30d ?? "—"} mess visits`}
+                  </p>
                 </div>
 
                 {/* Late night */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Late Night</p>
+                  <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider font-bold">Late Night</p>
                   <p className="text-[16px] font-black text-foreground tnum">
                     {insights ? rupees(insights.late_night.total_paise) : "—"}
                   </p>
@@ -1334,7 +1683,7 @@ function Dashboard() {
 
                 {/* Sub bleed */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-bold">Sub Bleed</p>
+                  <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider font-bold">Sub Bleed</p>
                   <p className="text-[16px] font-black text-foreground tnum">
                     {insights ? rupees(insights.subscriptions.monthly_bleed_paise) : "—"}
                   </p>
@@ -1345,7 +1694,7 @@ function Dashboard() {
               {/* Mess vs delivery bar */}
               {insights?.food && (insights.food.delivery_count_30d + insights.food.mess_count_30d) > 0 && (
                 <div className="mt-5 pt-4 border-t border-border">
-                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-2">Mess vs Delivery ratio (30d)</p>
+                  <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider mb-2">Routine meal vs delivery ratio (30d)</p>
                   <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
                     <div
                       className="bg-success rounded-full transition-all"
@@ -1357,8 +1706,8 @@ function Dashboard() {
                     />
                   </div>
                   <div className="flex justify-between mt-1.5">
-                    <span className="text-[10px] text-success font-bold">Mess {insights.food.mess_count_30d}</span>
-                    <span className="text-[10px] text-warning font-bold">Delivery {insights.food.delivery_count_30d}</span>
+                    <span className="text-[10px] md:text-xs text-success font-bold">Mess {insights.food.mess_count_30d}</span>
+                    <span className="text-[10px] md:text-xs text-warning font-bold">Delivery {insights.food.delivery_count_30d}</span>
                   </div>
                 </div>
               )}
@@ -1367,31 +1716,63 @@ function Dashboard() {
             {/* Active Pools */}
             <section id="section-active-pools" className="space-y-4 pt-2">
               <div className="flex items-center justify-between px-1">
-                <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase">Active Wing Pools</h3>
+                <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase">Active Pools</h3>
                 <Link
                   to="/pool"
                   id="btn-new-pool-dash"
-                  className="text-[10px] font-bold text-foreground bg-surface-raised border border-border hover:bg-surface-interactive transition-all px-3.5 py-1.5 rounded-full uppercase tracking-wider cursor-pointer"
+                  className="text-[10px] md:text-xs font-bold text-foreground bg-surface-raised border border-border hover:bg-surface-interactive transition-all px-3.5 py-1.5 rounded-full uppercase tracking-wider cursor-pointer"
                 >
                   + New Pool
                 </Link>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {(pools ?? []).filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now()).length === 0 && (
-                  <div className="col-span-full py-10 text-center border border-dashed border-border rounded-2xl bg-surface-raised/40">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools in your wing.</p>
-                    <p className="text-xs text-zinc-500 mt-1">Start one now to split delivery fees with your wing.</p>
-                  </div>
-                )}
-                {(pools ?? [])
-                  .filter((p) => p.status === "open" && new Date(p.expires_at).getTime() > Date.now())
-                  .map((p) => {
-                    const total = (p.items ?? []).reduce((s: number, i: any) => s + i.estimated_price, 0);
+                {(() => {
+                  const activeDashboardPools = (pools ?? []).filter(
+                    (p) => (p.status === "open" && new Date(p.expires_at).getTime() > Date.now()) ||
+                           (p.status === "completed" && !isPoolFullyPaid(p))
+                  );
+                  
+                  if (activeDashboardPools.length === 0) {
+                    return (
+                      <div className="col-span-full py-10 text-center border border-dashed border-border rounded-2xl bg-surface-raised/40">
+                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools in your wing.</p>
+                        <p className="text-xs text-zinc-500 mt-1">Start one now to split delivery fees with your wing.</p>
+                      </div>
+                    );
+                  }
+                  
+                  return activeDashboardPools.map((p) => {
+                    const total = p.status === "completed"
+                      ? (p.items ?? []).filter((it: any) => it.is_purchased).reduce((s: number, i: any) => s + i.estimated_price, 0)
+                      : (p.items ?? []).reduce((s: number, i: any) => s + i.estimated_price, 0);
                     const minsLeft = Math.max(0, Math.round((new Date(p.expires_at).getTime() - Date.now()) / 60000));
                     const perPerson = (p.items ?? []).length
                       ? Math.round(p.delivery_fee / new Set((p.items ?? []).map((i: any) => i.added_by_name)).size)
                       : 0;
+                    
+                    const rSummary = p.status === "completed" ? (() => {
+                      const breakdown = p.split_breakdown ?? {};
+                      let unpaidCount = 0;
+                      let unpaidTotal = 0;
+                      let myOwed = 0;
+                      let myStatus = "";
+                      Object.entries(breakdown).forEach(([rName, details]: [string, any]) => {
+                        const isHost = rName.toLowerCase() === "you" || rName.toLowerCase() === (p.created_by_name ?? "").toLowerCase();
+                        if (isHost) return;
+                        if (!details.paid) {
+                          unpaidCount += 1;
+                          unpaidTotal += details.total;
+                        }
+                        const isMe = user && (rName.toLowerCase() === user.fullName.trim().toLowerCase());
+                        if (isMe) {
+                          myOwed = details.total;
+                          myStatus = details.payment_status;
+                        }
+                      });
+                      return { unpaidCount, unpaidTotal, myOwed, myStatus };
+                    })() : null;
+
                     return (
                       <Link key={p.id} to="/pool/$id" params={{ id: p.id }} className="group">
                         <Card className="bg-surface relative overflow-hidden border border-border p-5 transition-all duration-300 hover:border-white/15 hover:bg-surface-raised h-full flex flex-col justify-between hover:shadow-lg hover:shadow-black/40">
@@ -1401,29 +1782,81 @@ function Dashboard() {
                                 <PlatformIcon platform={p.platform} name={p.platform_display_label || p.platform.replace("_", " ")} className="h-5 w-5" />
                                 <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                   <span className="text-xs font-black uppercase tracking-wider text-foreground truncate max-w-[120px] sm:max-w-none">{p.platform_display_label || p.platform.replace("_", " ")}</span>
-                                  <Badge variant="outline" className="text-muted-foreground bg-white/5 border-border text-[10px] font-bold">{p.wing_label}</Badge>
+                                  <Badge variant="outline" className="hidden">{p.wing_label}</Badge>
                                 </div>
                               </div>
-                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border border-border bg-background tnum shrink-0 ${minsLeft < 5 ? "text-destructive animate-pulse border-destructive/20 bg-destructive/5" : "text-foreground"}`}>
-                                {minsLeft}m left
+                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border border-border bg-background tnum shrink-0 ${minsLeft < 5 && p.status === "open" ? "text-destructive animate-pulse border-destructive/20 bg-destructive/5" : "text-foreground"}`}>
+                                {p.status === "open" ? `${minsLeft}m left` : "Splits Active"}
                               </span>
                             </div>
                             <p className="text-xs text-muted-foreground">Host: <span className="font-semibold text-foreground capitalize">{p.created_by_name || "—"}</span></p>
+                            
+                            {rSummary && (
+                              <div className="mt-3">
+                                {user && p.host_id === user.id ? (
+                                  rSummary.unpaidTotal > 0 ? (
+                                    <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-xl text-[10px] text-amber-500 font-bold">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                                      <span>Collect: <strong className="text-foreground">{rupees(rSummary.unpaidTotal)}</strong> pending ({rSummary.unpaidCount})</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 px-2.5 py-1.5 rounded-xl text-[10px] text-green-500 font-bold">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                                      <span>All splits collected & verified!</span>
+                                    </div>
+                                  )
+                                ) : (
+                                  rSummary.myOwed > 0 && (
+                                    rSummary.myStatus === "verified" ? (
+                                      <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 px-2.5 py-1.5 rounded-xl text-[10px] text-green-500 font-bold">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                                        <span>Paid: <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong></span>
+                                      </div>
+                                    ) : rSummary.myStatus === "pending" ? (
+                                      <div className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1.5 rounded-xl text-[10px] text-blue-500 font-bold animate-pulse">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                                        <span>Verifying split of <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong></span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1.5 rounded-xl text-[10px] text-rose-500 font-bold">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
+                                        <span>Owe: <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong></span>
+                                      </div>
+                                    )
+                                  )
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className="mt-6 pt-4 border-t border-border flex items-center justify-between">
                             <div className="flex flex-col">
-                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Cart</span>
-                              <span className="text-xs font-black text-foreground">{rupees(total)} <span className="text-zinc-500 font-normal text-[10px]">/ {rupees(p.min_cart_value)} min</span></span>
+                              <span className="text-[10px] md:text-xs text-zinc-500 font-bold uppercase tracking-wider">Cart</span>
+                              <span className="text-xs font-black text-foreground">
+                                {rupees(total)}
+                                {p.status === "open" && (
+                                  <span className="text-zinc-500 font-normal text-[10px] md:text-xs"> / {rupees(p.min_cart_value)} min</span>
+                                )}
+                              </span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Split Est.</span>
-                              <span className="text-xs font-black text-success">{rupees(perPerson)} <span className="text-zinc-500 font-normal text-[10px]">/ person</span></span>
+                              <span className="text-[10px] md:text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                                {p.status === "completed" ? "Your Split" : "Split Est."}
+                              </span>
+                              <span className="text-xs font-black text-success">
+                                {p.status === "completed" && rSummary
+                                  ? rupees(rSummary.myOwed || (total / (Object.keys(p.split_breakdown ?? {}).length || 1)))
+                                  : rupees(perPerson)}
+                                <span className="text-zinc-500 font-normal text-[10px] md:text-xs">
+                                  {p.status === "completed" ? "" : " / person"}
+                                </span>
+                              </span>
                             </div>
                           </div>
                         </Card>
                       </Link>
                     );
-                  })}
+                  });
+                })()}
               </div>
             </section>
           </div>
@@ -1437,7 +1870,7 @@ function Dashboard() {
                 <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 opacity-80" />
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                   <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase">Wing Netting & Settlements</p>
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full border text-emerald-500 border-emerald-500/20 bg-emerald-500/5">
+                  <span className="text-[10px] md:text-xs font-black px-2 py-0.5 rounded-full border text-emerald-500 border-emerald-500/20 bg-emerald-500/5">
                     NETTED ACTIVE
                   </span>
                 </div>
@@ -1446,7 +1879,7 @@ function Dashboard() {
                   {/* Nishant owes others (you_owe) */}
                   {nettedBalances.balances?.you_owe?.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">You Owe</p>
+                      <p className="text-[11px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider">You Owe</p>
                       <div className="space-y-1.5">
                         {nettedBalances.balances.you_owe.map((item: any, idx: number) => (
                           <div key={idx} className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg text-xs border border-border">
@@ -1461,7 +1894,7 @@ function Dashboard() {
                   {/* Others owe Nishant (owes_you) */}
                   {nettedBalances.balances?.owes_you?.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Owes You</p>
+                      <p className="text-[11px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider">Owes You</p>
                       <div className="space-y-1.5">
                         {nettedBalances.balances.owes_you.map((item: any, idx: number) => (
                           <div key={idx} className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg text-xs border border-border">
@@ -1476,7 +1909,7 @@ function Dashboard() {
                   {/* Suggested settlements path */}
                   {nettedBalances.suggested_settlements?.length > 0 && (
                     <div className="space-y-2 pt-3 border-t border-border/60">
-                      <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <p className="text-[11px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                         <span>💡 Optimized Settlement Plan</span>
                       </p>
                       <div className="space-y-1.5">
@@ -1498,7 +1931,7 @@ function Dashboard() {
                 <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.05), transparent 65%)" }} />
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                   <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase group-hover:text-primary transition-colors">Survive Until Broke</p>
-                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full border text-primary border-primary/30 bg-primary/5 flex items-center gap-1">
+                  <span className="text-[11px] md:text-xs font-black px-2.5 py-1 rounded-full border text-primary border-primary/30 bg-primary/5 flex items-center gap-1">
                     LIVE COUNTDOWN
                     <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                   </span>
@@ -1525,7 +1958,7 @@ function Dashboard() {
                 </div>
                 <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Campus Intelligence</p>
                 {campusIntel?.source === "bedrock" && (
-                  <span className="ml-auto text-[10px] font-black text-primary uppercase tracking-wider border border-primary/30 px-1.5 py-0.5 rounded-full">Bedrock</span>
+                  <span className="ml-auto text-[10px] md:text-xs font-black text-primary uppercase tracking-wider border border-primary/30 px-1.5 py-0.5 rounded-full">Bedrock</span>
                 )}
               </div>
               {campusIntel?.summary ? (
@@ -1540,11 +1973,11 @@ function Dashboard() {
               {campusIntel && (
                 <div className="mt-3 pt-3 border-t border-border flex gap-4">
                   <div>
-                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider">This Week</p>
+                    <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider">This Week</p>
                     <p className="text-xs font-black text-foreground tnum">{rupees((campusIntel.spend_7d ?? 0) * 100)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Last Meal</p>
+                    <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider">Last Meal</p>
                     <p className={`text-xs font-black tnum ${(campusIntel.last_food_hours ?? 0) > 8 ? "text-warning" : "text-success"}`}>
                       {campusIntel.last_food_hours > 0 ? `${Math.round(campusIntel.last_food_hours)}h ago` : "—"}
                     </p>
@@ -1561,7 +1994,7 @@ function Dashboard() {
                   <Compass className="h-4.5 w-4.5 text-primary" />
                   <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase font-display">Campus Fare Guard</p>
                 </div>
-                <Badge variant="outline" className="bg-success/5 border-success/20 text-success font-bold text-[10px] font-mono">
+                <Badge variant="outline" className="bg-success/5 border-success/20 text-success font-bold text-[10px] md:text-xs font-mono">
                   Saved ₹{travelSavings?.total_saved ?? 0}
                 </Badge>
               </div>
@@ -1582,7 +2015,7 @@ function Dashboard() {
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Wing Activity</p>
-                <span className="flex items-center gap-1.5 text-[10px] text-zinc-600 font-bold">
+                <span className="flex items-center gap-1.5 text-[10px] md:text-xs text-zinc-600 font-bold">
                   <span className={`w-1.5 h-1.5 rounded-full ${wingEvents.length ? "bg-success animate-pulse" : "bg-zinc-600"}`} />
                   {wingEvents.length ? "Live" : "No Live Events"}
                 </span>
@@ -1608,7 +2041,7 @@ function Dashboard() {
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-zinc-300 leading-snug">{ev.text}</p>
-                        <p className="text-[10px] text-zinc-600 mt-0.5 font-bold">
+                        <p className="text-[10px] md:text-xs text-zinc-600 mt-0.5 font-bold">
                           {ev.mins_ago === 0 ? "just now" : ev.mins_ago < 60 ? `${ev.mins_ago}m ago` : `${Math.floor(ev.mins_ago / 60)}h ago`}
                         </p>
                       </div>
@@ -1643,15 +2076,15 @@ function Dashboard() {
             )}
 
             {/* Alert Widget */}
-            {calc && (calc.runwayDays < 7 || calc.safeDailyLimit < 150) && (
+            {runwayView && (runwayView.days < 7 || runwayView.safeDailyPaise < 15_000) && (
               <Card id="card-runway-alert" className="border-destructive/30 bg-destructive/5 p-5 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-[3px] h-full bg-destructive" />
                 <div className="flex items-center gap-2 mb-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
-                  <p className="text-xs font-bold text-destructive tracking-widest uppercase">Runway Warning</p>
+                  <p className="text-xs font-bold text-destructive tracking-widest uppercase">Runway Action</p>
                 </div>
                 <p className="text-xs font-medium text-foreground leading-relaxed">
-                  Daily limit is <span className="text-destructive font-bold">{rupees(calc.safeDailyLimit * 100)}</span>. Skip delivery orders tonight.
+                  Safe limit is <span className="text-destructive font-bold">{rupees(runwayView.safeDailyPaise)}</span>. {runwayView.decision?.next_best_action?.detail ?? runwayView.foodRoutine?.action?.detail ?? "Reduce today's flexible spend to protect the allowance cycle."}
                 </p>
                 {bestFood && (
                   <div className="mt-4 rounded-lg border border-success/20 bg-success/5 p-3.5 space-y-1">
@@ -1675,40 +2108,82 @@ function Dashboard() {
             {/* Collisions */}
             {collisions.length > 0 && (
               <section id="section-collisions" className="space-y-3">
-                <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase px-1">Budget Collisions</h3>
-                <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="w-1.5 h-3.5 bg-destructive rounded-full" />
+                  <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase">Budget Collisions</h3>
+                </div>
+                <Card className="bg-surface border-border p-4 space-y-4">
                   {collisions.length > 1 && (
-                    <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-4 text-xs">
-                      <p className="font-bold tracking-wider text-xs text-destructive uppercase mb-1">Cumulative Debit Impact</p>
-                      <p className="font-medium text-zinc-400 leading-relaxed">
-                        If all {collisions.length} debits hit this week, your safe limit drops to <strong className="text-foreground">{rupees(cumulativeCollisionLimit * 100)}</strong>/day.
-                      </p>
+                    <div className="relative overflow-hidden bg-destructive/5 border border-destructive/15 rounded-xl p-4 text-xs shadow-sm">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-destructive/10 rounded-full blur-xl pointer-events-none" />
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="font-bold tracking-wider text-xs text-destructive uppercase">Cumulative Debit Impact</p>
+                          <p className="font-medium text-zinc-400 leading-relaxed">
+                            If all {collisions.length} debits hit this week, your safe limit drops to <strong className="text-foreground">{rupees(cumulativeCollisionLimit * 100)}</strong>/day.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  {collisions.map((c) => (
-                    <Card
-                      key={c.id}
-                      className={`bg-surface border-border p-4 relative overflow-hidden ${c.critical ? "border-l-2 border-l-destructive" : ""}`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-xs font-bold text-foreground flex items-center">
-                          {c.service_name ?? c.name}
-                          {c.detected_from === "auto_detected" && (
-                            <Badge className="ml-2 bg-white/5 border border-border text-[10px] font-bold px-1.5 py-0">Auto</Badge>
-                          )}
-                        </p>
-                        <p className="text-xs font-bold text-destructive tnum">−{rupees(c.amount)}</p>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <p className="text-zinc-500 font-semibold">{shortDate(new Date(c.next_debit_date))}</p>
-                        <p className="text-zinc-500">
-                          Limit: <span className="text-foreground font-bold">{rupees(c.newLimit * 100)}</span>
-                          {c.critical && <span className="ml-1.5 text-destructive font-black text-xs font-mono uppercase tracking-widest bg-destructive/10 border border-destructive/20 px-1 py-0.5 rounded">CRITICAL</span>}
-                        </p>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
+                  
+                  <div className="divide-y divide-border/60">
+                    {collisions.map((c, idx) => {
+                      const isNetflix = (c.service_name ?? c.name).toLowerCase().includes("netflix");
+                      const isSpotify = (c.service_name ?? c.name).toLowerCase().includes("spotify");
+                      const isYoutube = (c.service_name ?? c.name).toLowerCase().includes("youtube");
+                      
+                      const brandColorClass = isNetflix 
+                        ? "text-red-500 bg-red-500/10 border-red-500/20" 
+                        : isSpotify 
+                        ? "text-green-500 bg-green-500/10 border-green-500/20" 
+                        : isYoutube 
+                        ? "text-red-500 bg-red-500/10 border-red-500/20" 
+                        : "text-primary bg-primary/10 border-primary/20";
+
+                      return (
+                        <div
+                          key={c.id}
+                          className="py-3 first:pt-0 last:pb-0 relative overflow-hidden flex flex-col gap-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${brandColorClass}`}>
+                                {c.service_name ?? c.name}
+                              </span>
+                              {c.detected_from === "auto_detected" && (
+                                <Badge className="bg-zinc-800 text-zinc-400 border border-zinc-700/60 text-[9px] font-bold px-1.5 py-0 uppercase tracking-widest font-mono">
+                                  Auto
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs font-black text-destructive tnum flex items-center gap-0.5">
+                              <span>−</span>
+                              <span>{rupees(c.amount)}</span>
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-xs text-zinc-500">
+                            <div className="flex items-center gap-1.5 font-semibold">
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>{shortDate(new Date(c.next_debit_date))}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span>Limit:</span>
+                              <span className="text-foreground font-black tnum">{rupees(c.newLimit * 100)}</span>
+                              {c.critical && (
+                                <span className="ml-1.5 text-red-500 bg-red-500/10 border border-red-500/20 text-[9px] font-bold tracking-widest px-2 py-0.5 rounded-full uppercase animate-pulse">
+                                  Critical
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
               </section>
             )}
 
@@ -1739,18 +2214,18 @@ function Dashboard() {
                           </p>
                           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                             {t.category && (
-                              <span className="text-[10px] font-black tracking-widest text-zinc-500 uppercase">{t.category}</span>
+                              <span className="text-[10px] md:text-xs font-black tracking-widest text-zinc-500 uppercase">{t.category}</span>
                             )}
                             {t.source !== "manual" && (
                               <>
-                                <span className="text-[10px] text-zinc-600 font-bold">•</span>
-                                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">{t.source.split("_")[1]}</span>
+                                <span className="text-[10px] md:text-xs text-zinc-600 font-bold">•</span>
+                                <span className="text-[10px] md:text-xs font-black text-zinc-500 uppercase tracking-wider">{t.source.split("_")[1]}</span>
                               </>
                             )}
                             {t.needs_verification && (
                               <>
-                                <span className="text-[10px] text-zinc-600 font-bold">•</span>
-                                <span className="text-[9px] font-black text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                <span className="text-[10px] md:text-xs text-zinc-600 font-bold">•</span>
+                                <span className="text-[9px] md:text-xs font-black text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
                                   Verify Parser
                                 </span>
                               </>
@@ -1759,7 +2234,7 @@ function Dashboard() {
                               <button
                                 id={`btn-identify-${t.id}`}
                                 onClick={() => setIdentifying(t)}
-                                className="ml-1 rounded-full px-3 py-1 text-[11px] font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
+                                className="ml-1 rounded-full px-3 py-1 text-[11px] md:text-xs font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
                               >
                                 Identify?
                               </button>
@@ -1767,7 +2242,7 @@ function Dashboard() {
                             <button
                               id={`btn-edit-ledger-${t.id}`}
                               onClick={() => setEditingTxn(t)}
-                              className="ml-1 rounded-full px-3 py-1 text-[11px] font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
+                              className="ml-1 rounded-full px-3 py-1 text-[11px] md:text-xs font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
                             >
                               Edit
                             </button>
@@ -1775,7 +2250,7 @@ function Dashboard() {
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-xs font-black text-foreground tnum">{rupees(t.amount)}</p>
-                          <p className="text-[10px] text-zinc-500 font-semibold mt-0.5">{relativeTime(t.created_at)}</p>
+                          <p className="text-[10px] md:text-xs text-zinc-500 font-semibold mt-0.5">{relativeTime(t.created_at)}</p>
                         </div>
                       </div>
                     ))}
@@ -1909,7 +2384,7 @@ function Dashboard() {
             {foodTab === "scan" && (
               <form onSubmit={handleScanSubmit} className="space-y-4 py-4 animate-[fadeIn_0.2s_ease-out]">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Canteen / Venue Name</label>
+                  <label className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Canteen / Venue Name</label>
                   <Input
                     id="input-scan-venue"
                     placeholder="e.g. Hostel 4 Canteen, Nescafe, Main Cafeteria"
@@ -1921,7 +2396,7 @@ function Dashboard() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Menu Image (Max 5MB)</label>
+                  <label className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Menu Image (Max 5MB)</label>
                   <div className="flex items-center justify-center w-full">
                     <label className="flex flex-col items-center justify-center w-full h-32 border border-dashed border-border rounded-xl cursor-pointer bg-surface hover:bg-surface-raised transition-all">
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -1929,7 +2404,7 @@ function Dashboard() {
                         <p className="text-xs text-zinc-300 font-semibold">
                           {scanFile ? scanFile.name : "Select or Drop Menu Photo"}
                         </p>
-                        <p className="text-[10px] text-zinc-500 mt-1">PNG, JPG or JPEG up to 5MB</p>
+                        <p className="text-[10px] md:text-xs text-zinc-500 mt-1">PNG, JPG or JPEG up to 5MB</p>
                       </div>
                       <input
                         type="file"
@@ -1977,10 +2452,10 @@ function Dashboard() {
                       <div key={it.id} className="flex items-center justify-between bg-surface border border-border p-3.5 rounded-xl text-xs">
                         <div className="space-y-1 min-w-0 pr-4">
                           <p className="font-bold text-foreground truncate">{it.item_name}</p>
-                          <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">
+                          <p className="text-[10px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">
                             {it.venue_name} · {rupees(it.price)}
                           </p>
-                          <p className="text-[9px] font-bold text-primary tracking-widest uppercase">
+                          <p className="text-[9px] md:text-xs font-bold text-primary tracking-widest uppercase">
                             Votes: {it.verification_votes > 0 ? `+${it.verification_votes}` : it.verification_votes}
                           </p>
                         </div>
@@ -1989,14 +2464,14 @@ function Dashboard() {
                           <button
                             onClick={() => handleVerifyVote(it.id, "up")}
                             disabled={verifyMutation.isPending}
-                            className="px-3 py-2 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success font-bold text-[10px] uppercase cursor-pointer"
+                            className="px-3 py-2 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success font-bold text-[10px] md:text-xs uppercase cursor-pointer"
                           >
                             ✓ Upvote
                           </button>
                           <button
                             onClick={() => handleVerifyVote(it.id, "down")}
                             disabled={verifyMutation.isPending}
-                            className="px-3 py-2 rounded-lg bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive font-bold text-[10px] uppercase cursor-pointer"
+                            className="px-3 py-2 rounded-lg bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive font-bold text-[10px] md:text-xs uppercase cursor-pointer"
                           >
                             ✕ Downvote
                           </button>
@@ -2124,7 +2599,7 @@ function IdentifyForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
         <div className="space-y-1">
           <label className="text-[12px] text-muted-foreground">Custom Category</label>
           <Input id="input-map-custom-category" value={customCat} onChange={(e) => setCustomCat(e.target.value)} placeholder="e.g., Laundry, Books, Printing" />
-          <p className="text-[10px] text-zinc-500 pl-1">This category will be saved for future use.</p>
+          <p className="text-[10px] md:text-xs text-zinc-500 pl-1">This category will be saved for future use.</p>
         </div>
       )}
       <DialogFooter>
@@ -2237,7 +2712,7 @@ function AddTxnForm({ onClose }: { onClose: () => void }) {
         <div className="space-y-1">
           <label className="text-[12px] text-muted-foreground">Custom Category</label>
           <Input id="input-txn-custom-category" value={customCat} onChange={(e) => setCustomCat(e.target.value)} placeholder="e.g., Laundry, Books, Printing" />
-          <p className="text-[10px] text-zinc-500 pl-1">This category will be saved for future use.</p>
+          <p className="text-[10px] md:text-xs text-zinc-500 pl-1">This category will be saved for future use.</p>
         </div>
       )}
       <DialogFooter>
@@ -2402,7 +2877,7 @@ function EditTxnForm({ txn, onClose }: { txn: Txn; onClose: () => void }) {
               onChange={(e) => setCustomCat(e.target.value)}
               placeholder="e.g., Laundry, Books, Printing"
             />
-            <p className="text-[10px] text-zinc-500 pl-1">This category will be saved for future use.</p>
+            <p className="text-[10px] md:text-xs text-zinc-500 pl-1">This category will be saved for future use.</p>
           </div>
         )}
       </div>

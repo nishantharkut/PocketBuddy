@@ -44,9 +44,9 @@
   --color-accent-copper: var(--accent-copper);
   --color-accent-amber: var(--accent-amber);
   /* Fonts */
-  --font-sans: "Inter", "DM Sans", system-ui, sans-serif;
-  --font-display: "Inter", "Space Grotesk", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: var(--font-sans);
+  --font-mono: var(--font-sans);
 }
 
 :root {
@@ -100,51 +100,51 @@
 }
 
 .dark {
-  --background: #0a0a0a;
+  --background: #111113;
   --foreground: #f4f4f5;
-  --surface: #0d0d0d;
-  --surface-raised: #121214;
-  --surface-interactive: #1a1a1d;
-  --card: #0f0f10;
-  --card-foreground: #f4f4f5;
-  --popover: #121214;
+  --surface: #18181b;
+  --surface-raised: #1f1f23;
+  --surface-interactive: #27272a;
+  --card: #18181b;
+  --card-foreground: #e4e4e7;
+  --popover: #1c1c1f;
   --popover-foreground: #f4f4f5;
   --primary: #f08a68;
-  --primary-foreground: #0a0a0a;
-  --secondary: #18181b;
+  --primary-foreground: #111113;
+  --secondary: #1c1c1f;
   --secondary-foreground: #f4f4f5;
-  --muted: #18181b;
-  --muted-foreground: #71717a;
-  --accent: #18181b;
+  --muted: #1c1c1f;
+  --muted-foreground: #a1a1aa;
+  --accent: #1c1c1f;
   --accent-foreground: #f4f4f5;
-  --destructive: #ef4444;
-  --destructive-foreground: #f4f4f5;
-  --border: #1f1f22;
-  --input: #1f1f22;
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+  --border: #27272a;
+  --input: #27272a;
   --ring: #f08a68;
 
   /* Status tokens (guard pattern) */
   --pb-blue: #f08a68;
   --pb-purple: #f08a68;
-  --pb-green: #22c55e;
-  --pb-amber: #d9a05b;
-  --pb-red: #ef4444;
+  --pb-green: #34d399;
+  --pb-amber: #fbbf24;
+  --pb-red: #f87171;
 
   /* Backward compat (primary pages still use these TW classes) */
   --accent-bronze: #8C7853;
   --accent-copper: #b86f56;
-  --accent-amber: #d9a05b;
+  --accent-amber: #fbbf24;
 
-  --success: #22c55e;
-  --warning: #d9a05b;
+  --success: #34d399;
+  --warning: #fbbf24;
 
-  --sidebar: #0d0d0d;
+  --sidebar: #18181b;
   --sidebar-foreground: #f4f4f5;
   --sidebar-primary: #f08a68;
-  --sidebar-primary-foreground: #0a0a0a;
-  --sidebar-accent: #18181b;
+  --sidebar-primary-foreground: #111113;
+  --sidebar-accent: #1c1c1f;
   --sidebar-accent-foreground: #f4f4f5;
-  --sidebar-border: #1f1f22;
+  --sidebar-border: #27272a;
   --sidebar-ring: #f08a68;
 }
 
@@ -162,7 +162,7 @@ html.dark { color-scheme: dark; }
     letter-spacing: 0;
   }
 
-  /* Headings use display font */
+  /* Headings intentionally use the same app font as body copy. */
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: 0; }
 
   /* Utility classes from guard */

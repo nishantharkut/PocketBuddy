@@ -21,6 +21,56 @@ PRIMARY_ALLOWANCE_WORDS = {"allowance", "stipend", "scholarship"}
 REFUND_WORDS = {"refund", "cashback", "reimbursement", "reversal"}
 INVALID_STATUSES = {"duplicate", "refunded", "reversed", "cancelled", "failed", "rejected"}
 MESS_WORDS = {"mess", "hostel dining", "meal plan"}
+DELIVERY_WORDS = {
+    "swiggy",
+    "zomato",
+    "food delivery",
+    "delivery",
+    "ubereats",
+    "eatclub",
+    "box8",
+    "dominos",
+    "pizza hut",
+    "kfc",
+    "mcdonald",
+    "burger",
+}
+COOKING_WORDS = {
+    "grocery",
+    "groceries",
+    "kirana",
+    "dmart",
+    "bigbasket",
+    "blinkit",
+    "zepto",
+    "jiomart",
+    "vegetable",
+    "fruit",
+    "milk",
+    "atta",
+    "rice",
+    "dal",
+    "oil",
+    "egg",
+    "maggi",
+    "cooking",
+}
+CAMPUS_FOOD_WORDS = {
+    "canteen",
+    "cafeteria",
+    "cafe",
+    "hostel dining",
+    "mess",
+    "tapri",
+    "dhaba",
+    "juice",
+    "tea",
+    "coffee",
+    "tiffin",
+}
+FOOD_CATEGORIES = {"food", "mess", "canteen", "dining", "snacks", "grocery", "groceries"}
+PG_CONTEXT_WORDS = {"pg", "paying guest", "flat", "rented", "rental", "apartment", "off campus"}
+DAY_SCHOLAR_CONTEXT_WORDS = {"day scholar", "commuter", "commute", "home", "local", "with parents"}
 
 
 def _utc_naive(value: Any) -> Optional[dt.datetime]:
@@ -104,6 +154,222 @@ def _is_committed_expense(txn: dict) -> bool:
     return str(txn.get("category") or "").casefold() == "subscription" or any(
         word in label for word in MESS_WORDS
     ) or bool(txn.get("is_committed"))
+
+
+def _contains_any(text: str, words: set[str]) -> bool:
+    return any(word in text for word in words)
+
+
+def _is_food_expense(txn: dict) -> bool:
+    category = str(txn.get("category") or "").casefold()
+    label = _label(txn)
+    return (
+        category in FOOD_CATEGORIES
+        or _contains_any(label, DELIVERY_WORDS)
+        or _contains_any(label, COOKING_WORDS)
+        or _contains_any(label, CAMPUS_FOOD_WORDS)
+    )
+
+
+def _food_stats(items: list[dict]) -> dict:
+    total = sum(_valid_amount(txn) for txn in items)
+    count = len(items)
+    return {
+        "count": count,
+        "spend": total,
+        "avg_order": round(total / count) if count else 0,
+    }
+
+
+def _profile_context(profile: dict) -> str:
+    keys = (
+        "hostel_block",
+        "residence_type",
+        "student_type",
+        "meal_routine",
+        "living_situation",
+        "housing_type",
+        "campus_role",
+    )
+    return " ".join(str(profile.get(key) or "") for key in keys).casefold()
+
+
+def _routine_fallback_daily(routine_type: str) -> int:
+    # Conservative Indian campus daily food caps in paise. These are used only
+    # when the user has no configured meal cost and not enough food history.
+    if routine_type == "hostel_mess":
+        return 12_000
+    if routine_type == "pg_cooking":
+        return 16_000
+    if routine_type == "day_scholar":
+        return 18_000
+    return 20_000
+
+
+def _build_food_routine(
+    *,
+    profile: dict,
+    cycle_expenses: list[dict],
+    cycle_start: dt.datetime,
+    cycle_end: dt.datetime,
+    now: dt.datetime,
+    days_left: int,
+    safe_daily: int,
+    mess_model: str,
+) -> dict:
+    observed_cycle_expenses = [
+        txn
+        for txn in cycle_expenses
+        if (created := _utc_naive(txn.get("created_at"))) and cycle_start <= created <= min(now, cycle_end)
+    ]
+    food_items = [txn for txn in observed_cycle_expenses if _is_food_expense(txn)]
+    delivery_items = [txn for txn in food_items if _contains_any(_label(txn), DELIVERY_WORDS)]
+    cooking_items = [txn for txn in food_items if _contains_any(_label(txn), COOKING_WORDS)]
+    campus_items = [
+        txn
+        for txn in food_items
+        if _contains_any(_label(txn), CAMPUS_FOOD_WORDS) and txn not in delivery_items
+    ]
+
+    food = _food_stats(food_items)
+    delivery = _food_stats(delivery_items)
+    cooking = _food_stats(cooking_items)
+    campus_direct = _food_stats(campus_items)
+    elapsed_days = max(1, (min(now, cycle_end - dt.timedelta(microseconds=1)).date() - cycle_start.date()).days + 1)
+    food_daily_pace = round(food["spend"] / elapsed_days) if food["spend"] else 0
+    delivery_daily_pace = round(delivery["spend"] / elapsed_days) if delivery["spend"] else 0
+    cooking_daily_pace = round(cooking["spend"] / elapsed_days) if cooking["spend"] else 0
+    campus_daily_pace = round(campus_direct["spend"] / elapsed_days) if campus_direct["spend"] else 0
+
+    context = _profile_context(profile)
+    routine_type = "mixed"
+    detected_from: list[str] = []
+    if profile.get("mess_enrolled") or mess_model in {"monthly", "per_meal", "included"}:
+        routine_type = "hostel_mess"
+        detected_from.append("profile_mess")
+    elif _contains_any(context, DAY_SCHOLAR_CONTEXT_WORDS):
+        routine_type = "day_scholar"
+        detected_from.append("profile_residence")
+    elif _contains_any(context, PG_CONTEXT_WORDS):
+        routine_type = "pg_cooking"
+        detected_from.append("profile_residence")
+    elif cooking["count"] >= 2 and cooking["spend"] >= max(delivery["spend"], campus_direct["spend"], 1):
+        routine_type = "pg_cooking"
+        detected_from.append("grocery_pattern")
+    elif campus_direct["count"] >= 2 and delivery["count"] == 0:
+        routine_type = "day_scholar"
+        detected_from.append("campus_meal_pattern")
+    elif food["count"]:
+        detected_from.append("food_history")
+    else:
+        detected_from.append("profile_default")
+
+    labels = {
+        "hostel_mess": "Hostel mess / campus meals",
+        "pg_cooking": "PG cooking / grocery routine",
+        "day_scholar": "Day scholar meals",
+        "mixed": "Mixed meal routine",
+    }
+
+    mess_per_meal = _profile_amount(profile, "mess_per_meal_cost")
+    meals_per_day = min(max(int(profile.get("mess_meals_per_day") or 2), 1), 4)
+    if routine_type == "hostel_mess" and mess_per_meal:
+        routine_daily_target = mess_per_meal * meals_per_day
+        meal_cost_source = "profile_mess_cost"
+    elif routine_type == "pg_cooking" and cooking_daily_pace:
+        routine_daily_target = max(8_000, min(22_000, cooking_daily_pace))
+        meal_cost_source = "grocery_history"
+    elif routine_type == "day_scholar" and campus_direct["avg_order"]:
+        routine_daily_target = max(10_000, min(24_000, campus_direct["avg_order"] * 2))
+        meal_cost_source = "campus_meal_history"
+    elif food_daily_pace:
+        routine_daily_target = max(8_000, min(_routine_fallback_daily(routine_type), food_daily_pace))
+        meal_cost_source = "food_history"
+    else:
+        routine_daily_target = _routine_fallback_daily(routine_type)
+        meal_cost_source = "campus_default"
+
+    recommended_daily_food_cap = max(0, min(routine_daily_target, safe_daily))
+    projected_remaining_food_pace = food_daily_pace * days_left
+    projected_remaining_food_cap = recommended_daily_food_cap * days_left
+    over_cap_remaining = max(0, projected_remaining_food_pace - projected_remaining_food_cap)
+
+    if mess_per_meal:
+        routine_meal_cost = mess_per_meal
+    elif campus_direct["avg_order"]:
+        routine_meal_cost = campus_direct["avg_order"]
+    elif cooking_daily_pace:
+        routine_meal_cost = max(4_000, round(cooking_daily_pace / 2))
+    else:
+        routine_meal_cost = round(_routine_fallback_daily(routine_type) / 2)
+    savings_if_replace_two_deliveries = (
+        max(0, delivery["avg_order"] - routine_meal_cost) * 2 if delivery["avg_order"] else 0
+    )
+
+    if not food["count"]:
+        action = {
+            "type": "set_routine",
+            "title": "Set a default meal routine",
+            "detail": "Log two or three meals this week so runway can separate food pace from other discretionary spend.",
+            "impact": 0,
+        }
+    elif delivery["count"] and (food_daily_pace > recommended_daily_food_cap or delivery["spend"] >= food["spend"] * 0.45):
+        impact = max(savings_if_replace_two_deliveries, over_cap_remaining)
+        action = {
+            "type": "reduce_delivery",
+            "title": "Replace two delivery orders this week",
+            "detail": f"Your delivery average is Rs {delivery['avg_order'] // 100:,}. Use {labels[routine_type].lower()} for two meals and keep food near Rs {recommended_daily_food_cap // 100:,}/day.",
+            "impact": impact,
+        }
+    elif routine_type == "pg_cooking":
+        action = {
+            "type": "pg_batch_cook",
+            "title": "Batch-cook before high-spend days",
+            "detail": f"Your grocery-led routine works best when food stays near Rs {recommended_daily_food_cap // 100:,}/day. Plan two ready meals before busy class or exam days.",
+            "impact": over_cap_remaining,
+        }
+    elif routine_type == "day_scholar":
+        action = {
+            "type": "day_scholar_plan",
+            "title": "Set a commute-day meal cap",
+            "detail": f"Keep one predictable campus meal or packed meal inside Rs {recommended_daily_food_cap // 100:,}/day so travel and snacks do not eat into runway.",
+            "impact": over_cap_remaining,
+        }
+    elif routine_type == "hostel_mess":
+        action = {
+            "type": "use_mess",
+            "title": "Use prepaid meals for routine days",
+            "detail": f"Mess/campus meals are your stable baseline. Keep outside food inside Rs {recommended_daily_food_cap // 100:,}/day unless runway is comfortably above cycle length.",
+            "impact": over_cap_remaining,
+        }
+    else:
+        action = {
+            "type": "stabilize_food",
+            "title": "Pick one default low-cost meal",
+            "detail": f"Keep food pace near Rs {recommended_daily_food_cap // 100:,}/day and reserve delivery for planned days, not impulse gaps.",
+            "impact": over_cap_remaining,
+        }
+
+    return {
+        "type": routine_type,
+        "label": labels[routine_type],
+        "detected_from": detected_from,
+        "meal_cost_source": meal_cost_source,
+        "cycle_food_spend": food["spend"],
+        "cycle_food_count": food["count"],
+        "food_daily_pace": food_daily_pace,
+        "recommended_daily_food_cap": recommended_daily_food_cap,
+        "projected_remaining_food_pace": projected_remaining_food_pace,
+        "projected_remaining_food_cap": projected_remaining_food_cap,
+        "over_cap_remaining": over_cap_remaining,
+        "avg_meal_cost": food["avg_order"],
+        "routine_meal_cost": routine_meal_cost,
+        "delivery": {**delivery, "daily_pace": delivery_daily_pace},
+        "campus_direct": {**campus_direct, "daily_pace": campus_daily_pace},
+        "cooking": {**cooking, "daily_pace": cooking_daily_pace},
+        "savings_if_replace_two_deliveries": savings_if_replace_two_deliveries,
+        "action": action,
+    }
 
 
 def _billing_interval(subscription: dict) -> tuple[str, int]:
@@ -413,6 +679,16 @@ def build_runway_forecast(
         shortfall_probability = 1.0 if projected_discretionary > available_for_discretionary else 0.0
     shortfall_probability = round(min(1.0, max(0.0, shortfall_probability)), 4)
     safe_daily = max(0, math.floor(available_for_discretionary / max(1, days_left)))
+    food_routine = _build_food_routine(
+        profile=profile,
+        cycle_expenses=cycle_expenses,
+        cycle_start=cycle_start,
+        cycle_end=cycle_end,
+        now=now,
+        days_left=days_left,
+        safe_daily=safe_daily,
+        mess_model=mess_model,
+    )
 
     # Simulate depletion with dated commitments and the projected weekday pace.
     balance = remaining
@@ -431,7 +707,7 @@ def build_runway_forecast(
     ask_home = _round_ask_home(-end_balance_low) if end_balance < 0 else 0
     projected_daily = round(projected_discretionary / max(1, days_left))
     if ask_home:
-        action = {"type": "ask_home", "title": f"Plan for Rs {ask_home // 100:,}", "detail": "This covers the forecast shortfall plus the high-spend side of the confidence range."}
+        action = {"type": "ask_home", "title": f"Ask home for Rs {ask_home // 100:,}", "detail": "This covers the forecast shortfall plus the high-spend side of the confidence range."}
     elif shortfall_probability >= 0.35:
         action = {"type": "slow_down", "title": f"Hold flexible spend near Rs {safe_daily // 100:,}/day", "detail": "The base forecast survives, but the high-spend range can still end below zero."}
     elif commitment_total and safe_daily < projected_daily:
@@ -473,6 +749,73 @@ def build_runway_forecast(
     for item in commitments:
         commitment_by_kind[item["kind"]] += item["amount"]
     status = "shortfall" if end_balance < 0 else "watch" if shortfall_probability >= 0.35 else "healthy"
+    subscription_total = commitment_by_kind.get("subscription", 0)
+    pool_total = commitment_by_kind.get("pool", 0)
+    exam_total = commitment_by_kind.get("exam_buffer", 0)
+    mess_total = commitment_by_kind.get("mess", 0)
+    absorbed = [
+        {
+            "kind": "subscriptions",
+            "label": "Subscriptions",
+            "amount": subscription_total,
+            "detail": "Recurring debits due before reset.",
+        },
+        {
+            "kind": "food_pace",
+            "label": "Food pace",
+            "amount": food_routine["projected_remaining_food_pace"],
+            "daily_amount": food_routine["food_daily_pace"],
+            "detail": f"{food_routine['label']} projected from this cycle.",
+        },
+        {
+            "kind": "pool_debts",
+            "label": "Pool debts",
+            "amount": pool_total,
+            "detail": "Pending or estimated shared-cart settlements.",
+        },
+        {
+            "kind": "exam_buffer",
+            "label": "Exam buffer",
+            "amount": exam_total,
+            "detail": "Reserved money for exam-window stability.",
+        },
+        {
+            "kind": "safe_daily",
+            "label": "Safe/day",
+            "amount": safe_daily,
+            "daily_amount": safe_daily,
+            "detail": "What remains per day after spend, commitments, and buffers.",
+        },
+    ]
+    reserved_labels = []
+    if subscription_total:
+        reserved_labels.append("subscriptions")
+    if mess_total:
+        reserved_labels.append("mess")
+    if pool_total:
+        reserved_labels.append("pool debts")
+    if exam_total:
+        reserved_labels.append("exam buffer")
+    reserved_text = ", ".join(reserved_labels) if reserved_labels else "known reserves"
+
+    next_best_action = action
+    food_action = food_routine.get("action") or {}
+    if action["type"] not in {"ask_home"} and int(food_action.get("impact") or 0) > 0:
+        next_best_action = {
+            "type": food_action.get("type") or "food_pace",
+            "title": food_action.get("title") or "Stabilize food pace",
+            "detail": food_action.get("detail") or "Food pace is the fastest lever to extend runway this cycle.",
+            "impact": int(food_action.get("impact") or 0),
+        }
+    elif action["type"] == "on_track" and pool_total:
+        next_best_action = {
+            "type": "settle_pool",
+            "title": "Confirm pending pool shares",
+            "detail": "Settling shared-cart dues keeps the safe/day number accurate before the next reset.",
+            "impact": pool_total,
+        }
+    else:
+        next_best_action = {**action, "impact": ask_home or max(0, projected_daily - safe_daily) * days_left}
 
     return {
         "generated_at": now.isoformat() + "Z",
@@ -510,6 +853,12 @@ def build_runway_forecast(
             "committed": committed_spent + commitment_total,
             "flexible": discretionary_spent + round(projected_discretionary),
         },
+        "food_routine": food_routine,
+        "decision_engine": {
+            "summary": f"Runway leaves Rs {safe_daily // 100:,}/day after reserving {reserved_text} and tracking food at Rs {food_routine['food_daily_pace'] // 100:,}/day.",
+            "absorbed": absorbed,
+            "next_best_action": next_best_action,
+        },
         "action": action,
         "confidence": confidence,
         "horizons": horizons,
@@ -521,6 +870,7 @@ def build_runway_forecast(
             "notes": [
                 "Calculations are deterministic; AI does not decide financial values.",
                 "Duplicates, failed/reversed events, credits, and committed historical spend are excluded from flexible-spend pace.",
+                "Food pace is separated into delivery, campus meals, and grocery/cooking patterns so hostel, PG, day-scholar, and mixed routines are handled differently.",
                 "The ask-home amount is shown only when the base forecast is negative and is rounded up to Rs 100.",
             ],
         },

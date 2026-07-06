@@ -945,7 +945,7 @@ function PoolDetail() {
           </span>
         </div>
         <div className="flex gap-2">
-          <Badge variant="outline" className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider bg-muted/50 border-border max-w-[120px] sm:max-w-none truncate whitespace-nowrap">
+          <Badge variant="outline" className="text-[10px] md:text-xs sm:text-xs font-semibold uppercase tracking-wider bg-muted/50 border-border max-w-[120px] sm:max-w-none truncate whitespace-nowrap">
             {theme.name}
           </Badge>
           <Button
@@ -1023,7 +1023,7 @@ function PoolDetail() {
             </div>
             {pool.checkout_notes && (
               <div className="bg-green-600/5 border border-green-500/10 rounded-lg p-3 text-xs">
-                <span className="font-bold text-green-500 uppercase tracking-widest text-[9px] block mb-1">Host Note / Message</span>
+                <span className="font-bold text-green-500 uppercase tracking-widest text-[9px] md:text-xs block mb-1">Host Note / Message</span>
                 <p className="text-zinc-300 leading-relaxed font-semibold">
                   "{pool.checkout_notes}"
                 </p>
@@ -1045,7 +1045,7 @@ function PoolDetail() {
             </div>
             {pool.checkout_notes && (
               <div className="bg-green-600/5 border border-green-500/10 rounded-lg p-3 text-xs">
-                <span className="font-bold text-green-500 uppercase tracking-widest text-[9px] block mb-1">Host Note / Message</span>
+                <span className="font-bold text-green-500 uppercase tracking-widest text-[9px] md:text-xs block mb-1">Host Note / Message</span>
                 <p className="text-zinc-300 leading-relaxed font-semibold">
                   "{pool.checkout_notes}"
                 </p>
@@ -1067,7 +1067,7 @@ function PoolDetail() {
             </div>
             {pool.cancellation_reason && (
               <div className="bg-destructive/5 border border-destructive/10 rounded-lg p-3 text-xs">
-                <span className="font-bold text-destructive uppercase tracking-widest text-[9px] block mb-1">Reason for Cancellation</span>
+                <span className="font-bold text-destructive uppercase tracking-widest text-[9px] md:text-xs block mb-1">Reason for Cancellation</span>
                 <p className="text-zinc-300 leading-relaxed font-semibold">
                   "{pool.cancellation_reason}"
                 </p>
@@ -1194,7 +1194,7 @@ function PoolDetail() {
                                 </span>
                               </p>
                               {details.email && (
-                                <p className="text-[10px] text-zinc-500 font-semibold lowercase">
+                                <p className="text-[10px] md:text-xs text-zinc-500 font-semibold lowercase">
                                   {details.email}
                                 </p>
                               )}
@@ -1202,7 +1202,7 @@ function PoolDetail() {
                                 Share: {rupees(details.total)}
                               </p>
                               {details.utr && (
-                                <p className="text-[10px] text-muted-foreground font-mono">
+                                <p className="text-[10px] md:text-xs text-muted-foreground font-mono">
                                   UTR: {details.utr}
                                 </p>
                               )}
@@ -1214,7 +1214,7 @@ function PoolDetail() {
                                     VERIFIED
                                   </Badge>
                                   {details.settlementMode === "settle_in_kind" && (
-                                    <span className="text-[10px] text-amber-500 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">
+                                    <span className="text-[10px] md:text-xs text-amber-500 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">
                                       Settled In Kind
                                     </span>
                                   )}
@@ -1225,7 +1225,7 @@ function PoolDetail() {
                                     <Button
                                       size="sm"
                                       onClick={() => handleVerifyPayment(rName, "verify")}
-                                      className="h-8 bg-green-600 text-white hover:bg-green-700 py-1 px-2 text-[10px] uppercase font-bold tracking-wider"
+                                      className="h-8 bg-green-600 text-white hover:bg-green-700 py-1 px-2 text-[10px] md:text-xs uppercase font-bold tracking-wider"
                                     >
                                       Approve
                                     </Button>
@@ -1233,7 +1233,7 @@ function PoolDetail() {
                                       size="sm"
                                       variant="outline"
                                       onClick={() => handleVerifyPayment(rName, "settle_in_kind")}
-                                      className="h-8 border-amber-500/20 text-amber-500 hover:bg-amber-500/5 py-1 px-2 text-[10px] uppercase font-bold tracking-wider"
+                                      className="h-8 border-amber-500/20 text-amber-500 hover:bg-amber-500/5 py-1 px-2 text-[10px] md:text-xs uppercase font-bold tracking-wider"
                                     >
                                       In Kind
                                     </Button>
@@ -1242,7 +1242,7 @@ function PoolDetail() {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleNudgeRoommate(rName, details.total)}
-                                    className="h-8 border-primary/20 text-primary hover:bg-primary/5 py-1 px-2 text-[10px] uppercase font-bold tracking-wider flex items-center justify-center gap-1.5 w-full"
+                                    className="h-8 border-primary/20 text-primary hover:bg-primary/5 py-1 px-2 text-[10px] md:text-xs uppercase font-bold tracking-wider flex items-center justify-center gap-1.5 w-full"
                                   >
                                     <Bell className="h-3.5 w-3.5 shrink-0" />
                                     <span>Nudge Roommate</span>
@@ -1252,7 +1252,7 @@ function PoolDetail() {
                                       size="sm"
                                       variant="outline"
                                       onClick={() => handleVerifyPayment(rName, "reject")}
-                                      className="h-7 border-destructive/20 text-destructive hover:bg-destructive/5 py-1 px-2 text-[10px] uppercase font-bold tracking-wider w-full"
+                                      className="h-7 border-destructive/20 text-destructive hover:bg-destructive/5 py-1 px-2 text-[10px] md:text-xs uppercase font-bold tracking-wider w-full"
                                     >
                                       Reject
                                     </Button>
@@ -1570,7 +1570,7 @@ function PoolDetail() {
                       <span>{who}</span>
                     </span>
                     {splitBreakdown[who]?.email && (
-                      <span className="text-[10px] text-zinc-500 font-semibold lowercase mt-0.5 block truncate max-w-[200px]">
+                      <span className="text-[10px] md:text-xs text-zinc-500 font-semibold lowercase mt-0.5 block truncate max-w-[200px]">
                         {splitBreakdown[who].email}
                       </span>
                     )}
@@ -1606,7 +1606,7 @@ function PoolDetail() {
                           <p className="text-xs text-zinc-500 font-semibold flex items-center gap-1.5 mt-0.5 uppercase tracking-wider">
                             {relativeTime(it.created_at)}
                             {it.is_purchased === false && (
-                              <Badge className="bg-destructive/10 text-destructive border-none text-[11px] py-0.5 px-2 hover:bg-destructive/10">Out of Stock</Badge>
+                              <Badge className="bg-destructive/10 text-destructive border-none text-[11px] md:text-xs py-0.5 px-2 hover:bg-destructive/10">Out of Stock</Badge>
                             )}
                           </p>
                         </div>
@@ -1941,7 +1941,7 @@ function PoolDetail() {
 
           <div className="space-y-4 py-2 text-xs">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Select Reason</label>
+              <label className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Select Reason</label>
               <div className="flex flex-col gap-2">
                 {[
                   "Minimum cart value not met",
@@ -1969,7 +1969,7 @@ function PoolDetail() {
 
             {cancelReasonOption === "Other Reason (Type below)" && (
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Custom Reason</label>
+                <label className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Custom Reason</label>
                 <textarea
                   value={cancelCustomReason}
                   onChange={(e) => setCancelCustomReason(e.target.value)}
@@ -2041,7 +2041,7 @@ function PoolDetail() {
               <span className="font-extrabold text-lg tracking-tight text-[#FF9900]">amazon</span>
               <span className="font-light text-lg text-zinc-300">pay</span>
             </div>
-            <Badge variant="outline" className="text-[#FF9900] border-[#FF9900]/40 font-mono text-[9px] uppercase tracking-widest px-2 py-0.5">
+            <Badge variant="outline" className="text-[#FF9900] border-[#FF9900]/40 font-mono text-[9px] md:text-xs uppercase tracking-widest px-2 py-0.5">
               Sandbox Mode
             </Badge>
           </div>
@@ -2049,7 +2049,7 @@ function PoolDetail() {
           <div className="p-6 space-y-5 text-left text-sm">
             <div className="border-b border-zinc-100 pb-3">
               <h2 className="text-base font-bold text-zinc-800 tracking-tight">Confirm Payment & Stored Consent</h2>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+              <p className="text-[11px] md:text-xs text-zinc-500 mt-0.5">
                 Authorise PocketBuddy to charge your payment method for this pool.
               </p>
             </div>
@@ -2069,7 +2069,7 @@ function PoolDetail() {
               </div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-[11px] leading-relaxed rounded-xl p-3.5 flex gap-2 font-medium">
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-[11px] md:text-xs leading-relaxed rounded-xl p-3.5 flex gap-2 font-medium">
               <Sparkles className="h-4 w-4 shrink-0 text-[#FF9900]" />
               <div>
                 <strong>Prototype Notice:</strong> This flow simulates a production-grade Amazon Pay Checkout Session. Confirming will finalize the pool split and notify your roommates.

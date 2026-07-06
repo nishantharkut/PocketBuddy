@@ -950,7 +950,7 @@ function DashboardMockup() {
 
               {/* Status bar */}
               <div className="relative flex justify-between items-center px-3.5 pt-2.5 pb-1 select-none shrink-0" style={{ zIndex: 2 }}>
-                <span className="text-[10px] font-bold text-foreground leading-none" style={{ fontFamily: "-apple-system, 'SF Pro Text', system-ui, sans-serif" }}>{time}</span>
+                <span className="text-[10px] font-bold text-foreground leading-none" style={{ fontFamily: "var(--font-sans)" }}>{time}</span>
                 {/* Scaled Dynamic Island */}
                 <div className="absolute top-[4px] left-1/2 -translate-x-1/2 w-[68px] h-[16px] rounded-full flex items-center justify-center" style={{ background: "#000" }}>
                   <div className="w-[5px] h-[5px] rounded-full ml-[16px]" style={{ background: "radial-gradient(circle at 35% 35%, #1a2a3a, #0a0f15)" }} />

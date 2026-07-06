@@ -101,7 +101,7 @@ function StatsPage() {
     const truncatedName = name.length > 10 ? name.slice(0, 10) + "…" : name;
     return (
       <text x={x} y={y} fill="var(--foreground)" textAnchor={x > cx ? "start" : "end"}
-        dominantBaseline="central" fontSize={10} fontWeight={700} fontFamily="'DM Sans', sans-serif">
+        dominantBaseline="central" fontSize={10} fontWeight={700} fontFamily="var(--font-sans)">
         {truncatedName}
         <tspan dx={2} fill="var(--muted-foreground)" fontSize={9}>{pct}%</tspan>
       </text>
@@ -192,7 +192,7 @@ function StatsPage() {
             <button
               onClick={exportCSV}
               id="btn-export-csv"
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-surface px-3 text-[10px] font-black uppercase tracking-[0.08em] text-foreground transition-all hover:bg-surface-raised"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-surface px-3 text-[10px] md:text-xs font-black uppercase tracking-[0.08em] text-foreground transition-all hover:bg-surface-raised"
             >
               <Download className="h-4 w-4 text-primary" />
               <span>Export CSV</span>
@@ -207,15 +207,15 @@ function StatsPage() {
         {/* ── Summary Cards ───────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-surface rounded-xl border border-border p-3 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Income</p>
+            <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Income</p>
             <p className="text-sm font-black tnum text-[#5DADE2]">{rupees(stats?.summary?.income ?? 0)}</p>
           </div>
           <div className="bg-surface rounded-xl border border-border p-3 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Expenses</p>
+            <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Expenses</p>
             <p className="text-sm font-black tnum text-[#FF6B4A]">{rupees(stats?.summary?.expenses ?? 0)}</p>
           </div>
           <div className="bg-surface rounded-xl border border-border p-3 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Net</p>
+            <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">Net</p>
             <p className={`text-sm font-black tnum ${netAmount >= 0 ? "text-foreground" : "text-[#FF6B4A]"}`}>
               {netAmount >= 0 ? "+" : ""}{rupees(Math.abs(netAmount))}
             </p>
@@ -321,7 +321,7 @@ function StatsPage() {
                       {pieData.map((item: any) => (
                         <div key={item.name}
                           className="flex items-center gap-3 py-2.5 px-3 rounded-xl hover:bg-surface-raised/60 transition-colors border-b border-border/30 last:border-b-0">
-                          <span className="inline-flex items-center justify-center w-9 h-6 rounded-md text-[10px] font-black tnum shrink-0"
+                          <span className="inline-flex items-center justify-center w-9 h-6 rounded-md text-[10px] md:text-xs font-black tnum shrink-0"
                             style={{ backgroundColor: `${item.fill}22`, color: item.fill }}>
                             {Math.round(item.pct)}%
                           </span>
@@ -386,10 +386,10 @@ function StatsPage() {
                       </h3>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1 text-[10px] md:text-xs text-muted-foreground">
                         <span className="w-2 h-2 rounded-full bg-[#5DADE2]" /> Income
                       </span>
-                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1 text-[10px] md:text-xs text-muted-foreground">
                         <span className="w-2 h-2 rounded-full bg-[#FF6B4A]" /> Expenses
                       </span>
                     </div>
@@ -448,7 +448,7 @@ function StatsPage() {
                             <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl">
                               <p className="text-xs font-bold text-foreground">{label}</p>
                               <p className="text-xs text-[#AF7AC5] tnum font-bold">₹{payload[0].value}</p>
-                              <p className="text-[10px] text-muted-foreground">{payload[0].payload.count} txns</p>
+                              <p className="text-[10px] md:text-xs text-muted-foreground">{payload[0].payload.count} txns</p>
                             </div>
                           );
                         }} />
@@ -521,11 +521,11 @@ function StatsPage() {
                         <div key={i} className="px-4 py-3 space-y-1.5">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <span className="text-[10px] font-black tnum text-muted-foreground w-5 shrink-0">
+                              <span className="text-[10px] md:text-xs font-black tnum text-muted-foreground w-5 shrink-0">
                                 {i + 1}.
                               </span>
                               <span className="text-xs font-bold text-foreground truncate">{m.name}</span>
-                              <span className="text-[10px] text-muted-foreground shrink-0">{m.count}×</span>
+                              <span className="text-[10px] md:text-xs text-muted-foreground shrink-0">{m.count}×</span>
                             </div>
                             <span className="text-xs font-black tnum text-foreground shrink-0 ml-2">
                               {rupees(m.amount)}
@@ -584,7 +584,7 @@ function StatsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-foreground truncate">{stats.biggest_txn.merchant}</p>
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground capitalize">{stats.biggest_txn.category}</p>
+                      <p className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground capitalize">{stats.biggest_txn.category}</p>
                     </div>
                     <p className="text-lg font-black tnum text-[#FF6B4A]">{rupees(stats.biggest_txn.amount)}</p>
                   </div>
@@ -596,7 +596,7 @@ function StatsPage() {
                 <div className="bg-surface rounded-2xl border border-border p-4 md:p-5 flex flex-col justify-center">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">
+                      <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground mb-1">
                         Compared Expenses (Last month)
                       </p>
                       <p className="text-2xl font-black tnum text-foreground">{stats.compared_expenses_pct}%</p>
@@ -673,8 +673,8 @@ function QuickStatCard({
         </div>
       </div>
       <p className="text-sm font-black tnum text-foreground">{value}</p>
-      <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground mt-0.5">{label}</p>
-      {sub && <p className="text-[9px] text-muted-foreground tnum">{sub}</p>}
+      <p className="text-[9px] md:text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground mt-0.5">{label}</p>
+      {sub && <p className="text-[9px] md:text-xs text-muted-foreground tnum">{sub}</p>}
     </div>
   );
 }

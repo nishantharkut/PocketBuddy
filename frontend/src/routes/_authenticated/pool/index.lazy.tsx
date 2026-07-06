@@ -439,7 +439,7 @@ function PoolCard({ pool }: { pool: Pool }) {
 
             {pool.status === "completed" && (
               <div className="mt-3.5 space-y-2 border-t border-border/50 pt-2.5">
-                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest pl-0.5">Roommate Splits Status:</p>
+                <p className="text-[9px] md:text-xs text-zinc-500 font-bold uppercase tracking-widest pl-0.5">Roommate Splits Status:</p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(pool.split_breakdown ?? {}).map(([rName, details]: [string, any]) => {
                     const isHost = rName.toLowerCase() === "you" || rName.toLowerCase() === (pool.created_by_name ?? "").toLowerCase();
@@ -470,7 +470,7 @@ function PoolCard({ pool }: { pool: Pool }) {
                     );
                   })}
                   {Object.keys(pool.split_breakdown ?? {}).filter(k => k.toLowerCase() !== "you" && k.toLowerCase() !== (pool.created_by_name ?? "").toLowerCase()).length === 0 && (
-                    <span className="text-[10px] text-zinc-500 italic pl-0.5">No roommate splits generated.</span>
+                    <span className="text-[10px] md:text-xs text-zinc-500 italic pl-0.5">No roommate splits generated.</span>
                   )}
                 </div>
               </div>
@@ -480,7 +480,7 @@ function PoolCard({ pool }: { pool: Pool }) {
           <div className="mt-5 flex justify-between items-end border-t border-border pt-3">
             <div className="flex gap-4">
               <div>
-                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                <p className="text-[9px] md:text-xs text-zinc-500 font-bold uppercase tracking-wider">
                   Min Target
                 </p>
                 <p className="text-xs font-black text-foreground tnum mt-0.5">
@@ -488,13 +488,13 @@ function PoolCard({ pool }: { pool: Pool }) {
                 </p>
               </div>
               <div className="border-l border-border/40 pl-4">
-                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                <p className="text-[9px] md:text-xs text-zinc-500 font-bold uppercase tracking-wider">
                   Current Cart
                 </p>
                 <p className={`text-xs font-black tnum mt-0.5 ${
                   totalCartValue >= pool.min_cart_value ? "text-[#16A34A]" : "text-foreground"
                 }`}>
-                  {rupees(totalCartValue)} <span className="text-[9px] font-normal text-muted-foreground">({itemsCount} items)</span>
+                  {rupees(totalCartValue)} <span className="text-[9px] md:text-xs font-normal text-muted-foreground">({itemsCount} items)</span>
                 </p>
               </div>
             </div>
@@ -505,7 +505,7 @@ function PoolCard({ pool }: { pool: Pool }) {
                   <span>{minsLeft}m left</span>
                 </span>
               ) : (
-                <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                <span className="text-[10px] md:text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                   {dateStr}
                 </span>
               )}
@@ -724,7 +724,7 @@ function CreatePoolForm({
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-xs font-bold text-foreground">Auto-Nudge Roommates</span>
-              <span className="text-[10px] text-muted-foreground">Automated WhatsApp alerts for unpaid splits</span>
+              <span className="text-[10px] md:text-xs text-muted-foreground">Automated WhatsApp alerts for unpaid splits</span>
             </div>
             <input
               type="checkbox"

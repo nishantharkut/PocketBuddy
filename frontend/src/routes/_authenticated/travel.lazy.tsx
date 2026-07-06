@@ -796,7 +796,7 @@ function TravelPage() {
 
           {routesLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 bg-white/5 rounded-xl" />)}
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
             </div>
           ) : !routes || routes.length === 0 ? (
             <div className="text-center py-8 space-y-2">
@@ -1500,7 +1500,7 @@ function TravelPage() {
                       </div>
 
                       {poolsLoading ? (
-                        <Skeleton className="h-16 bg-white/5 rounded-xl" />
+                        <Skeleton className="h-16 rounded-xl" />
                       ) : !ridePools || ridePools.length === 0 ? (
                         <div className="p-5 border border-dashed border-border rounded-2xl text-center space-y-1.5 bg-surface-raised/40">
                           <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">No active ride pools for this route</p>
@@ -1973,7 +1973,7 @@ function TravelPage() {
                 </div>
                 <div className="space-y-2 max-h-80 overflow-y-auto">
                   {reportsLoading ? (
-                    <Skeleton className="h-16 bg-white/5" />
+                    <Skeleton className="h-16" />
                   ) : !reports || reports.length === 0 ? (
                     <div className="text-center py-8 space-y-2">
                       <Users className="h-8 w-8 text-muted-foreground mx-auto" />

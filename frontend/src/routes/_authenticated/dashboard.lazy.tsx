@@ -1026,9 +1026,9 @@ function Dashboard() {
 
                 {wellnessLoading ? (
                   <div className="space-y-3">
-                    <Skeleton className="h-6 w-1/4 bg-white/5" />
-                    <Skeleton className="h-4 w-3/4 bg-white/5" />
-                    <Skeleton className="h-12 w-full bg-white/5" />
+                    <Skeleton className="h-6 w-1/4" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-12 w-full" />
                   </div>
                 ) : wellnessError ? (
                   <div className="rounded-xl border border-dashed border-destructive/20 bg-destructive/5 p-4">
@@ -1200,7 +1200,7 @@ function Dashboard() {
                 </div>
 
                 {!calc ? (
-                  <Skeleton className="mt-2 h-20 w-full max-w-xs bg-white/5" />
+                  <Skeleton className="mt-2 h-20 w-full max-w-xs" />
                 ) : (
                   <>
                     <div className="flex items-baseline gap-2.5">
@@ -1722,7 +1722,7 @@ function Dashboard() {
               </div>
               <Card className="bg-surface border-border p-1 overflow-hidden">
                 {!txns ? (
-                  <div className="p-4"><Skeleton className="h-32 w-full bg-white/5 border-none" /></div>
+                  <div className="p-4"><Skeleton className="h-32 w-full border-none" /></div>
                 ) : recent.length === 0 ? (
                   <p className="py-8 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">No transactions logged</p>
                 ) : (
@@ -1964,8 +1964,8 @@ function Dashboard() {
 
                 {!pendingFoods ? (
                   <div className="space-y-2">
-                    <Skeleton className="h-14 bg-white/5" />
-                    <Skeleton className="h-14 bg-white/5" />
+                    <Skeleton className="h-14" />
+                    <Skeleton className="h-14" />
                   </div>
                 ) : pendingFoods.length === 0 ? (
                   <div className="py-10 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">

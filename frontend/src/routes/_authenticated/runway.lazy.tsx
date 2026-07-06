@@ -352,8 +352,8 @@ Generated via PocketBuddy Runway Flight deck.`;
           </div>
           {intelLoading ? (
             <div className="space-y-2">
-              <Skeleton className="h-4 w-full bg-white/5 animate-pulse" />
-              <Skeleton className="h-4 w-5/6 bg-white/5 animate-pulse" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
             </div>
           ) : (
             <p className="text-[13px] sm:text-[14px] text-foreground font-semibold leading-relaxed">

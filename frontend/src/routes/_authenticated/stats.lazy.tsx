@@ -224,9 +224,9 @@ function StatsPage() {
 
         {isLoading ? (
           <div className="space-y-4">
-            <Skeleton className="h-64 w-full bg-white/5 border-none rounded-2xl" />
-            <Skeleton className="h-40 w-full bg-white/5 border-none rounded-2xl" />
-            <Skeleton className="h-48 w-full bg-white/5 border-none rounded-2xl" />
+            <Skeleton className="h-64 w-full border-none rounded-2xl" />
+            <Skeleton className="h-40 w-full border-none rounded-2xl" />
+            <Skeleton className="h-48 w-full border-none rounded-2xl" />
           </div>
         ) : (
           <>

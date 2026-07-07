@@ -60,6 +60,61 @@ import {
 } from "@/lib/api/db.functions";
 
 
+const getTrustBadgeLabel = (item: any, isPending: boolean = false) => {
+  // 1. Prefer backend-provided trust/status fields
+  if (item.trust_badge) {
+    const tb = String(item.trust_badge).toLowerCase();
+    if (tb === "partner verified" || tb === "official") return "Official";
+    if (tb === "student confirmed" || tb === "trusted") return "Trusted";
+    if (tb === "campus baseline" || tb === "baseline" || tb === "") return "";
+    return item.trust_badge;
+  }
+
+  const status = String(item.status || "").toLowerCase();
+  if (status === "disputed_hidden" || Number(item.dispute_count ?? 0) > 0) {
+    return "Disputed";
+  }
+  if (isPending || status === "pending_verification" || status === "needs_review") {
+    return "Needs confirmation";
+  }
+
+  // 2. Fallback to source_type/source
+  const src = String(item.source_type || item.source || "").toLowerCase();
+  if (src === "partner_verified" || src === "partner_api") return "Official";
+  if (src === "student_confirmed" || src === "trusted_direct_edit") return "Trusted";
+  if (src === "curated_baseline" || src === "baseline") return "";
+  if (src === "transaction_seen") return "Seen in payments";
+  if (src === "menu_scan_pending" || src === "price_change_review" || src === "needs_review") {
+    return "Needs confirmation";
+  }
+
+  if (Number(item.confirmation_count ?? 0) > 0 || Number(item.verification_votes ?? 0) > 0) {
+    return "Needs confirmation";
+  }
+  return "";
+};
+
+const getTrustBadgeClass = (label: string) => {
+  switch (label) {
+    case "Official":
+    case "Partner verified":
+      return "border-blue-500/20 bg-blue-500/5 text-blue-400";
+    case "Trusted":
+    case "Student confirmed":
+      return "border-emerald-500/20 bg-emerald-500/5 text-emerald-400";
+    case "Disputed":
+      return "border-red-500/20 bg-red-500/5 text-red-400";
+    case "Needs confirmation":
+    case "Needs review":
+    case "Price review":
+      return "border-amber-500/20 bg-amber-500/5 text-amber-400";
+    case "Seen in payments":
+      return "border-violet-500/20 bg-violet-500/5 text-violet-400";
+    default:
+      return "border-zinc-500/20 bg-zinc-500/5 text-zinc-400";
+  }
+};
+
 export const Route = createLazyFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
@@ -808,11 +863,29 @@ function Dashboard() {
   const bestFood = useMemo(() => {
     if (!foods?.length) return null;
     const now = new Date();
-    const available = foods.filter((f) => isTimeInRange(now, f.available_from, f.available_until));
-    if (available.length) {
-      return [...available].sort((a, b) => a.price - b.price)[0];
-    }
-    return foods[0];
+    const foodScore = (food: Food) => {
+      const available = isTimeInRange(now, food.available_from, food.available_until);
+      const trustScore = Number(food.trust_score ?? 50);
+      const price = Number(food.price ?? 0);
+      const budgetBonus =
+        food.budget_fit === "safe"
+          ? 24
+          : food.budget_fit === "tight"
+            ? 8
+            : food.budget_fit === "avoid_today"
+              ? -36
+              : 0;
+      const sourcePenalty =
+        food.source_type === "external_snapshot"
+          ? -14
+          : food.source_type === "price_change_review" || food.source_type === "menu_scan_pending"
+            ? -60
+            : 0;
+      return (available ? 40 : -20) + trustScore + budgetBonus + sourcePenalty - Math.min(price / 1000, 12);
+    };
+    return [...foods]
+      .filter((food) => Number(food.price ?? 0) > 0 && !["pending_verification", "rejected", "merged_into_active", "needs_review", "disputed_hidden"].includes(String(food.status ?? "active")))
+      .sort((a, b) => foodScore(b) - foodScore(a))[0] ?? null;
   }, [foods]);
 
   const runwayColor = runwayView
@@ -881,10 +954,22 @@ function Dashboard() {
   const [scanBusy, setScanBusy] = useState(false);
 
   const { data: pendingFoods, refetch: refetchPending } = useQuery({
-    queryKey: ["pending-foods"],
-    queryFn: () => getCampusFood("pending_verification"),
+    queryKey: ["pending-foods", "review_queue"],
+    queryFn: () => getCampusFood("review_queue"),
     enabled: showFoodSheet && foodTab === "verify",
   });
+
+  const reviewFoods = useMemo(() => {
+    return pendingFoods || [];
+  }, [pendingFoods]);
+
+  const pendingItems = useMemo(() => {
+    return reviewFoods.filter(it => !it.dispute_count || Number(it.dispute_count) === 0);
+  }, [reviewFoods]);
+
+  const disputedItems = useMemo(() => {
+    return reviewFoods.filter(it => Number(it.dispute_count ?? 0) > 0);
+  }, [reviewFoods]);
 
   const verifyMutation = useMutation({
     mutationFn: verifyCampusFoodItem,
@@ -894,6 +979,14 @@ function Dashboard() {
       toast.success(
         res.status === "promoted_to_active"
           ? "Item promoted to active campus menu!"
+          : res.status === "merged_into_active"
+          ? "Correction merged into the trusted menu."
+          : res.status === "disputed_hidden"
+          ? "Item hidden from recommendations for review."
+          : res.status === "rejected"
+          ? "Item rejected after community dispute."
+          : res.status === "submitter_cannot_self_confirm"
+          ? "Another student needs to confirm your submission."
           : res.status === "already_voted"
           ? "You have already voted on this item."
           : "Thank you for verifying!"
@@ -1636,7 +1729,15 @@ function Dashboard() {
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
                 <div>
-                  <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Food & Wellness</p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Food & Wellness</p>
+                    <button
+                      onClick={() => { setShowFoodSheet(true); setFoodTab("menus"); }}
+                      className="text-xs font-bold text-primary hover:underline uppercase tracking-wider cursor-pointer bg-primary/10 px-2.5 py-0.5 rounded border border-primary/20"
+                    >
+                      Campus Food Guard
+                    </button>
+                  </div>
                   <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
                     Meal gaps, delivery, groceries, and subscriptions feed directly into runway.
                   </p>
@@ -1650,7 +1751,7 @@ function Dashboard() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {/* Food gap */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider font-bold">Last meal</p>
+                  <p className="text-[10px] md:text-xs text-zinc-500 uppercase tracking-wider font-bold">Last meal</p>
                   {insights ? (
                     <p className={`text-[16px] font-black tnum ${insights.food.gap_hours > 12 ? "text-destructive" : insights.food.gap_hours > 6 ? "text-warning" : "text-success"}`}>
                       {insights.food.gap_hours > 0 ? `${Math.round(insights.food.gap_hours)}h ago` : "—"}
@@ -1658,36 +1759,36 @@ function Dashboard() {
                   ) : (
                     <p className="text-[16px] font-black text-zinc-400">{foodGapHours > 0 ? `${Math.round(foodGapHours)}h ago` : "—"}</p>
                   )}
-                  <p className="text-xs text-zinc-600">food gap</p>
+                  <p className="text-xs text-zinc-500">food gap</p>
                 </div>
 
                 {/* Delivery vs mess */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider font-bold">Delivery</p>
+                  <p className="text-[10px] md:text-xs text-zinc-500 uppercase tracking-wider font-bold">Delivery</p>
                   <p className="text-[16px] font-black text-foreground">
                     {runwayView?.foodRoutine?.delivery?.count ?? insights?.food?.delivery_count_30d ?? "—"}×
                   </p>
-                  <p className="text-xs text-zinc-600">
+                  <p className="text-xs text-zinc-500">
                     {runwayView?.foodRoutine ? `${rupees(runwayView.foodRoutine.food_daily_pace ?? 0)}/day food pace` : `vs ${insights?.food?.mess_count_30d ?? "—"} mess visits`}
                   </p>
                 </div>
 
                 {/* Late night */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider font-bold">Late Night</p>
+                  <p className="text-[10px] md:text-xs text-zinc-500 uppercase tracking-wider font-bold">Late Night</p>
                   <p className="text-[16px] font-black text-foreground tnum">
                     {insights ? rupees(insights.late_night.total_paise) : "—"}
                   </p>
-                  <p className="text-xs text-zinc-600">{insights?.late_night?.txn_count ?? 0} txns after 11PM</p>
+                  <p className="text-xs text-zinc-500">{insights?.late_night?.txn_count ?? 0} txns after 11PM</p>
                 </div>
 
                 {/* Sub bleed */}
                 <div className="flex flex-col gap-1">
-                  <p className="text-[10px] md:text-xs text-zinc-600 uppercase tracking-wider font-bold">Sub Bleed</p>
+                  <p className="text-[10px] md:text-xs text-zinc-500 uppercase tracking-wider font-bold">Sub Bleed</p>
                   <p className="text-[16px] font-black text-foreground tnum">
                     {insights ? rupees(insights.subscriptions.monthly_bleed_paise) : "—"}
                   </p>
-                  <p className="text-xs text-zinc-600">/month in {insights?.subscriptions?.count ?? 0} subs</p>
+                  <p className="text-xs text-zinc-500">/month in {insights?.subscriptions?.count ?? 0} subs</p>
                 </div>
               </div>
 
@@ -2322,7 +2423,7 @@ function Dashboard() {
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Active Menus
+                  Eat Now
                 </button>
                 <button
                   onClick={() => setFoodTab("scan")}
@@ -2332,7 +2433,7 @@ function Dashboard() {
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Scan Menu Board
+                  Scan Menu
                 </button>
                 <button
                   onClick={() => setFoodTab("verify")}
@@ -2342,7 +2443,7 @@ function Dashboard() {
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Verify Pending
+                  Verify Menu
                 </button>
               </div>
             </SheetHeader>
@@ -2355,20 +2456,62 @@ function Dashboard() {
                     return acc;
                   }, {}),
                 ).map(([venue, items]) => (
-                  <div key={venue} className="space-y-1.5">
-                    <h4 className="text-[12px] font-black uppercase tracking-wider text-zinc-500">{venue}</h4>
-                    <div className="space-y-1">
-                      {items.map((it) => {
-                        const open = isTimeInRange(new Date(), it.available_from, it.available_until);
-                        return (
-                          <div key={it.id} className="flex items-center justify-between rounded-xl bg-surface border border-border p-3">
-                            <div>
-                              <p className="text-xs font-bold text-foreground">{it.item_name}</p>
-                              <p className={`text-[10px] ${open ? "text-success font-semibold" : "text-muted-foreground"}`}>
-                                {open ? "Available Now" : `Available ${fmtTime(it.available_from)} - ${fmtTime(it.available_until)}`}
-                              </p>
+                  <div key={venue} className="space-y-2 pt-2">
+                    {(() => {
+                      const firstItem = items[0];
+                      const open = firstItem ? isTimeInRange(new Date(), firstItem.available_from, firstItem.available_until) : false;
+                      return (
+                        <div className="flex items-center justify-between pl-0.5 mb-1.5">
+                          <h4 className="text-xs md:text-sm font-bold uppercase tracking-wider text-zinc-400">{venue}</h4>
+                          {firstItem && (
+                            <div className="flex items-center gap-1.5 text-xs md:text-sm">
+                              <span className={`h-1.5 w-1.5 rounded-full ${open ? "bg-success animate-pulse" : "bg-zinc-600"}`} />
+                              <span className={open ? "text-success font-semibold" : "text-zinc-500 font-semibold"}>
+                                {open ? "Open now" : `Closed (Opens ${fmtTime(firstItem.available_from)} - ${fmtTime(firstItem.available_until)})`}
+                              </span>
                             </div>
-                            <span className="tnum text-xs font-black text-primary font-mono">{rupees(it.price)}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    <div className="space-y-2">
+                      {items.map((it) => {
+                        const trustLabel = getTrustBadgeLabel(it);
+                        const isSafeBudget = it.price <= (insights?.safe_daily_limit_paise || (runwayView?.safeDailyPaise ?? 23800));
+                        return (
+                          <div key={it.id} className="flex flex-col gap-2 rounded-xl bg-surface border border-border p-3">
+                            <div className="flex items-start justify-between w-full">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-bold text-foreground">{it.item_name}</p>
+                                  {trustLabel && (
+                                    <Badge variant="outline" className={`text-xs uppercase tracking-wider px-2 py-0.5 ${getTrustBadgeClass(trustLabel)}`}>
+                                      {trustLabel}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="tnum text-sm md:text-base font-black text-primary font-mono shrink-0">{rupees(it.price)}</span>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-border/30">
+                              <span className="text-xs px-2 py-0.5 rounded bg-surface-raised text-zinc-400 font-semibold flex items-center gap-1">
+                                <span className={`h-1.5 w-1.5 rounded-full ${isSafeBudget ? "bg-success" : "bg-destructive"}`} />
+                                {isSafeBudget ? "Within today's food budget" : "Over daily safe budget"}
+                              </span>
+                              {it.source_type === "student_confirmed" && (
+                                <span className="text-xs px-2 py-0.5 rounded bg-surface-raised text-zinc-400 font-semibold flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                                  Student confirmed
+                                </span>
+                              )}
+                              {insights?.food?.gap_hours > 0 && (
+                                <span className="text-xs px-2 py-0.5 rounded bg-surface-raised text-zinc-400 font-semibold flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-warning" />
+                                  {insights.food.gap_hours >= 12 ? `Good after ${Math.round(insights.food.gap_hours)}h meal gap` : `Last meal ${Math.round(insights.food.gap_hours)}h ago`}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -2432,9 +2575,19 @@ function Dashboard() {
             )}
 
             {foodTab === "verify" && (
-              <div className="space-y-3 py-4 animate-[fadeIn_0.2s_ease-out] max-h-[50vh] overflow-y-auto">
-                <div className="bg-surface-raised border border-border p-3.5 rounded-xl text-xs text-zinc-400 leading-relaxed font-medium">
-                  <span className="font-bold text-foreground">Crowdsourced Menu Verification:</span> Verify items scanned by other students. Items require <strong>+3 votes</strong> to go live, or <strong>-3 votes</strong> to be deleted.
+              <div className="space-y-4 py-4 animate-[fadeIn_0.2s_ease-out] max-h-[50vh] overflow-y-auto">
+                <div className="bg-surface-raised border border-border p-3.5 rounded-xl text-xs text-zinc-300 leading-relaxed font-normal space-y-1.5">
+                  <p>Scanned menu items are not used in recommendations until enough independent students confirm them.</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1.5 border-t border-border/30 text-[11px] text-zinc-400">
+                    <span className="flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                      <strong className="text-success font-semibold">Confirm:</strong> I saw this item on campus
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                      <strong className="text-destructive font-semibold">Dispute:</strong> This looks wrong
+                    </span>
+                  </div>
                 </div>
 
                 {!pendingFoods ? (
@@ -2442,42 +2595,131 @@ function Dashboard() {
                     <Skeleton className="h-14" />
                     <Skeleton className="h-14" />
                   </div>
-                ) : pendingFoods.length === 0 ? (
-                  <div className="py-10 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">
-                    No pending items to verify. Great job!
+                ) : reviewFoods.length === 0 ? (
+                  <div className="py-10 text-center space-y-3">
+                    <p className="text-sm text-zinc-300 font-semibold">No menu items need review right now.</p>
+                    <p className="text-xs text-zinc-400 max-w-sm mx-auto font-normal">
+                      Scan a canteen menu to help PocketBuddy build trusted campus food options.
+                    </p>
+                    <Button
+                      id="btn-switch-to-scan"
+                      onClick={() => setFoodTab("scan")}
+                      className="bg-primary hover:bg-primary/95 text-primary-foreground font-black uppercase text-xs h-8 px-4 tracking-wider cursor-pointer"
+                    >
+                      Scan Menu
+                    </Button>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {pendingFoods.map((it: any) => (
-                      <div key={it.id} className="flex items-center justify-between bg-surface border border-border p-3.5 rounded-xl text-xs">
-                        <div className="space-y-1 min-w-0 pr-4">
-                          <p className="font-bold text-foreground truncate">{it.item_name}</p>
-                          <p className="text-[10px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">
-                            {it.venue_name} · {rupees(it.price)}
-                          </p>
-                          <p className="text-[9px] md:text-xs font-bold text-primary tracking-widest uppercase">
-                            Votes: {it.verification_votes > 0 ? `+${it.verification_votes}` : it.verification_votes}
-                          </p>
-                        </div>
+                  <div className="space-y-4">
+                    {/* Needs confirmation section */}
+                    {pendingItems.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 pl-0.5">Needs confirmation</h4>
+                        <div className="space-y-2">
+                          {pendingItems.map((it: any) => (
+                            <div key={it.id} className="bg-surface border border-border p-3.5 rounded-xl text-xs">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-3">
+                                <div className="space-y-1 min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-xs md:text-sm font-bold text-foreground truncate">{it.item_name}</p>
+                                    {getTrustBadgeLabel(it, true) && (
+                                      <Badge variant="outline" className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 ${
+                                        getTrustBadgeClass(getTrustBadgeLabel(it, true))
+                                      }`}>
+                                        {getTrustBadgeLabel(it, true)}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">
+                                    {it.venue_name} · {rupees(it.price)}
+                                  </p>
+                                  <p className="text-xs font-bold text-primary">
+                                    {(it.verification_threshold ?? 5) - (it.confirmation_count ?? Math.max(0, it.verification_votes ?? 0)) > 0
+                                      ? `Needs ${Math.max(0, (it.verification_threshold ?? 5) - (it.confirmation_count ?? Math.max(0, it.verification_votes ?? 0)))} more confirmations`
+                                      : "Pending final approval"}
+                                    <span className="text-zinc-500 font-normal"> · Submitted from menu scan</span>
+                                  </p>
+                                </div>
 
-                        <div className="flex gap-1.5 shrink-0">
-                          <button
-                            onClick={() => handleVerifyVote(it.id, "up")}
-                            disabled={verifyMutation.isPending}
-                            className="px-3 py-2 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success font-bold text-[10px] md:text-xs uppercase cursor-pointer"
-                          >
-                            ✓ Upvote
-                          </button>
-                          <button
-                            onClick={() => handleVerifyVote(it.id, "down")}
-                            disabled={verifyMutation.isPending}
-                            className="px-3 py-2 rounded-lg bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive font-bold text-[10px] md:text-xs uppercase cursor-pointer"
-                          >
-                            ✕ Downvote
-                          </button>
+                                <div className="flex gap-2 w-full sm:w-auto sm:shrink-0 pt-2 sm:pt-0 border-t border-border/20 sm:border-0">
+                                  <button
+                                    onClick={() => handleVerifyVote(it.id, "up")}
+                                    disabled={verifyMutation.isPending}
+                                    className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success font-bold text-xs uppercase cursor-pointer text-center"
+                                    title="I saw this item and price on campus"
+                                  >
+                                    ✓ Confirm
+                                  </button>
+                                  <button
+                                    onClick={() => handleVerifyVote(it.id, "down")}
+                                    disabled={verifyMutation.isPending}
+                                    className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive font-bold text-xs uppercase cursor-pointer text-center"
+                                    title="This item or price looks wrong"
+                                  >
+                                    ✕ Dispute
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
+                    )}
+
+                    {/* Needs review / Disputed section */}
+                    {disputedItems.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-destructive pl-0.5">Needs review</h4>
+                        <div className="space-y-2">
+                          {disputedItems.map((it: any) => (
+                            <div key={it.id} className="bg-surface border border-border p-3.5 rounded-xl text-xs">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-3">
+                                <div className="space-y-1 min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-xs md:text-sm font-bold text-foreground truncate">{it.item_name}</p>
+                                    {getTrustBadgeLabel(it, true) && (
+                                      <Badge variant="outline" className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 ${
+                                        getTrustBadgeClass(getTrustBadgeLabel(it, true))
+                                      }`}>
+                                        {getTrustBadgeLabel(it, true)}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">
+                                    {it.venue_name} · {rupees(it.price)}
+                                  </p>
+                                  <p className="text-xs font-bold text-primary">
+                                    <span className="text-destructive">
+                                      {it.dispute_count} student{it.dispute_count === 1 ? "" : "s"} disputed this
+                                    </span>
+                                    <span className="text-zinc-500 font-normal"> · Submitted from menu scan</span>
+                                  </p>
+                                </div>
+
+                                <div className="flex gap-2 w-full sm:w-auto sm:shrink-0 pt-2 sm:pt-0 border-t border-border/20 sm:border-0">
+                                  <button
+                                    onClick={() => handleVerifyVote(it.id, "up")}
+                                    disabled={verifyMutation.isPending}
+                                    className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-success/10 hover:bg-success/20 border border-success/20 text-success font-bold text-xs uppercase cursor-pointer text-center"
+                                    title="I saw this item and price on campus"
+                                  >
+                                    ✓ Confirm
+                                  </button>
+                                  <button
+                                    onClick={() => handleVerifyVote(it.id, "down")}
+                                    disabled={verifyMutation.isPending}
+                                    className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 border border-destructive/20 text-destructive font-bold text-xs uppercase cursor-pointer text-center"
+                                    title="This item or price looks wrong"
+                                  >
+                                    ✕ Dispute
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2486,54 +2728,76 @@ function Dashboard() {
 
         {/* Check-in dialog */}
         <Dialog open={showCheckIn} onOpenChange={setShowCheckIn}>
-          <DialogContent id="dialog-checkin">
-            <DialogHeader>
-              <DialogTitle>Hey, it's been a while since your last meal.</DialogTitle>
-            </DialogHeader>
-            <p className="text-[13px] text-muted-foreground">It's exam season. Quick check:</p>
-            <p className="text-[12px] text-warning">Last food transaction was {Math.round(foodGapHours)} hours ago</p>
-            <div className="mt-3 space-y-2">
-              <button
-                id="btn-checkin-ate"
-                onClick={handleCheckInAte}
-                className="w-full rounded-md border-l-4 border-l-success bg-surface p-3 text-left text-[13px] cursor-pointer hover:bg-surface-raised transition-colors"
-              >
-                I ate at mess / cooked / ordered in
-              </button>
-              <div className="rounded-md border-l-4 border-l-destructive bg-surface p-3">
-                <button
-                  id="btn-checkin-skipped"
-                  onClick={() => setCheckInExpanded(true)}
-                  className="w-full text-left text-[13px] cursor-pointer"
-                >
-                  Skipped / couldn't eat
-                </button>
-                {checkInExpanded && (
-                  <div className="mt-2 space-y-2">
-                    <p className="text-[12px] text-muted-foreground">What happened?</p>
-                    <Input
-                      id="input-checkin-note"
-                      value={stressNote}
-                      onChange={(e) => setStressNote(e.target.value)}
-                      placeholder="e.g., was studying, mess closed, no money"
-                    />
-                    <Button
-                      variant="outline"
-                      className="w-full border-destructive text-destructive"
-                      onClick={handleCheckInSkipped}
-                    >
-                      Submit
-                    </Button>
-                  </div>
-                )}
+          <DialogContent id="dialog-checkin" className="max-w-md bg-surface border border-border p-5 rounded-2xl">
+            <DialogHeader className="space-y-1">
+              <div className="flex items-center gap-2 text-warning">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider">Runway Health Alert</span>
               </div>
-              <Button
-                variant="ghost"
-                className="w-full text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => setShowCheckIn(false)}
-              >
-                Not now
-              </Button>
+              <DialogTitle className="text-sm md:text-base font-bold text-foreground">
+                Hey, it's been a while since your last meal.
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 mt-2">
+              <p className="text-xs text-zinc-400 leading-relaxed font-normal">
+                No food transactions logged for the last <strong className="text-foreground">{Math.round(foodGapHours)} hours</strong>. Skipped meals or unlogged cash transactions skew your daily runway forecast.
+              </p>
+
+              <div className="space-y-2 mt-3">
+                <button
+                  id="btn-checkin-ate"
+                  onClick={handleCheckInAte}
+                  className="w-full flex items-center justify-between rounded-xl border border-success/20 bg-success/5 hover:bg-success/10 p-3.5 text-left text-xs font-semibold text-success transition-all cursor-pointer"
+                >
+                  <span>I ate at mess / cooked / home meal</span>
+                  <span className="text-[10px] opacity-75 font-normal tracking-wide">Log Mess visit</span>
+                </button>
+
+                <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3.5">
+                  <button
+                    id="btn-checkin-skipped"
+                    onClick={() => setCheckInExpanded(true)}
+                    className="w-full flex items-center justify-between text-left text-xs font-semibold text-destructive cursor-pointer"
+                  >
+                    <span>I skipped a meal / couldn't eat</span>
+                    <span className="text-[10px] opacity-75 font-normal">Check in</span>
+                  </button>
+                  {checkInExpanded && (
+                    <div className="mt-3 space-y-2.5 animate-[fadeIn_0.15s_ease-out]">
+                      <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">What happened?</p>
+                      <Input
+                        id="input-checkin-note"
+                        value={stressNote}
+                        onChange={(e) => setStressNote(e.target.value)}
+                        placeholder="e.g. studying for exams, mess was closed, etc."
+                        className="bg-surface border-border text-xs h-9 text-foreground font-semibold"
+                      />
+                      <Button
+                        id="btn-submit-checkin-skipped"
+                        className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-black uppercase tracking-wider h-9"
+                        onClick={handleCheckInSkipped}
+                      >
+                        Submit Health Check
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => { setShowCheckIn(false); setShowFoodSheet(true); setFoodTab("menus"); }}
+                  className="flex-1 rounded-xl bg-primary text-primary-foreground font-black uppercase text-xs h-9 tracking-wider hover:bg-primary/95 transition-all cursor-pointer text-center"
+                >
+                  Campus Eat Now
+                </button>
+                <button
+                  onClick={() => setShowCheckIn(false)}
+                  className="flex-1 rounded-xl bg-surface-raised border border-border text-zinc-400 font-bold uppercase text-xs h-9 tracking-wider hover:text-zinc-200 transition-all cursor-pointer text-center"
+                >
+                  Not now
+                </button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

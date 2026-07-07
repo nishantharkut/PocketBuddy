@@ -3,7 +3,15 @@ import sys
 import uuid
 import datetime
 import bcrypt
+from pathlib import Path
 from pymongo import MongoClient
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "backend"))
+os.environ.setdefault("JWT_SECRET", "seed-script-placeholder")
+os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017")
+
+from app.services.campus_food import compute_food_verification_threshold  # noqa: E402
 
 # Target credentials
 TARGET_EMAIL = "charizardoped@gmail.com"
@@ -12,11 +20,13 @@ TARGET_NAME = "Nishant Arkut"
 
 def get_mongo_client():
     mongo_uri = "mongodb://localhost:27017"
-    if os.path.exists(".env"):
-        with open(".env", "r") as f:
-            for line in f:
-                if line.startswith("MONGO_URI="):
-                    mongo_uri = line.split("=", 1)[1].strip()
+    for env_path in (Path.cwd() / ".env", REPO_ROOT / "backend" / ".env", REPO_ROOT / ".env"):
+        if env_path.exists():
+            with env_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("MONGO_URI="):
+                        mongo_uri = line.split("=", 1)[1].strip().strip('"').strip("'")
+            break
     return MongoClient(mongo_uri)
 
 def generate_monthly_transactions(year, month, user_id, max_day=31):
@@ -753,6 +763,10 @@ def seed_data(email=TARGET_EMAIL, password=TARGET_PASSWORD, full_name=TARGET_NAM
 
     # 12. Seed Campus Food (Pending crowdsourced items for verification testing)
     print("Seeding pending food items for crowdsourced verification...")
+    food_review_threshold = compute_food_verification_threshold(
+        "menu_scan_pending",
+        active_reviewers=36,
+    )
     db.campus_food.insert_many([
         {
             "_id": "seed_food_1",
@@ -763,10 +777,15 @@ def seed_data(email=TARGET_EMAIL, password=TARGET_PASSWORD, full_name=TARGET_NAM
             "category": "food",
             "price": 6000,
             "status": "pending_verification",
-            "verification_votes": 2,
-            "verification_threshold": 3,
+            "source": "ocr_menu_scan",
+            "verification_votes": 3,
+            "confirmation_count": 4,
+            "dispute_count": 1,
+            "verification_threshold": food_review_threshold,
             "scanned_by": "rahul_sharma",
-            "voters": ["some_voter_1", "some_voter_2"],
+            "submitted_by": "rahul_sharma",
+            "voters": ["some_voter_1", "some_voter_2", "some_voter_3", "some_voter_4", "some_voter_5"],
+            "needs_review": True,
             "available_from": "18:00",
             "available_until": "02:00",
             "created_at": now - datetime.timedelta(hours=5)
@@ -780,13 +799,40 @@ def seed_data(email=TARGET_EMAIL, password=TARGET_PASSWORD, full_name=TARGET_NAM
             "category": "food",
             "price": 8000,
             "status": "pending_verification",
-            "verification_votes": 1,
-            "verification_threshold": 3,
+            "source": "ocr_menu_scan",
+            "verification_votes": 2,
+            "confirmation_count": 2,
+            "dispute_count": 0,
+            "verification_threshold": food_review_threshold,
             "scanned_by": "rahul_sharma",
-            "voters": ["some_voter_1"],
+            "submitted_by": "rahul_sharma",
+            "voters": ["some_voter_1", "some_voter_2"],
+            "needs_review": True,
             "available_from": "18:00",
             "available_until": "02:00",
             "created_at": now - datetime.timedelta(hours=4)
+        },
+        {
+            "_id": "seed_food_3",
+            "campus": "IIT Madras",
+            "venue_id": "gurunath_cafe",
+            "venue_name": "Gurunath Cafe",
+            "item_name": "Cold Coffee Combo",
+            "category": "beverage",
+            "price": 12000,
+            "status": "disputed_hidden",
+            "source": "ocr_menu_scan",
+            "verification_votes": -3,
+            "confirmation_count": 2,
+            "dispute_count": 5,
+            "verification_threshold": food_review_threshold,
+            "scanned_by": "rahul_sharma",
+            "submitted_by": "rahul_sharma",
+            "voters": ["some_voter_1", "some_voter_2", "some_voter_3", "some_voter_4", "some_voter_5", "some_voter_6", "some_voter_7"],
+            "needs_review": True,
+            "available_from": "18:00",
+            "available_until": "02:00",
+            "created_at": now - datetime.timedelta(hours=3)
         }
     ])
 

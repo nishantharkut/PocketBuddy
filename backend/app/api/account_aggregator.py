@@ -612,14 +612,20 @@ async def simulate_sandbox_consent(
         message = req.reason or "AA sandbox consent rejected."
 
     elif req.action == "revoke":
+        delete_result = await db.aa_financial_snapshots.delete_many(
+            {"user_id": user_id, "consent_id": consent_id}
+        )
         update = {
             "status": "revoked",
             "aa_status": "REVOKED",
             "revoked_at": consent.get("revoked_at") or now,
+            "fetch_status": "revoked",
+            "fetched_records_count": 0,
             "updated_at": now,
         }
         event_type = "consent_revoked"
-        message = req.reason or "AA sandbox consent revoked."
+        message = req.reason or "AA sandbox consent revoked and fetched sandbox records deleted."
+        revoke_metadata = {"sandbox_data": True, "deleted_snapshot_count": delete_result.deleted_count}
 
     elif req.action == "expire":
         if current_status == "revoked":
@@ -701,7 +707,7 @@ async def simulate_sandbox_consent(
         event_type=event_type,
         status=update.get("status") or update.get("fetch_status") or current_status,
         message=message,
-        metadata={"sandbox_data": True},
+        metadata=revoke_metadata if req.action == "revoke" else {"sandbox_data": True},
     )
     fresh = await db.data_consents.find_one({"_id": consent_id})
     return {"status": fresh.get("status"), "message": message, "consent": map_doc(fresh)}
@@ -750,12 +756,20 @@ async def receive_consent_notification(
         update["granted_at"] = consent.get("granted_at") or utcnow()
     if next_status == "revoked":
         update["revoked_at"] = utcnow()
+        update["fetch_status"] = "revoked"
+        update["fetched_records_count"] = 0
     if next_status == "expired":
         update["expired_at"] = utcnow()
     if next_status == "rejected":
         update["rejected_at"] = utcnow()
 
     await db.data_consents.update_one({"_id": consent["_id"]}, {"$set": update})
+    deleted_snapshot_count = 0
+    if next_status == "revoked":
+        delete_result = await db.aa_financial_snapshots.delete_many(
+            {"user_id": consent.get("user_id"), "consent_id": consent["_id"]}
+        )
+        deleted_snapshot_count = delete_result.deleted_count
     await insert_aa_event(
         db,
         user_id=consent.get("user_id"),
@@ -763,7 +777,11 @@ async def receive_consent_notification(
         event_type="consent_callback",
         status=next_status,
         message=f"AA consent notification received: {aa_status or next_status}.",
-        metadata={"provider_txnid": payload.get("txnid"), "notifier": payload.get("Notifier")},
+        metadata={
+            "provider_txnid": payload.get("txnid"),
+            "notifier": payload.get("Notifier"),
+            "deleted_snapshot_count": deleted_snapshot_count,
+        },
     )
     return rebit_ack(payload)
 

@@ -2,6 +2,8 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 import datetime
+import hashlib
+import hmac
 import jwt
 import re
 import uuid
@@ -9,6 +11,12 @@ import logging
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.privacy import (
+    connector_pairing_present,
+    device_fingerprint,
+    masked_device_id,
+    verify_connector_pairing_token,
+)
 from app.core.security import get_current_user
 from app.services.subscriptions import (
     subscription_name_for_merchant,
@@ -205,7 +213,54 @@ def clean_confidence(value: Optional[str]) -> Optional[str]:
 
 
 def build_android_consent_id(user_id: str, device_id: Optional[str]) -> str:
+    if not device_id:
+        return f"android:{user_id}:unknown-device"
+    return f"android:{user_id}:{device_fingerprint(device_id)}"
+
+
+def legacy_android_consent_id(user_id: str, device_id: Optional[str]) -> str:
     return f"android:{user_id}:{device_id or 'unknown-device'}"
+
+
+def verify_connector_request_signature(
+    *,
+    supplied_token: str,
+    raw_body: bytes,
+    timestamp_header: Optional[str],
+    event_id_header: Optional[str],
+    signature_header: Optional[str],
+    now: datetime.datetime,
+) -> bool:
+    if not (timestamp_header and event_id_header and signature_header):
+        if settings.CONNECTOR_SIGNATURE_REQUIRED:
+            raise HTTPException(status_code=401, detail="Missing connector request signature")
+        return False
+
+    try:
+        timestamp_ms = int(timestamp_header)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid connector signature timestamp")
+
+    try:
+        event_time = datetime.datetime.utcfromtimestamp(timestamp_ms / 1000)
+    except (OverflowError, OSError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid connector signature timestamp")
+    tolerance = max(60, int(settings.CONNECTOR_SIGNATURE_TOLERANCE_SECONDS))
+    if abs((now - event_time).total_seconds()) > tolerance:
+        raise HTTPException(status_code=401, detail="Stale connector request signature")
+
+    signed_payload = (
+        f"{timestamp_header}.{event_id_header}.".encode("utf-8") + raw_body
+    )
+    expected = hmac.new(
+        supplied_token.encode("utf-8"),
+        signed_payload,
+        hashlib.sha256,
+    ).hexdigest()
+    supplied = signature_header.removeprefix("sha256=").strip()
+    if not hmac.compare_digest(expected, supplied):
+        raise HTTPException(status_code=401, detail="Invalid connector request signature")
+    return True
 
 
 def _coerce_datetime(value) -> Optional[datetime.datetime]:
@@ -224,7 +279,7 @@ def pairing_rotated_after_revocation(profile: dict, consent: Optional[dict]) -> 
 
 
 def connector_ingest_block_reason(profile: dict, consent: Optional[dict]) -> Optional[str]:
-    if not profile.get("pairing_code"):
+    if not connector_pairing_present(profile):
         return "connector_not_paired"
 
     if profile.get("companion_sync_enabled") is False:
@@ -246,13 +301,17 @@ async def find_android_consent(db, user_id: str, device_id: Optional[str]) -> Op
         return consent
 
     if device_id:
-        return await db.data_consents.find_one(
+        fingerprint = device_fingerprint(device_id)
+        consent = await db.data_consents.find_one(
             {
                 "user_id": user_id,
                 "source": "android_connector",
-                "device_id": device_id,
+                "device_fingerprint": fingerprint,
             }
         )
+        if consent:
+            return consent
+        return await db.data_consents.find_one({"_id": legacy_android_consent_id(user_id, device_id)})
 
     return None
 
@@ -268,6 +327,7 @@ async def upsert_android_consent(
     sync_observed: bool = True,
 ) -> str:
     consent_id = build_android_consent_id(user_id, device_id)
+    fingerprint = device_fingerprint(device_id)
     status_timestamps = {"last_sync_at": now} if sync_observed else {"last_blocked_at": now}
     update = {
         "$set": {
@@ -283,7 +343,8 @@ async def upsert_android_consent(
                 "source_app",
                 "masked_preview",
             ],
-            "device_id": device_id,
+            "device_id": masked_device_id(device_id),
+            "device_fingerprint": fingerprint,
             "device_name": req.device_name or req.sourceApp or req.packageName or "PocketBuddy Android Connector",
             **status_timestamps,
             "raw_text_policy": "not_required_for_v2",
@@ -327,7 +388,8 @@ async def record_blocked_connector_event(
         {
             "_id": log_id,
             "user_id": user_id,
-            "device_id": device_id,
+            "device_id": masked_device_id(device_id),
+            "device_fingerprint": device_fingerprint(device_id),
             "device_name": req.device_name or req.sourceApp or req.packageName,
             "notification_source": req.captureSource or req.type or req.source or "unknown",
             "notification_preview": "Connector event blocked by your privacy controls before parsing.",
@@ -365,22 +427,26 @@ async def update_profile_sync_state(db, user_id: str, req: WebhookReq, now: date
         }
     }
     if device_id:
-        update["$set"]["companion_device_id"] = device_id
+        fingerprint = device_fingerprint(device_id)
+        update["$set"]["companion_device_id"] = masked_device_id(device_id)
+        update["$set"]["companion_device_fingerprint"] = fingerprint
     if req.sourceApp:
         update["$addToSet"] = {"upi_apps_used": req.sourceApp}
 
     await db.profiles.update_one({"_id": user_id}, update)
 
     if device_id:
-        # Cascade-unpair any other user registered with this same physical device ID
+        fingerprint = device_fingerprint(device_id)
+        # Cascade-unpair any other user registered with this same device fingerprint.
         await db.profiles.update_many(
-            {"_id": {"$ne": user_id}, "companion_device_id": device_id},
+            {"_id": {"$ne": user_id}, "companion_device_fingerprint": fingerprint},
             {
                 "$set": {
                     "companion_paired": False,
                     "companion_device_name": None,
                     "companion_last_sync": None,
-                    "companion_device_id": None
+                    "companion_device_id": None,
+                    "companion_device_fingerprint": None
                 }
             }
         )
@@ -587,9 +653,13 @@ async def ingest_notification(
     authorization: Optional[str] = Header(None),
     x_pocketbuddy_user_id: Optional[str] = Header(None, alias="X-PocketBuddy-User-Id"),
     x_pocketbuddy_device_id: Optional[str] = Header(None, alias="X-PocketBuddy-Device-Id"),
+    x_pocketbuddy_timestamp: Optional[str] = Header(None, alias="X-PocketBuddy-Timestamp"),
+    x_pocketbuddy_event_id: Optional[str] = Header(None, alias="X-PocketBuddy-Event-Id"),
+    x_pocketbuddy_signature: Optional[str] = Header(None, alias="X-PocketBuddy-Signature"),
 ):
     db = get_db()
     now = datetime.datetime.utcnow()
+    request_body = await request.body()
     user_id = user_id_from_authorization(authorization) or x_pocketbuddy_user_id or req.userId or req.user_id
 
     if not user_id:
@@ -606,12 +676,23 @@ async def ingest_notification(
 
     client_pairing_code = provided_token or req.pairing_code
     device_id = req.deviceId or x_pocketbuddy_device_id
+    if x_pocketbuddy_event_id and not req.clientEventId:
+        req.clientEventId = x_pocketbuddy_event_id
 
-    if not profile.get("pairing_code"):
+    if not connector_pairing_present(profile):
         raise HTTPException(status_code=403, detail="Connector is not paired. Start setup from PocketBuddy before syncing.")
 
-    if not client_pairing_code or profile["pairing_code"] != client_pairing_code:
+    if not verify_connector_pairing_token(profile, client_pairing_code):
         raise HTTPException(status_code=403, detail="Invalid pairing code")
+
+    signature_verified = verify_connector_request_signature(
+        supplied_token=client_pairing_code,
+        raw_body=request_body,
+        timestamp_header=x_pocketbuddy_timestamp,
+        event_id_header=x_pocketbuddy_event_id or req.clientEventId,
+        signature_header=x_pocketbuddy_signature,
+        now=now,
+    )
 
     if req.type == "unpair" or req.source == "unpair":
         await db.profiles.update_one(
@@ -622,9 +703,15 @@ async def ingest_notification(
                     "companion_device_name": None,
                     "companion_last_sync": None,
                     "companion_device_id": None,
-                    "pairing_code": None,
+                    "companion_device_fingerprint": None,
                     "pairing_code_updated_at": now,
-                }
+                },
+                "$unset": {
+                    "pairing_code": "",
+                    "pairing_code_hash": "",
+                    "pairing_code_preview": "",
+                    "pairing_token_version": "",
+                },
             }
         )
         await upsert_android_consent(db, user_id=user_id, device_id=device_id, req=req, now=now, status="revoked")
@@ -635,6 +722,11 @@ async def ingest_notification(
         raise HTTPException(status_code=400, detail="Raw notification text is not accepted on v2 ingest")
 
     raw_body = req.text or req.body or ""
+    if raw_body and not strict_sanitized and not settings.CONNECTOR_LEGACY_RAW_INGEST_ENABLED:
+        raise HTTPException(
+            status_code=400,
+            detail="Legacy raw notification ingest is disabled. Update the connector to notification-v2 on-device parsing.",
+        )
     raw_payload_received = bool(raw_body)
     has_structured_event = req.amount is not None or bool(req.merchant) or bool(req.transactionId)
     notification_preview = (req.maskedPreview or "").strip() or mask_notification_text(raw_body)
@@ -649,6 +741,20 @@ async def ingest_notification(
     data_origin = "android_on_device" if privacy_mode == "on_device_only" else "legacy_android_raw_ingest"
     source_confidence = clean_confidence(req.confidence)
     log_id = str(uuid.uuid4())
+
+    if req.clientEventId:
+        existing_event = await db.companion_sync_log.find_one(
+            {
+                "user_id": user_id,
+                "client_event_id": req.clientEventId,
+                "processing_status": {"$ne": "pending"},
+            }
+        )
+        if existing_event:
+            return {
+                "status": "duplicate_event",
+                "transaction_id": existing_event.get("transaction_id"),
+            }
 
     existing_consent = await find_android_consent(db, user_id, device_id)
     block_reason = connector_ingest_block_reason(profile, existing_consent)
@@ -680,7 +786,8 @@ async def ingest_notification(
         {
             "_id": log_id,
             "user_id": user_id,
-            "device_id": device_id,
+            "device_id": masked_device_id(device_id),
+            "device_fingerprint": device_fingerprint(device_id),
             "device_name": req.device_name or req.sourceApp or req.packageName,
             "notification_source": notification_source,
             "notification_preview": notification_preview,
@@ -696,6 +803,7 @@ async def ingest_notification(
             "raw_payload_received": raw_payload_received,
             "schema_version": req.schemaVersion,
             "client_event_id": req.clientEventId,
+            "signature_verified": signature_verified,
             "created_at": now,
         }
     )
@@ -812,7 +920,8 @@ async def ingest_notification(
         "source": source,
         "notification_preview": notification_preview,
         "transaction_reference": transaction_reference,
-        "device_id": device_id,
+        "device_id": masked_device_id(device_id),
+        "device_fingerprint": device_fingerprint(device_id),
         "package_name": req.packageName,
         "source_app": req.sourceApp,
         "capture_source": notification_source,
@@ -824,6 +933,7 @@ async def ingest_notification(
         "raw_payload_received": raw_payload_received,
         "schema_version": req.schemaVersion,
         "client_event_id": req.clientEventId,
+        "signature_verified": signature_verified,
         "verification_status": "needs_review" if needs_verification else verification_status,
         "verified_by": None,
         "detected_at_device": millis_to_utc_datetime(req.detectedAtDeviceMillis or req.timestamp),

@@ -9,14 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
   FileCheck2,
-  KeyRound,
-  Lock,
   Landmark,
   RefreshCw,
   ShieldCheck,
@@ -218,6 +215,7 @@ function PrivacyPage() {
     androidConsents[0];
   const syncLogs: SyncLog[] = Array.isArray(syncLogData) ? syncLogData : syncLogData?.logs ?? [];
   const latestSyncLog = syncLogs[0];
+  const latestSyncAt = profile?.companion_last_sync ?? latestSyncLog?.created_at;
   const legacyRawLogCount = syncLogs.filter((log) => log.raw_payload_received === true).length;
   const rawUploadLabel =
     latestSyncLog?.raw_payload_received === true
@@ -347,7 +345,10 @@ function PrivacyPage() {
       toast.error("No bank consent selected.");
       return;
     }
-    if (action === "revoke" && !confirm("Revoke bank consent? PocketBuddy will stop new bank-source fetches for this consent.")) {
+    if (
+      action === "revoke" &&
+      !confirm("Revoke bank consent? PocketBuddy will stop future bank-source fetches and delete fetched sandbox records tied to this consent.")
+    ) {
       return;
     }
     setAaBusyAction(action);
@@ -446,7 +447,7 @@ function PrivacyPage() {
             <ChevronRight className="h-4 w-4 rotate-180" />
           </Link>
           <h1 className="text-base font-black tracking-wider text-foreground uppercase truncate">
-            Privacy Center
+            Data Control Center
           </h1>
         </div>
         <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
@@ -454,7 +455,7 @@ function PrivacyPage() {
 
       <div className="mx-auto max-w-3xl pb-20 space-y-8">
 
-        {/* Trust Layer */}
+        {/* Data Control Center */}
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground">
@@ -471,107 +472,77 @@ function PrivacyPage() {
           </div>
 
           <Card className="bg-surface-raised p-4 sm:p-5">
-            <div className="flex flex-col gap-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex min-w-0 gap-3">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                    <ShieldCheck className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[15px] font-semibold text-foreground">Your spending data stays under your control.</p>
-                    <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
-                      Bank consent is the primary verified path. Phone auto-sync is optional and only sends structured transaction facts after supported payment alerts are parsed on your device.
-                    </p>
-                  </div>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                  <ShieldCheck className="h-5 w-5" />
                 </div>
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                  <Button
-                    size="sm"
-                    className="w-full shrink-0 text-xs sm:w-fit"
-                    disabled={Boolean(aaBusyAction) || (!bankConsentCanStart && !currentAAConsent)}
-                    variant={bankConsentCanStart ? "default" : "outline"}
-                    onClick={bankConsentCanStart ? () => setBankConsentDialogOpen(true) : focusBankConsentCard}
-                  >
-                    {aaBusyAction === "start" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                    {bankConsentPrimaryAction}
-                  </Button>
-                  <Button variant="outline" size="sm" className="w-full shrink-0 text-xs sm:w-fit" onClick={() => nav({ to: "/companion" })}>
-                    Manage sync
-                  </Button>
+                <div className="min-w-0">
+                  <p className="text-[15px] font-semibold text-foreground">
+                    Your data sources stay visible and controllable.
+                  </p>
+                  <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
+                    Bank consent is read-only and revocable. Phone sync is optional, parses supported
+                    payment alerts on-device, and does not upload raw alert text in the current flow.
+                  </p>
                 </div>
               </div>
-
-              <div className="grid gap-2 sm:grid-cols-3">
-                <TrustMetric
-                  icon={<ShieldCheck className="h-4 w-4" />}
-                  label="Bank consent"
-                  value={aaTrustStatus}
-                  detail={
-                    currentAAConsent
-                      ? "Consent state is recorded here"
-                      : bankConsentCanStart
-                        ? "Tap Connect bank to start"
-                        : "Available when bank consent is configured"
-                  }
-                />
-                <TrustMetric
-                  icon={<Smartphone className="h-4 w-4" />}
-                  label="Phone auto-sync"
-                  value={profile?.companion_paired ? "On-device" : "Optional"}
-                  detail={activeAndroidConsent?.device_name || profile?.companion_device_name || "No phone connected"}
-                />
-                <TrustMetric
-                  icon={<Lock className="h-4 w-4" />}
-                  label="Raw text stored"
-                  value={rawUploadLabel}
-                  detail={
-                    legacyRawLogCount
-                      ? `${legacyRawLogCount} older masked event${legacyRawLogCount === 1 ? "" : "s"} in recent log`
-                      : "New syncs store structured fields only"
-                  }
-                />
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <Button
+                  size="sm"
+                  className="w-full shrink-0 text-xs sm:w-fit"
+                  disabled={Boolean(aaBusyAction) || (!bankConsentCanStart && !currentAAConsent)}
+                  variant={bankConsentCanStart ? "default" : "outline"}
+                  onClick={bankConsentCanStart ? () => setBankConsentDialogOpen(true) : focusBankConsentCard}
+                >
+                  {aaBusyAction === "start" ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                  )}
+                  {bankConsentPrimaryAction}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full shrink-0 text-xs sm:w-fit"
+                  onClick={() => nav({ to: "/companion" })}
+                >
+                  Manage sync
+                </Button>
               </div>
+            </div>
 
-              <Accordion type="single" collapsible className="rounded-xl border border-border bg-background/70">
-                <PrivacyAccordionItem
-                  value="how-tracking-works"
-                  icon={<FileCheck2 className="h-4 w-4" />}
-                  title="How tracking works"
-                  summary="Verified consent first; optional phone sync for supported UPI alerts."
-                >
-                  <ul className="space-y-1.5">
-                    <li>Bank consent is used for verified financial data when a provider is connected.</li>
-                    <li>The Android connector checks supported payment alerts on your phone before anything is sent.</li>
-                    <li>Transactions show clear labels such as Bank verified, On-device, Manual, Reviewed, or Needs review.</li>
-                  </ul>
-                </PrivacyAccordionItem>
-
-                <PrivacyAccordionItem
-                  value="never-asks"
-                  icon={<KeyRound className="h-4 w-4" />}
-                  title="What PocketBuddy never asks for"
-                  summary="No bank password, MPIN, OTP, or payment permission."
-                >
-                  <ul className="space-y-1.5">
-                    <li>No bank login password, MPIN, OTP, or card PIN.</li>
-                    <li>No permission to initiate payments or move money.</li>
-                    <li>No full notification inbox access from the web app, and no raw alert text in the new connector flow.</li>
-                  </ul>
-                </PrivacyAccordionItem>
-
-                <PrivacyAccordionItem
-                  value="controls"
-                  icon={<Lock className="h-4 w-4" />}
-                  title="Your controls"
-                  summary="Pause sync, unpair the phone, review entries, or delete account data."
-                >
-                  <ul className="space-y-1.5">
-                    <li>Pause auto-sync before new phone events are parsed.</li>
-                    <li>Unpairing rotates the setup token so the old connector cannot continue syncing.</li>
-                    <li>Low-confidence entries can be reviewed before they are trusted in your ledger.</li>
-                  </ul>
-                </PrivacyAccordionItem>
-              </Accordion>
+            <div className="mt-4 divide-y divide-border rounded-xl border border-border bg-background/70">
+              <SourceRow
+                label="Bank consent"
+                status={aaTrustStatus}
+                detail={
+                  currentAAConsent
+                    ? `${currentAAConsent.financial_institution_name || currentAAConsent.provider_label || "Connected bank"} · ${currentAAConsent.fetch_status || "fetch not started"}`
+                    : bankConsentCanStart
+                      ? "Ready to connect through the Account Aggregator flow."
+                      : "Not connected."
+                }
+              />
+              <SourceRow
+                label="Phone auto-sync"
+                status={profile?.companion_paired ? (syncEnabled ? "Active" : "Paused") : "Optional"}
+                detail={
+                  profile?.companion_paired
+                    ? `${profile.companion_device_name || activeAndroidConsent?.device_name || "Android connector"} · ${syncEnabled ? "new structured events allowed" : "paused before parsing"}`
+                    : "Pair only if you want instant on-device UPI alert parsing."
+                }
+              />
+              <SourceRow
+                label="Raw alert text"
+                status={rawUploadLabel}
+                detail={
+                  legacyRawLogCount
+                    ? `${legacyRawLogCount} older masked legacy event${legacyRawLogCount === 1 ? "" : "s"} in recent sync history.`
+                    : "Current connector events store structured fields and a masked preview."
+                }
+              />
             </div>
           </Card>
         </section>
@@ -593,7 +564,7 @@ function PrivacyPage() {
             <DataSourceStatusCard
               icon={<Landmark className="h-4 w-4" />}
               title="Bank consent"
-              status={currentAAConsent ? humanConsentStatus(currentAAConsent.status) : bankConsentCanStart ? "Ready to connect" : "Not connected"}
+              status={currentAAConsent ? humanConsentStatus(currentAAConsent.status) : bankConsentCanStart ? "Ready" : "Off"}
               tone={
                 currentAAConsent?.status === "active"
                   ? "success"
@@ -620,7 +591,7 @@ function PrivacyPage() {
             <DataSourceStatusCard
               icon={<Smartphone className="h-4 w-4" />}
               title="Phone auto-sync"
-              status={profile?.companion_paired ? (syncEnabled ? "Active" : "Paused") : "Optional"}
+              status={profile?.companion_paired ? (syncEnabled ? "Active" : "Paused") : "Off"}
               tone={profile?.companion_paired ? (syncEnabled ? "success" : "warning") : "muted"}
               description="Optional Android connector for supported payment alerts when bank consent is not enough for instant tracking."
               detail={
@@ -635,6 +606,44 @@ function PrivacyPage() {
               points={["On-device parsing", "Structured fields", "Pause anytime"]}
             />
           </div>
+        </section>
+
+        {/* Data Receipt */}
+        <section className="space-y-3">
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground">
+              Data Receipt
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              A simple view of what PocketBuddy stores for the active trust layer.
+            </p>
+          </div>
+          <Card className="bg-surface-raised p-4 sm:p-5">
+            <div className="grid gap-3 md:grid-cols-2">
+              <ReceiptBlock
+                icon={<Landmark className="h-4 w-4" />}
+                title="Bank consent"
+                status={currentAAConsent ? humanConsentStatus(currentAAConsent.status) : "Not connected"}
+                rows={[
+                  ["Purpose", currentAAConsent?.purpose || "Verify bank transactions for insights"],
+                  ["Accounts", currentAAConsent?.account_count ? `${currentAAConsent.account_count} masked account${currentAAConsent.account_count === 1 ? "" : "s"}` : "None selected"],
+                  ["Fetched records", currentAAConsent?.fetched_records_count ? `${currentAAConsent.fetched_records_count}` : "No fetch yet"],
+                  ["Control", currentAAConsent?.status === "active" ? "Can revoke anytime" : bankConsentCanStart ? "Ready to connect" : "Unavailable"],
+                ]}
+              />
+              <ReceiptBlock
+                icon={<Smartphone className="h-4 w-4" />}
+                title="Phone auto-sync"
+                status={profile?.companion_paired ? (syncEnabled ? "Active" : "Paused") : "Optional"}
+                rows={[
+                  ["Uploads", "Amount, merchant, direction, reference, masked preview"],
+                  ["Raw alert text", rawUploadLabel],
+                  ["Last sync", latestSyncAt ? relativeTime(latestSyncAt) : "Never"],
+                  ["Control", profile?.companion_paired ? "Pause or unpair anytime" : "Pair only if needed"],
+                ]}
+              />
+            </div>
+          </Card>
         </section>
 
         {/* Bank Consent */}
@@ -1065,11 +1074,11 @@ function consentStatusClass(status?: string) {
   return "text-muted-foreground";
 }
 
-function CompactConsentFact({ label, value }: { label: string; value: string }) {
+function ConsentDetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-background/70 p-3">
-      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-1 line-clamp-2 text-[12px] font-semibold leading-snug text-foreground">{value}</p>
+    <div className="grid gap-1 p-3 sm:grid-cols-[140px_1fr] sm:gap-3">
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="break-words text-[12px] font-semibold leading-snug text-foreground">{value}</p>
     </div>
   );
 }
@@ -1158,33 +1167,23 @@ function AccountAggregatorSandboxCard({
           </Button>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Connected institution</p>
-                <p className="mt-2 truncate text-[18px] font-semibold text-foreground">{institutionName}</p>
-                <p className="mt-1 text-[12px] text-muted-foreground">
-                  {consent ? accountSummary : "Connect a bank to enable verified tracking"}
-                </p>
-              </div>
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-background/70 text-[12px] font-bold text-primary">
-                {institutionShortName.slice(0, 3).toUpperCase()}
-              </div>
+        <div className="mt-4 rounded-xl border border-border bg-background/70">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-3">
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-semibold text-foreground">{institutionName}</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                {consent ? accountSummary : "Connect a bank to enable verified tracking."}
+              </p>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Badge variant="outline" className="border-success/30 bg-background/70 text-[10px] text-success">Read-only</Badge>
-              <Badge variant="outline" className="border-primary/25 bg-background/70 text-[10px] text-primary">Account Aggregator</Badge>
-              <Badge variant="outline" className="bg-background/70 text-[10px] text-muted-foreground">Revocable</Badge>
-              <Badge variant="outline" className="bg-background/70 text-[10px] text-muted-foreground">No bank password</Badge>
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-[11px] font-bold text-primary">
+              {institutionShortName.slice(0, 3).toUpperCase()}
             </div>
           </div>
-
-          <div className="grid gap-2">
-            <CompactConsentFact label="Purpose" value={consent?.purpose || "Verified transaction tracking"} />
-            <CompactConsentFact label="Accounts" value={consent ? maskedAccountRefs : "No account selected"} />
-            <CompactConsentFact label="Scope" value={scope} />
-            <CompactConsentFact label="Last activity" value={lastActivity ? relativeTime(lastActivity) : "No activity yet"} />
+          <div className="divide-y divide-border">
+            <ConsentDetailRow label="Purpose" value={consent?.purpose || "Verified transaction tracking"} />
+            <ConsentDetailRow label="Accounts" value={consent ? maskedAccountRefs : "No account selected"} />
+            <ConsentDetailRow label="Scope" value={scope} />
+            <ConsentDetailRow label="Last activity" value={lastActivity ? relativeTime(lastActivity) : "No activity yet"} />
           </div>
         </div>
 
@@ -1392,7 +1391,7 @@ function bankConsentMessage(runtimeStatus?: string, consentStatus?: string) {
 function bankConsentActionToast(action: AASandboxAction) {
   if (action === "approve") return "Consent approved.";
   if (action === "reject") return "Consent rejected.";
-  if (action === "revoke") return "Consent revoked.";
+  if (action === "revoke") return "Consent revoked and fetched records deleted.";
   if (action === "expire") return "Consent expired.";
   if (action === "fetch_success") return "Consent data fetched.";
   if (action === "fetch_failed") return "Consent fetch marked failed.";
@@ -1429,58 +1428,40 @@ function formatPaise(value?: number) {
   return `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Math.round(Number(value) / 100))}`;
 }
 
-function PrivacyAccordionItem({
-  value,
+function ReceiptBlock({
   icon,
   title,
-  summary,
-  children,
+  status,
+  rows,
 }: {
-  value: string;
   icon: ReactNode;
   title: string;
-  summary: string;
-  children: ReactNode;
+  status: string;
+  rows: Array<[string, string]>;
 }) {
   return (
-    <AccordionItem value={value} className="border-border px-3 last:border-b-0 sm:px-4">
-      <AccordionTrigger className="py-3 hover:no-underline">
-        <div className="flex min-w-0 items-center gap-3 pr-3">
+    <div className="rounded-xl border border-border bg-background/70 p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
             {icon}
           </div>
-          <div className="min-w-0 text-left">
-            <p className="text-[12px] font-semibold text-foreground">{title}</p>
-            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{summary}</p>
-          </div>
+          <p className="truncate text-[13px] font-semibold text-foreground">{title}</p>
         </div>
-      </AccordionTrigger>
-      <AccordionContent className="pb-3 pl-11 text-[11px] leading-relaxed text-muted-foreground">
-        {children}
-      </AccordionContent>
-    </AccordionItem>
-  );
-}
-
-function TrustMetric({
-  icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-background/70 p-3">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        {icon}
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em]">{label}</span>
+        <Badge variant="outline" className="shrink-0 text-[9px]">
+          {status}
+        </Badge>
       </div>
-      <p className="mt-2 truncate text-[13px] font-semibold text-foreground">{value}</p>
-      <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{detail}</p>
+      <div className="mt-3 divide-y divide-border/70">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              {label}
+            </p>
+            <p className="min-w-0 text-right text-[11px] leading-snug text-foreground">{value}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1498,9 +1479,12 @@ function SourceRow({
   const paused = status === "Paused";
 
   return (
-    <div className="rounded-lg bg-surface/70 p-2.5">
-      <div className="flex items-center justify-between gap-2">
+    <div className="flex flex-col gap-1.5 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
         <p className="text-[12px] font-semibold text-foreground">{label}</p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{detail}</p>
+      </div>
+      <div className="shrink-0">
         <Badge
           variant="outline"
           className={`shrink-0 text-[9px] ${
@@ -1514,7 +1498,6 @@ function SourceRow({
           {status}
         </Badge>
       </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{detail}</p>
     </div>
   );
 }
@@ -1544,29 +1527,34 @@ function DataSourceStatusCard({
 }) {
   return (
     <Card className="bg-surface-raised p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 gap-3">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-background text-primary">
             {icon}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[13px] font-semibold text-foreground">{title}</p>
-              <Badge variant="outline" className={`text-[9px] ${dataSourceToneClass(tone)}`}>
+              <Badge variant="outline" className={`shrink-0 whitespace-nowrap text-[9px] ${dataSourceToneClass(tone)}`}>
                 {status}
               </Badge>
             </div>
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" className="h-8 w-full shrink-0 text-xs sm:w-fit" disabled={actionDisabled} onClick={onAction}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 min-w-[96px] shrink-0 whitespace-nowrap px-3 text-xs"
+          disabled={actionDisabled}
+          onClick={onAction}
+        >
           {actionLabel}
         </Button>
       </div>
 
-      <div className="mt-3 rounded-xl border border-border bg-background/70 p-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Current state</p>
-        <p className="mt-1 text-[12px] font-semibold leading-snug text-foreground">{detail}</p>
+      <div className="mt-3 border-t border-border pt-3">
+        <p className="text-[11px] leading-relaxed text-muted-foreground">{detail}</p>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">

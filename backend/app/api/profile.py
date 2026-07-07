@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from app.core.database import get_db
+from app.core.privacy import connector_token_hash, connector_token_preview
 from app.core.security import get_current_user, map_doc
 
 router = APIRouter()
@@ -67,19 +68,41 @@ async def update_profile(req: ProfileUpdateReq, user_id: str = Depends(get_curre
         return map_doc(profile)
 
     pairing_code_supplied = "pairing_code" in updates
+    unset_updates = {}
 
     if pairing_code_supplied:
+        supplied_pairing_code = updates.pop("pairing_code")
         updates["pairing_code_updated_at"] = now
+        if supplied_pairing_code:
+            updates["pairing_code_hash"] = connector_token_hash(supplied_pairing_code)
+            updates["pairing_code_preview"] = connector_token_preview(supplied_pairing_code)
+            updates["pairing_token_version"] = 2
+            unset_updates["pairing_code"] = ""
+        else:
+            unset_updates["pairing_code"] = ""
+            unset_updates["pairing_code_hash"] = ""
+            unset_updates["pairing_code_preview"] = ""
+            unset_updates["pairing_token_version"] = ""
 
     if updates.get("companion_paired") is False:
         updates.setdefault("companion_device_name", None)
         updates.setdefault("companion_last_sync", None)
         updates.setdefault("companion_device_id", None)
+        updates.setdefault("companion_device_fingerprint", None)
         if not pairing_code_supplied:
-            updates["pairing_code"] = None
             updates["pairing_code_updated_at"] = now
+            unset_updates["pairing_code"] = ""
+            unset_updates["pairing_code_hash"] = ""
+            unset_updates["pairing_code_preview"] = ""
+            unset_updates["pairing_token_version"] = ""
 
-    await db.profiles.update_one({"_id": user_id}, {"$set": updates})
+    mongo_update = {}
+    if updates:
+        mongo_update["$set"] = updates
+    if unset_updates:
+        mongo_update["$unset"] = unset_updates
+    if mongo_update:
+        await db.profiles.update_one({"_id": user_id}, mongo_update)
 
     if "companion_sync_enabled" in updates:
         await db.data_consents.update_many(

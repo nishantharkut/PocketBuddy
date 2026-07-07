@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     # normal local/dev auth flow.
     DEMO_PHONE_AUTH_ENABLED: bool = False
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
+    CORS_ALLOW_ORIGINS: str = ""
+
+    # Android connector trust boundary. Legacy raw notification ingest remains
+    # available only when explicitly enabled for migration from old connector
+    # builds. New connector builds use notification-v2, on-device parsing, and
+    # signed requests.
+    CONNECTOR_LEGACY_RAW_INGEST_ENABLED: bool = False
+    CONNECTOR_SIGNATURE_REQUIRED: bool = False
+    CONNECTOR_SIGNATURE_TOLERANCE_SECONDS: int = 300
 
     # Account Aggregator sandbox integration. Disabled by default so the app
     # never pretends to verify live bank data without explicit configuration.

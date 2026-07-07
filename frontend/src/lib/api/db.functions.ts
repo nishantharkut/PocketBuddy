@@ -186,6 +186,10 @@ export async function getDataConsents() {
   return apiRequest("/api/companion/consents");
 }
 
+export async function createCompanionPairingToken() {
+  return apiRequest("/api/companion/pairing-token", { method: "POST" });
+}
+
 export async function getAccountAggregatorStatus() {
   return apiRequest("/api/account-aggregator/status");
 }

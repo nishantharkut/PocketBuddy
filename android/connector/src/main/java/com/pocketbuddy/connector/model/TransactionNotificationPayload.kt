@@ -1,6 +1,7 @@
 package com.pocketbuddy.connector.model
 
 import org.json.JSONObject
+import java.util.UUID
 
 data class TransactionNotificationPayload(
     val packageName: String,
@@ -21,6 +22,7 @@ data class TransactionNotificationPayload(
     val rawTextSuppressed: Boolean = true,
     val schemaVersion: Int = 2,
     val detectedAtDeviceMillis: Long = System.currentTimeMillis(),
+    val clientEventId: String = UUID.randomUUID().toString(),
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("packageName", packageName)
@@ -41,6 +43,7 @@ data class TransactionNotificationPayload(
         put("rawTextSuppressed", rawTextSuppressed)
         put("schemaVersion", schemaVersion)
         put("detectedAtDeviceMillis", detectedAtDeviceMillis)
+        put("clientEventId", clientEventId)
     }
 
     companion object {
@@ -65,6 +68,8 @@ data class TransactionNotificationPayload(
                 rawTextSuppressed = jsonObject.optBoolean("rawTextSuppressed", true),
                 schemaVersion = jsonObject.optInt("schemaVersion", 2),
                 detectedAtDeviceMillis = jsonObject.getLong("detectedAtDeviceMillis"),
+                clientEventId = jsonObject.optString("clientEventId").takeIf(String::isNotBlank)
+                    ?: UUID.randomUUID().toString(),
             )
 
         private fun legacyMask(value: String): String =

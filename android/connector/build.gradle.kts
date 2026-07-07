@@ -46,6 +46,13 @@ android {
             "POCKETBUDDY_USER_ID",
             "\"${pocketBuddyUserId.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
         )
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
+    }
+
+    buildTypes {
+        release {
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+        }
     }
 
     buildFeatures {

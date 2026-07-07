@@ -17,6 +17,7 @@ from app.api.webhook import (
     pairing_rotated_after_revocation,
 )
 from app.core.config import Settings, settings
+from app.core.privacy import connector_token_hash, verify_connector_pairing_token
 from app.main import app
 
 
@@ -125,6 +126,13 @@ class PrivacyContractTests(unittest.TestCase):
             build_android_consent_id("user-1", None),
             "android:user-1:unknown-device",
         )
+
+    def test_connector_pairing_token_hash_verification(self):
+        token = "pb_secure-test-token"
+        profile = {"pairing_code_hash": connector_token_hash(token)}
+
+        self.assertTrue(verify_connector_pairing_token(profile, token))
+        self.assertFalse(verify_connector_pairing_token(profile, "wrong-token"))
 
     def test_connector_ingest_blocks_without_active_user_consent(self):
         active_profile = {"pairing_code": "PB-1234", "companion_sync_enabled": True}

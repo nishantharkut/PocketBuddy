@@ -1,8 +1,15 @@
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import QRCode from "qrcode";
 import { useAuth } from "@/lib/auth-context";
-import { getProfile, updateProfile, getCompanionSyncLogs, getDataConsents } from "@/lib/api/db.functions";
+import {
+  createCompanionPairingToken,
+  getProfile,
+  updateProfile,
+  getCompanionSyncLogs,
+  getDataConsents,
+} from "@/lib/api/db.functions";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +26,6 @@ import {
   FileCheck2,
   KeyRound,
   RefreshCw,
-  Save,
   Server,
   ShieldAlert,
   ShieldCheck,
@@ -50,13 +56,6 @@ function getCompanionWebhookUrl() {
   return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification-v2`;
 }
 
-function randomPairingCode() {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let s = "PB-";
-  for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
-
 function maskMiddle(value: string, visibleStart = 6, visibleEnd = 4) {
   if (!value) return "";
   if (value.length <= visibleStart + visibleEnd) return "••••";
@@ -74,6 +73,9 @@ function CompanionPage() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const [pairing, setPairing] = useState<string>("");
+  const [issuingPairing, setIssuingPairing] = useState(false);
+  const [setupLink, setSetupLink] = useState("");
+  const [setupQr, setSetupQr] = useState("");
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const { data: profile, refetch: refetchProfile } = useQuery<Profile>({
@@ -107,8 +109,7 @@ function CompanionPage() {
   const latestSyncAt = profile?.companion_last_sync ?? syncLogs[0]?.created_at;
   const isConnected = Boolean(profile?.companion_paired);
   const companionWebhookUrl = getCompanionWebhookUrl();
-  const pairingForDisplay = profile?.pairing_code || pairing;
-  const isPairingSaved = Boolean(profile?.pairing_code && profile.pairing_code === pairingForDisplay);
+  const pairingForDisplay = pairing || profile?.pairing_code || profile?.pairing_code_preview || "";
 
   function makeConnectorConfig(pairingCode: string) {
     return [
@@ -128,22 +129,45 @@ function CompanionPage() {
     ].join("\n");
   }
 
-  const connectorConfig = makeConnectorConfig(pairingForDisplay);
   const displayConnectorConfig = makeDisplayConnectorConfig(pairingForDisplay);
 
   useEffect(() => {
     if (profile?.pairing_code) setPairing(profile.pairing_code);
-    else if (!pairing) setPairing(randomPairingCode());
-  }, [profile, pairing]);
+  }, [profile]);
 
   const isAndroid = typeof window !== "undefined" && /android/i.test(window.navigator.userAgent);
 
+  function buildDeepLink(pairingToken: string) {
+    return `pocketbuddy://configure?webhook_url=${encodeURIComponent(companionWebhookUrl)}&user_id=${encodeURIComponent(user?.id ?? "")}&webhook_token=${encodeURIComponent(pairingToken)}&account_email=${encodeURIComponent(user?.email ?? "")}`;
+  }
+
   async function launchAutoConfigure() {
-    const savedPairing = await savePairingCode(pairingForDisplay, false);
+    const savedPairing = await getOrCreatePairingToken(false);
     if (!savedPairing) return;
 
-    const deepLinkUrl = `pocketbuddy://configure?webhook_url=${encodeURIComponent(companionWebhookUrl)}&user_id=${encodeURIComponent(user?.id ?? "")}&webhook_token=${encodeURIComponent(savedPairing)}&account_email=${encodeURIComponent(user?.email ?? "")}`;
+    const deepLinkUrl = buildDeepLink(savedPairing);
     window.location.href = deepLinkUrl;
+  }
+
+  async function preparePhoneSetup() {
+    const savedPairing = await getOrCreatePairingToken(false);
+    if (!savedPairing) return;
+    const deepLinkUrl = buildDeepLink(savedPairing);
+    setSetupLink(deepLinkUrl);
+    try {
+      const qr = await QRCode.toDataURL(deepLinkUrl, {
+        width: 184,
+        margin: 1,
+        color: {
+          dark: "#09090b",
+          light: "#ffffff",
+        },
+      });
+      setSetupQr(qr);
+      toast.success("Setup QR ready. Scan it from your Android phone.");
+    } catch (err) {
+      toast.error("Could not prepare setup QR. Use one-tap setup on the Android phone.");
+    }
   }
 
   async function checkRealSync() {
@@ -177,34 +201,37 @@ function CompanionPage() {
       qc.invalidateQueries({ queryKey: ["profile"] });
       qc.invalidateQueries({ queryKey: ["sync-log", user.id] });
       qc.invalidateQueries({ queryKey: ["data-consents"] });
-      setPairing(randomPairingCode());
+      setPairing("");
+      setSetupLink("");
+      setSetupQr("");
       toast.success("Device unpaired. Recent sync history is kept.");
     } catch (err: any) {
       toast.error(err.message || "Failed to unpair device");
     }
   }
 
-  async function savePairingCode(code = pairingForDisplay, showToast = true): Promise<string | null> {
+  async function issuePairingToken(showToast = true): Promise<string | null> {
     if (!user) return null;
-    const nextCode = (code || randomPairingCode()).trim();
-    if (!nextCode) return null;
-
-    if (profile?.pairing_code === nextCode) return nextCode;
-
+    setIssuingPairing(true);
     try {
-      await updateProfile({
-        data: {
-          pairing_code: nextCode,
-        },
-      });
-      setPairing(nextCode);
+      const result = await createCompanionPairingToken();
+      const nextToken = result?.pairing_token;
+      if (!nextToken) throw new Error("Pairing token was not returned");
+      setPairing(nextToken);
       qc.invalidateQueries({ queryKey: ["profile"] });
-      if (showToast) toast.success("Pairing token saved.");
-      return nextCode;
+      if (showToast) toast.success("Private setup key generated.");
+      return nextToken;
     } catch (err: any) {
-      toast.error(err.message || "Failed to save pairing token");
+      toast.error(err.message || "Failed to generate setup key");
       return null;
+    } finally {
+      setIssuingPairing(false);
     }
+  }
+
+  async function getOrCreatePairingToken(showToast = true): Promise<string | null> {
+    if (pairing) return pairing;
+    return issuePairingToken(showToast);
   }
 
   async function fallbackCopyText(text: string): Promise<boolean> {
@@ -227,7 +254,7 @@ function CompanionPage() {
   }
 
   async function copyConnectorConfig() {
-    const savedPairing = await savePairingCode(pairingForDisplay, false);
+    const savedPairing = await getOrCreatePairingToken(false);
     if (!savedPairing) return;
 
     const configToCopy = makeConnectorConfig(savedPairing);
@@ -294,49 +321,18 @@ function CompanionPage() {
               latestLog={latestSyncLog}
             />
 
-            {/* Automated Setup */}
-            <Card className="bg-primary/5 border border-primary/20 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Smartphone className="h-4.5 w-4.5 text-primary shrink-0" />
-                <p className="text-[13px] font-bold text-foreground">One-Tap Auto Configure</p>
-              </div>
-              <p className="text-[12px] text-muted-foreground leading-relaxed">
-                Open the connector and fill the server, account, and pairing fields from this signed-in session. No typing required.
-              </p>
-              {isAndroid ? (
-                <Button 
-                  className="w-full bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider py-2.5 h-10 hover:bg-primary/90"
-                  onClick={launchAutoConfigure}
-                >
-                  One-Tap Auto Configure
-                </Button>
-              ) : (
-                <div className="rounded-lg bg-card border border-border p-3 text-[11px] md:text-xs text-muted-foreground leading-normal">
-                  <b>Opening this on desktop?</b> Log in to PocketBuddy on your Android phone, open Settings / Companion, then tap auto-configure.
-                </div>
-              )}
-            </Card>
-
             <AndroidInstallGuideCard />
 
-            <Card className="bg-surface-raised p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-[13px] font-semibold">Pair another phone or reconnect</p>
-                  <p className="mt-0.5 text-[12px] text-muted-foreground">
-                    Use only if one-tap setup is not available on the Android phone.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={copyConnectorConfig}>
-                  <Copy />
-                  Copy fallback config
-                </Button>
-              </div>
-              <details className="mt-3 rounded-md bg-surface p-3 text-left text-xs text-muted-foreground">
-                <summary className="cursor-pointer font-semibold text-foreground">Show setup values (masked)</summary>
-                <pre className="mt-3 overflow-x-auto leading-5">{displayConnectorConfig}</pre>
-              </details>
-            </Card>
+            <ConfigureConnectorCard
+              isAndroid={isAndroid}
+              issuingPairing={issuingPairing}
+              setupQr={setupQr}
+              setupLink={setupLink}
+              displayConnectorConfig={displayConnectorConfig}
+              onOneTap={launchAutoConfigure}
+              onPrepareQr={preparePhoneSetup}
+              onCopyConfig={copyConnectorConfig}
+            />
 
 
             <div className="space-y-2">
@@ -381,64 +377,18 @@ function CompanionPage() {
               latestLog={latestSyncLog}
             />
 
-            {/* Automated Setup */}
-            <Card className="bg-primary/5 border border-primary/20 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Smartphone className="h-4.5 w-4.5 text-primary shrink-0" />
-                <p className="text-[13px] font-bold text-foreground">One-Tap Auto Configure</p>
-              </div>
-              <p className="text-[12px] text-muted-foreground leading-relaxed">
-                Open the connector and fill the server, account, and pairing fields from this signed-in session. No typing required.
-              </p>
-              {isAndroid ? (
-                <Button 
-                  className="w-full bg-primary text-primary-foreground font-bold text-xs uppercase tracking-wider py-2.5 h-10 hover:bg-primary/90"
-                  onClick={launchAutoConfigure}
-                >
-                  One-Tap Auto Configure
-                </Button>
-              ) : (
-                <div className="rounded-lg bg-card border border-border p-3 text-[11px] md:text-xs text-muted-foreground leading-normal">
-                  <b>Opening this on desktop?</b> Log in to PocketBuddy on your Android phone, open Settings / Companion, then tap auto-configure.
-                </div>
-              )}
-            </Card>
-
             <AndroidInstallGuideCard />
 
-            <div className="rounded-xl border border-border bg-surface-raised p-4 text-center">
-              <p className="text-[13px] font-semibold text-foreground">No manual code required</p>
-              <p className="mx-auto mt-1 max-w-sm text-[12px] leading-relaxed text-muted-foreground">
-                PocketBuddy creates a private setup key and passes it through one-tap setup. You do not need to type or remember it.
-              </p>
-              <Badge variant={isPairingSaved ? "outline" : "secondary"} className="mt-2 text-[10px] md:text-xs">
-                {isPairingSaved ? "Setup key saved" : "Setup key will save before setup"}
-              </Badge>
-            </div>
-
-            <Card className="bg-surface-raised p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[13px] font-semibold">Fallback manual config</p>
-                  <p className="mt-0.5 text-[12px] text-muted-foreground">
-                    Use this only when the one-tap app link cannot open the connector.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={copyConnectorConfig}>
-                  <Copy />
-                  Copy fallback config
-                </Button>
-              </div>
-              <details className="mt-3 rounded-md bg-surface p-3 text-left text-xs text-muted-foreground">
-                <summary className="cursor-pointer font-semibold text-foreground">Show setup values (masked)</summary>
-                <pre className="mt-3 overflow-x-auto leading-5">{displayConnectorConfig}</pre>
-              </details>
-            </Card>
-
-            <Button variant="outline" className="w-full" onClick={() => savePairingCode()}>
-              <Save />
-              Save setup key
-            </Button>
+            <ConfigureConnectorCard
+              isAndroid={isAndroid}
+              issuingPairing={issuingPairing}
+              setupQr={setupQr}
+              setupLink={setupLink}
+              displayConnectorConfig={displayConnectorConfig}
+              onOneTap={launchAutoConfigure}
+              onPrepareQr={preparePhoneSetup}
+              onCopyConfig={copyConnectorConfig}
+            />
             <Button
               className="w-full bg-success text-white hover:bg-success/90"
               onClick={checkRealSync}
@@ -500,6 +450,114 @@ function CompanionPage() {
   );
 }
 
+function ConfigureConnectorCard({
+  isAndroid,
+  issuingPairing,
+  setupQr,
+  setupLink,
+  displayConnectorConfig,
+  onOneTap,
+  onPrepareQr,
+  onCopyConfig,
+}: {
+  isAndroid: boolean;
+  issuingPairing: boolean;
+  setupQr: string;
+  setupLink: string;
+  displayConnectorConfig: string;
+  onOneTap: () => void;
+  onPrepareQr: () => void;
+  onCopyConfig: () => void;
+}) {
+  return (
+    <Card className="border border-border bg-surface-raised p-4">
+      <div className="flex items-start gap-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-background text-primary">
+          <Smartphone className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-foreground">Configure connector</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+            QR setup and copied config contain the same secure setup values. Use either one after
+            installing the APK.
+          </p>
+        </div>
+      </div>
+
+      {isAndroid ? (
+        <div className="mt-4 rounded-xl border border-border bg-background p-3">
+          <p className="text-[12px] font-semibold text-foreground">Using the Android phone now</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            Tap once to open the connector app and prefill the server, account, and setup key.
+          </p>
+          <Button
+            className="mt-3 h-10 w-full bg-primary text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+            onClick={onOneTap}
+            disabled={issuingPairing}
+          >
+            {issuingPairing ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+            One-Tap Auto Configure
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-border bg-background p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-semibold text-foreground">Set up from another screen</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                Generate a QR, scan it with the Android phone, and it will redirect to the connector
+                app with the values prefilled.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 h-9 text-xs"
+                onClick={onPrepareQr}
+                disabled={issuingPairing}
+              >
+                {issuingPairing ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Smartphone className="h-3.5 w-3.5" />
+                )}
+                Generate QR setup
+              </Button>
+            </div>
+            {setupQr ? (
+              <div className="mx-auto rounded-xl border border-border bg-white p-2">
+                <img src={setupQr} alt="PocketBuddy connector setup QR" className="h-36 w-36" />
+              </div>
+            ) : null}
+          </div>
+          {setupLink ? (
+            <a href={setupLink} className="mt-3 block text-[11px] font-semibold text-primary sm:hidden">
+              Open connector on this phone
+            </a>
+          ) : null}
+        </div>
+      )}
+
+      <details className="mt-3 rounded-xl border border-border bg-surface p-3">
+        <summary className="cursor-pointer text-[12px] font-semibold text-muted-foreground">
+          Copy config instead
+        </summary>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12px] leading-relaxed text-muted-foreground">
+            Same setup values as the QR. Use this only if the app link is blocked.
+          </p>
+          <Button variant="outline" size="sm" onClick={onCopyConfig} disabled={issuingPairing}>
+            <Copy />
+            Copy config
+          </Button>
+        </div>
+        <pre className="mt-3 overflow-x-auto rounded-md bg-background p-3 text-xs leading-5 text-muted-foreground">
+          {displayConnectorConfig}
+        </pre>
+      </details>
+    </Card>
+  );
+}
+
 function AndroidInstallGuideCard() {
   return (
     <Card className="bg-surface-raised p-4">
@@ -534,7 +592,9 @@ function AndroidInstallGuideCard() {
         </div>
         <div className="rounded-md border border-border bg-surface p-3">
           <p className="font-semibold text-foreground">3. Connect</p>
-          <p className="mt-1 leading-relaxed">Open PocketBuddy on the phone, tap One-Tap Auto Configure, and enable notification access.</p>
+          <p className="mt-1 leading-relaxed">
+            Use the QR or config section below to open the connector with values prefilled.
+          </p>
         </div>
       </div>
 

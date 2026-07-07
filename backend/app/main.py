@@ -23,9 +23,24 @@ from app.api import (
 
 app = FastAPI(title="PocketBuddy API")
 
+def cors_origins() -> list[str]:
+    configured = [
+        origin.strip()
+        for origin in (settings.CORS_ALLOW_ORIGINS or "").split(",")
+        if origin.strip()
+    ]
+    if configured:
+        return configured
+    return [
+        settings.FRONTEND_BASE_URL,
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

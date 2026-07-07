@@ -22,8 +22,6 @@ export const Route = createFileRoute("/login")({
 type Mode = "signin" | "signup";
 type Tab = "email" | "phone";
 
-const PHONE_DEMO_AUTH_ENABLED = import.meta.env.VITE_DEMO_PHONE_AUTH_ENABLED === "true";
-
 function LoginPage() {
   const nav = useNavigate();
   const { session, loading, login } = useAuth();
@@ -38,7 +36,7 @@ function LoginPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
   const [busy, setBusy] = useState(false);
-  const activeTab: Tab = PHONE_DEMO_AUTH_ENABLED ? tab : "email";
+  const activeTab: Tab = tab;
 
   useEffect(() => {
     setMounted(true);
@@ -86,10 +84,6 @@ function LoginPage() {
   }
 
   async function handlePhone() {
-    if (!PHONE_DEMO_AUTH_ENABLED) {
-      toast.error("Phone sign-in is not configured. Use email/password login.");
-      return;
-    }
     if (!phone || phone.length < 10) {
       toast.error("Enter a valid phone number");
       return;
@@ -181,9 +175,7 @@ function LoginPage() {
         </div>
 
         <div
-          className={`flex bg-surface-raised border border-border rounded-full p-1 mx-auto text-[10px] font-bold uppercase tracking-wider ${
-            PHONE_DEMO_AUTH_ENABLED ? "max-w-[200px]" : "max-w-[112px]"
-          }`}
+          className="mx-auto flex max-w-[200px] rounded-full border border-border bg-surface-raised p-1 text-[10px] font-bold uppercase tracking-wider"
         >
           <button
             id="tab-login-email"
@@ -192,15 +184,13 @@ function LoginPage() {
           >
             Email
           </button>
-          {PHONE_DEMO_AUTH_ENABLED && (
-            <button
-              id="tab-login-phone"
-              onClick={() => setTab("phone")}
-              className={`flex-1 py-1.5 rounded-full transition-all duration-150 cursor-pointer ${activeTab === "phone" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              Phone
-            </button>
-          )}
+          <button
+            id="tab-login-phone"
+            onClick={() => setTab("phone")}
+            className={`flex-1 py-1.5 rounded-full transition-all duration-150 cursor-pointer ${activeTab === "phone" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Phone
+          </button>
         </div>
 
         <div className="mt-8 space-y-4">

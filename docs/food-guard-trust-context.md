@@ -1,6 +1,6 @@
 # Food Guard Trust Context
 
-Status: implementation hardening branch  
+Status: implementation hardening branch
 Branch: `fix/food-guard-trust-backend`
 
 ## Why This Change Exists
@@ -56,7 +56,6 @@ Normal crowd submissions use:
 ```text
 threshold = max(5, min(25, ceil(1.5 * sqrt(active_campus_reviewers))))
 ```
-
 This gives:
 
 - a minimum of 5 independent confirmations for cold-start campuses;
@@ -182,4 +181,3 @@ $env:PYTHONPATH='backend'
 npm.cmd run check --workspace=frontend
 git diff --check
 ```
-

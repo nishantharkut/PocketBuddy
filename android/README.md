@@ -111,7 +111,7 @@ sdk.dir=C\:\\Users\\<YOUR_USER>\\AppData\\Local\\Android\\Sdk
 For USB testing with `adb reverse`, use:
 
 ```properties
-POCKETBUDDY_WEBHOOK_URL=http://127.0.0.1:8000/api/ingest/notification-v2
+POCKETBUDDY_WEBHOOK_URL=http://127.0.0.1:8000/api/ingest/notification
 POCKETBUDDY_WEBHOOK_TOKEN=
 POCKETBUDDY_USER_ID=
 ```
@@ -119,12 +119,12 @@ POCKETBUDDY_USER_ID=
 For a LAN/ngrok backend, replace the URL accordingly:
 
 ```properties
-POCKETBUDDY_WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app/api/ingest/notification-v2
+POCKETBUDDY_WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app/api/ingest/notification
 ```
 
 `android/local.properties` is ignored by git.
 
-These values are build-time defaults. The installed APK can safely prefill the server URL from this file, but user-specific account binding should come from PocketBuddy web through One-Tap Auto Configure or fallback pairing config.
+These values are build-time defaults. The installed APK also has a setup screen where you can change the webhook URL, user ID, and bearer token without rebuilding.
 
 The backend payload and companion frontend contract are documented in:
 
@@ -286,7 +286,7 @@ Expected architecture:
 
 ```text
 Phone Wi-Fi/mobile data
-  -> http://<EC2_PUBLIC_IP>/api/ingest/notification-v2
+  -> http://<EC2_PUBLIC_IP>/api/ingest/notification
   -> Nginx on EC2
   -> FastAPI backend
   -> MongoDB Atlas
@@ -303,12 +303,12 @@ http://<EC2_PUBLIC_IP>
 2. Login or signup.
 3. Complete onboarding.
 4. Open Settings -> Companion Device.
-5. Tap One-Tap Auto Configure from the Android phone. If the app link cannot open the connector, use the fallback connector config.
+5. Copy the connector config.
 
 It should look like:
 
 ```text
-POCKETBUDDY_WEBHOOK_URL=http://<EC2_PUBLIC_IP>/api/ingest/notification-v2
+POCKETBUDDY_WEBHOOK_URL=http://<EC2_PUBLIC_IP>/api/ingest/notification
 POCKETBUDDY_WEBHOOK_TOKEN=
 POCKETBUDDY_USER_ID=<your_user_id>
 ```
@@ -316,11 +316,13 @@ POCKETBUDDY_USER_ID=<your_user_id>
 On the Android app:
 
 1. Open `PocketBuddy Connector`.
-2. If One-Tap Auto Configure was used, confirm the account is linked.
-3. If fallback config was used, paste it and tap `Save connector config`.
-4. Tap `Open notification access`.
-5. Enable PocketBuddy Connector.
-6. Return to the app and confirm it says `Ready to sync`.
+2. Paste the webhook URL.
+3. Paste the user ID.
+4. Leave webhook token empty unless the backend gives you one.
+5. Tap `Save connector config`.
+6. Tap `Open notification access`.
+7. Enable PocketBuddy Connector.
+8. Return to the app and confirm it says `Ready to sync`.
 
 Then test from the web app:
 
@@ -353,7 +355,7 @@ UsbFfs tcp:8000 tcp:8000
 With `adb reverse`, Android can post to:
 
 ```text
-http://127.0.0.1:8000/api/ingest/notification-v2
+http://127.0.0.1:8000/api/ingest/notification
 ```
 
 ## Debug Broadcast Tests

@@ -14,7 +14,7 @@ if (localPropertiesFile.exists()) {
 
 val pocketBuddyWebhookUrl =
     localProperties.getProperty("POCKETBUDDY_WEBHOOK_URL")
-        ?: "http://10.0.2.2:8000/api/ingest/notification-v2"
+        ?: "http://10.0.2.2:8000/api/ingest/notification"
 val pocketBuddyWebhookToken =
     localProperties.getProperty("POCKETBUDDY_WEBHOOK_TOKEN") ?: ""
 val pocketBuddyUserId =
@@ -46,13 +46,6 @@ android {
             "POCKETBUDDY_USER_ID",
             "\"${pocketBuddyUserId.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
         )
-        manifestPlaceholders["usesCleartextTraffic"] = "true"
-    }
-
-    buildTypes {
-        release {
-            manifestPlaceholders["usesCleartextTraffic"] = "false"
-        }
     }
 
     buildFeatures {

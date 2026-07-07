@@ -48,8 +48,7 @@ class DebugNotificationReceiver : BroadcastReceiver() {
                     MODE_SMS -> "com.google.android.apps.messaging"
                     else -> "com.phonepe.app"
                 }
-            val parser = UpiNotificationParser()
-            val parsedNotification = parser.parse(parserPackageName, notificationText)
+            val parsedNotification = UpiNotificationParser().parse(parserPackageName, notificationText)
             if (parsedNotification == null) {
                 Log.w(TAG, "Debug parser rejected notification package=$parserPackageName")
                 return
@@ -58,6 +57,7 @@ class DebugNotificationReceiver : BroadcastReceiver() {
             WebhookClient(context.applicationContext).post(
                 TransactionNotificationPayload(
                     packageName = parserPackageName,
+                    text = notificationText,
                     timestamp = timestamp,
                     sourceApp = parsedNotification.sourceApp,
                     captureSource = parsedNotification.captureSource,
@@ -68,8 +68,6 @@ class DebugNotificationReceiver : BroadcastReceiver() {
                     direction = parsedNotification.direction,
                     merchant = parsedNotification.merchant,
                     transactionId = parsedNotification.transactionId,
-                    maskedPreview = parser.maskedPreview(notificationText),
-                    confidence = parser.confidenceFor(parsedNotification),
                 ),
             ) { result ->
                 when (result) {

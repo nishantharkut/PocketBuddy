@@ -30,17 +30,17 @@ Exact merchant extraction still depends on each app's notification wording. Duri
 From `PocketBuddy/android`, copy `local.properties.example` to `local.properties` and change:
 
 ```properties
-POCKETBUDDY_WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app/api/ingest/notification-v2
+POCKETBUDDY_WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app/api/ingest/notification
 ```
 
-`local.properties` provides build-time defaults. The APK can safely prefill the server URL from this file. User/account binding should come from PocketBuddy web through One-Tap Auto Configure or fallback pairing config.
+`local.properties` provides build-time defaults. After the APK is installed, open `PocketBuddy Connector` from the launcher to change the webhook URL, user ID, and token at runtime without rebuilding.
 
 The Android folder includes a local FastAPI test harness at `tools/ingest_test_backend`. The main project backend lives under the repo-level `backend/`; wire Android to that service once its ingest endpoint accepts the connector payload shape shown below.
 
 For an Android emulator, the default host URL is:
 
 ```properties
-POCKETBUDDY_WEBHOOK_URL=http://10.0.2.2:8000/api/ingest/notification-v2
+POCKETBUDDY_WEBHOOK_URL=http://10.0.2.2:8000/api/ingest/notification
 ```
 
 Optional backend binding fields:

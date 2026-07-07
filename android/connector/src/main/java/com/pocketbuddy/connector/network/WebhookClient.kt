@@ -6,10 +6,7 @@ import com.pocketbuddy.connector.BuildConfig
 import com.pocketbuddy.connector.config.ConnectorConfigStore
 import com.pocketbuddy.connector.model.TransactionNotificationPayload
 import java.io.IOException
-import java.util.UUID
 import java.util.concurrent.TimeUnit
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -37,23 +34,15 @@ class WebhookClient(
             return
         }
 
-        val bodyJson = payload.toJson().toString()
-        val timestamp = System.currentTimeMillis().toString()
-        val eventId = payload.clientEventId
-        val signature = webhookToken?.let { signPayload(it, timestamp, eventId, bodyJson) }
-
         val request = Request.Builder()
             .url(endpointUrl)
-            .post(bodyJson.toRequestBody(JSON_MEDIA_TYPE))
+            .post(payload.toJson().toString().toRequestBody(JSON_MEDIA_TYPE))
             .header("X-PocketBuddy-Connector", BuildConfig.APPLICATION_ID)
             .header("X-PocketBuddy-Connector-Version", BuildConfig.VERSION_NAME)
             .header("X-PocketBuddy-Device-Id", payload.deviceId)
-            .header("X-PocketBuddy-Timestamp", timestamp)
-            .header("X-PocketBuddy-Event-Id", eventId)
             .apply {
                 payload.userId?.let { header("X-PocketBuddy-User-Id", it) }
                 webhookToken?.let { header("Authorization", "Bearer $it") }
-                signature?.let { header("X-PocketBuddy-Signature", "sha256=$it") }
             }
             .build()
 
@@ -93,35 +82,24 @@ class WebhookClient(
             put("userId", userId)
             put("deviceId", deviceId)
             put("type", "unpair")
+            put("text", "unpair")
             put("packageName", "com.pocketbuddy.connector")
             put("sourceApp", "PocketBuddy Android Connector")
             put("timestamp", System.currentTimeMillis())
             put("amount", 0.0)
             put("currency", "INR")
             put("direction", "debit")
-            put("maskedPreview", "Connector unpair request")
-            put("parserVersion", "android-v2")
-            put("privacyMode", "on_device_only")
-            put("rawTextSuppressed", true)
-            put("schemaVersion", 2)
         }
-        val bodyJson = json.toString()
-        val timestamp = System.currentTimeMillis().toString()
-        val eventId = UUID.randomUUID().toString()
-        val signature = webhookToken?.let { signPayload(it, timestamp, eventId, bodyJson) }
 
         val request = Request.Builder()
             .url(endpointUrl)
-            .post(bodyJson.toRequestBody(JSON_MEDIA_TYPE))
+            .post(json.toString().toRequestBody(JSON_MEDIA_TYPE))
             .header("X-PocketBuddy-Connector", BuildConfig.APPLICATION_ID)
             .header("X-PocketBuddy-Connector-Version", BuildConfig.VERSION_NAME)
             .header("X-PocketBuddy-Device-Id", deviceId)
-            .header("X-PocketBuddy-Timestamp", timestamp)
-            .header("X-PocketBuddy-Event-Id", eventId)
             .apply {
                 header("X-PocketBuddy-User-Id", userId)
                 webhookToken?.let { header("Authorization", "Bearer $it") }
-                signature?.let { header("X-PocketBuddy-Signature", "sha256=$it") }
             }
             .build()
 
@@ -159,14 +137,5 @@ class WebhookClient(
             .writeTimeout(5, TimeUnit.SECONDS)
             .callTimeout(10, TimeUnit.SECONDS)
             .build()
-
-        private fun signPayload(secret: String, timestamp: String, eventId: String, bodyJson: String): String {
-            val mac = Mac.getInstance("HmacSHA256")
-            mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-            val signedPayload = "$timestamp.$eventId.$bodyJson"
-            return mac.doFinal(signedPayload.toByteArray(Charsets.UTF_8)).joinToString("") { byte ->
-                "%02x".format(byte.toInt() and 0xff)
-            }
-        }
     }
 }

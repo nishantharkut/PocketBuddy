@@ -26,24 +26,6 @@ class UpiNotificationParser {
         )
     }
 
-    fun maskedPreview(rawText: String): String =
-        normalize(rawText)
-            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[link]")
-            .replace(
-                Regex("((?:upi\\s*ref(?:erence)?\\s*(?:no|number)?|utr|txn\\s*id|transaction\\s*id|ref\\s*no)[:\\s.-]+)[a-z0-9-]+", RegexOption.IGNORE_CASE),
-                "$1[ref]",
-            )
-            .replace(Regex("\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b", RegexOption.IGNORE_CASE), "[email]")
-            .replace(Regex("(?<!\\d)\\d{4,}(?!\\d)"), "[digits]")
-            .take(180)
-
-    fun confidenceFor(parsed: ParsedUpiNotification): String =
-        when {
-            parsed.transactionId != null && parsed.merchant != null -> "high"
-            parsed.merchant != null -> "medium"
-            else -> "low"
-        }
-
     private fun normalize(rawText: String): String =
         rawText
             .replace(Regex("\\s+"), " ")

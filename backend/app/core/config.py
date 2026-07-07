@@ -31,4 +31,8 @@ class Settings(BaseSettings):
 
     # Frontend base URL (change to deployed URL in production)
     FRONTEND_BASE_URL: str = "http://localhost:5173"
+
+    DEMO_MODE: bool = False
+    OCR_PROVIDER: str = "ocrspace"
+    OCR_SPACE_API_KEY: str = ""
 settings = Settings()

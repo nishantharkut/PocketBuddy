@@ -7,9 +7,13 @@ class Settings(BaseSettings):
     JWT_SECRET: str
     MONGO_URI: str
     PORT: int = 8000
-    google_maps_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("google_maps_api_key", "GOOGLE_MAPS_API_KEY"),
+    photon_geocoder_url: str = Field(
+        default="https://photon.komoot.io",
+        validation_alias=AliasChoices("photon_geocoder_url", "PHOTON_GEOCODER_URL"),
+    )
+    osrm_route_url: str = Field(
+        default="https://router.project-osrm.org",
+        validation_alias=AliasChoices("osrm_route_url", "OSRM_ROUTE_URL"),
     )
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
@@ -20,6 +24,7 @@ class Settings(BaseSettings):
     BEDROCK_ENABLED: bool = False
     BEDROCK_REGION: str = "us-east-1"
     BEDROCK_MODEL_ID: str = "us.amazon.nova-lite-v1:0"
+    TRAVEL_DEMO_MODE: bool = False
 
     WHATSAPP_API_TOKEN: str = ""
     WHATSAPP_PHONE_NUMBER_ID: str = ""

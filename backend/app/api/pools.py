@@ -248,16 +248,16 @@ async def get_roommate_reliability(db, wing_label: str) -> dict:
         avg_score = int(sum(pool_scores) / len(pool_scores)) if pool_scores else 90
         
         if avg_score >= 95:
-            label = "Instant Pays"
+            label = "Instant payer"
             color = "green"
         elif avg_score >= 85:
             label = "Pays in hours"
             color = "blue"
         elif avg_score >= 70:
-            label = "Takes a day"
+            label = "Usually next day"
             color = "yellow"
         else:
-            label = "Slow payer"
+            label = "Needs reminder"
             color = "red"
             
         reliability[stats["name"]] = {
@@ -1093,7 +1093,7 @@ async def cron_auto_nudge(user_id: str = Depends(get_current_user)):
     return {"success": True, "messages_sent": nudge_count}
 
 
-# ── Amazon Pay E2E Integration (V2 API Compliant) ───────────────────────────
+# ── Amazon Pay sandbox contract simulation ──────────────────────────────────
 
 class AmazonCheckoutReq(BaseModel):
     final_overhead: int
@@ -1118,8 +1118,10 @@ async def create_amazon_checkout_session(
         
     if pool.get("host_id") != user_id:
         raise HTTPException(status_code=403, detail="Only the pool host can initiate Amazon Pay checkout")
+    if pool.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Amazon Pay sandbox checkout can only start while the pool is open")
         
-    # Generate mock Amazon Pay session ID in region S01 format
+    # Generate a local sandbox session ID in the same visual family as Amazon Pay.
     checkout_session_id = f"S01-{uuid.uuid4().hex[:14].upper()}"
     
     # Calculate net total amount in paise to display in INR
@@ -1128,7 +1130,7 @@ async def create_amazon_checkout_session(
     items_total = sum(it.get("estimated_price", 0) for it in items if it.get("is_purchased", True))
     net_total = max(0, items_total + req.final_overhead - req.final_discount)
     
-    # Store standard Amazon Pay V2 session state
+    # Store a local sandbox session shaped like the Amazon Pay V2 contract.
     amazon_checkout = {
         "checkoutSessionId": checkout_session_id,
         "statusDetails": {"state": "Open"},
@@ -1170,6 +1172,10 @@ async def complete_amazon_checkout_session(
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    if pool.get("host_id") != user_id:
+        raise HTTPException(status_code=403, detail="Only the pool host can complete Amazon Pay checkout")
+    if pool.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Amazon Pay sandbox checkout can only complete while the pool is open")
         
     amzn_checkout = pool.get("amazon_checkout")
     if not amzn_checkout or amzn_checkout.get("checkoutSessionId") != checkout_session_id:
@@ -1208,10 +1214,10 @@ async def complete_amazon_checkout_session(
             "_id": txn_id,
             "user_id": pool.get("host_id"),
             "amount": host_share,
-            "raw_merchant_string": f"{platform_name} Pool - Amazon Pay Host checkout",
-            "mapped_merchant_name": f"{platform_name} Pool (Amazon Pay)",
+            "raw_merchant_string": f"{platform_name} Pool - Amazon Pay Sandbox checkout",
+            "mapped_merchant_name": f"{platform_name} Pool (Amazon Pay Sandbox)",
             "category": "food",
-            "source": "amazon_pay",
+            "source": "amazon_pay_sandbox",
             "is_mapped": True,
             "created_at": utcnow()
         }
@@ -1253,18 +1259,36 @@ async def process_amazon_roommate_payment(
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    if pool.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Roommate settlement is available only after checkout is finalized")
+    if pool.get("host_id") == user_id:
+        raise HTTPException(status_code=400, detail="Host cannot settle their own pool as a roommate")
         
-    # Verify the roommate payment via Amazon Pay Later mock authorization
+    # Record a roommate sandbox settlement. This does not charge a live payment rail.
     exact_roommate_name = await match_wing_roommate(db, pool, req.roommate_name)
+    user_doc = await db.users.find_one({"_id": user_id})
+    user_name = name_key(user_doc.get("full_name")) if user_doc else ""
+    if not user_name or user_name != name_key(exact_roommate_name):
+        raise HTTPException(status_code=403, detail="You can settle only your own roommate split")
+
+    enriched_pool = await enrich_pool_document(db, {**pool, "id": pool.get("_id")}, current_user_id=user_id)
+    roommate_split = (enriched_pool.get("split_breakdown") or {}).get(exact_roommate_name)
+    if not roommate_split:
+        raise HTTPException(status_code=400, detail="Roommate split was not found for this pool")
+    if roommate_split.get("paid"):
+        raise HTTPException(status_code=409, detail="Roommate split is already settled")
+    expected_amount = int(roommate_split.get("total") or 0)
+    if req.amount != expected_amount:
+        raise HTTPException(status_code=400, detail="Settlement amount does not match the finalized split")
     
     charge_permission_id = f"B01-{uuid.uuid4().hex[:14].upper()}"
     payment_entry = {
         "name": exact_roommate_name,
         "utr": charge_permission_id,
-        "status": "verified", # Auto-verifies roommate split immediately via pre-authorized charge permission!
+        "status": "verified",
         "submitted_at": utcnow().isoformat(),
         "verified_at": utcnow().isoformat(),
-        "settlement_mode": "amazon_pay_later",
+        "settlement_mode": "amazon_pay_sandbox",
         "confidence": 1.0
     }
     
@@ -1284,10 +1308,10 @@ async def process_amazon_roommate_payment(
         "_id": txn_id,
         "user_id": user_id,
         "amount": req.amount,
-        "raw_merchant_string": f"Amazon Pay Later - Reimburse {pool.get('created_by_name')}",
-        "mapped_merchant_name": "Amazon Pay Later",
+        "raw_merchant_string": f"Amazon Pay Sandbox - Reimburse {pool.get('created_by_name')}",
+        "mapped_merchant_name": "Amazon Pay Sandbox",
         "category": "food",
-        "source": "amazon_pay",
+        "source": "amazon_pay_sandbox",
         "is_mapped": True,
         "created_at": utcnow()
     }

@@ -1,4 +1,3 @@
-import re
 import datetime
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -146,10 +145,6 @@ async def update_profile(req: ProfileUpdateReq, user_id: str = Depends(get_curre
 @router.post("/delete-account")
 async def delete_account(user_id: str = Depends(get_current_user)):
     db = get_db()
-    user = await db.users.find_one({"_id": user_id}) or {}
-    full_name = (user.get("full_name") or "").strip()
-    name_filter = {"$regex": f"^{re.escape(full_name)}$", "$options": "i"} if full_name else None
-    
     # Cascade delete all data for this user
     await db.transactions.delete_many({"user_id": user_id})
     await db.subscriptions.delete_many({"user_id": user_id})
@@ -173,10 +168,9 @@ async def delete_account(user_id: str = Depends(get_current_user)):
     user_pool_ids = [p["_id"] for p in user_pools]
     if user_pool_ids:
         await db.cart_pool_items.delete_many({"pool_id": {"$in": user_pool_ids}})
-    if name_filter:
-        # Cart pools currently store non-host participants by display name only.
-        await db.cart_pool_items.delete_many({"added_by_name": name_filter})
-        await db.cart_pools.update_many({}, {"$pull": {"payments": {"name": name_filter}}})
+    # Legacy cart pools store guest participants by display name only. Do not delete
+    # cross-pool rows by name here; names are not stable identifiers and can collide
+    # between unrelated students. Hosted pools are fully removed above.
     await db.cart_pools.delete_many({"host_id": user_id})
     
     await db.profiles.delete_one({"_id": user_id})

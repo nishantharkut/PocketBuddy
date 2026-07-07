@@ -230,27 +230,20 @@ function PrivacyPage() {
   const aaEvents = aaStatus?.events ?? [];
   const aaSnapshots = aaStatus?.snapshots ?? [];
   const aaTrustStatus = humanAAStatus(aaStatus, currentAAConsent);
-  const bankConsentRuntimeIsProvider = aaStatus?.status === "provider_configured";
-  const bankConsentPathDescription = bankConsentRuntimeIsProvider
-    ? "Provider-backed bank consent for transaction verification."
-    : "Account Aggregator-style consent sandbox for controlled bank-data access demos.";
-  const bankConsentConnectMessage = bankConsentRuntimeIsProvider
-    ? "Ready to connect through the provider-backed bank consent flow."
-    : "Ready to start the local bank-consent sandbox.";
-  const bankConsentFallbackMessage = bankConsentRuntimeIsProvider
-    ? "Read-only bank-source tracking. No bank password or OTP is collected."
-    : "Read-only bank-consent sandbox. No bank password or OTP is collected.";
-  const bankConsentCanStart = Boolean(aaStatus?.can_start_sandbox) && !currentAAConsent;
+  const bankConsentRuntimeIsProvider = false;
+  const bankConsentPathDescription = "AA-style consent sandbox for controlled read-only access demos.";
+  const bankConsentConnectMessage = "Ready to start the local consent sandbox.";
+  const bankConsentFallbackMessage = "Read-only consent sandbox. No bank password or OTP is collected.";
+  const bankConsentCanStart = !currentAAConsent;
+  const bankConsentStartLabel = "Start sandbox";
   const bankConsentPrimaryAction =
     currentAAConsent?.status === "active"
-      ? "View bank consent"
+      ? "View sandbox"
       : currentAAConsent?.status === "pending"
         ? "Review consent"
         : bankConsentCanStart
-          ? "Connect bank"
-          : aaStatus?.status === "loading" || !aaStatus
-            ? "Checking bank"
-            : "Bank consent unavailable";
+          ? bankConsentStartLabel
+          : bankConsentStartLabel;
 
   function focusBankConsentCard() {
     if (typeof document === "undefined") return;
@@ -329,7 +322,7 @@ function PrivacyPage() {
     try {
       await startAccountAggregatorSandboxConsent({
         data: {
-          purpose: "Verify bank transactions for PocketBuddy insights",
+          purpose: "Preview the consent sandbox for PocketBuddy insights",
           requested_range_days: payload?.requestedRangeDays ?? 30,
           fi_types: ["DEPOSIT"],
           aa_handle: payload?.aaHandle || null,
@@ -341,10 +334,10 @@ function PrivacyPage() {
       });
       await refreshAA();
       setBankConsentDialogOpen(false);
-      toast.success("Bank consent started.");
+      toast.success("Sandbox consent started.");
       focusBankConsentCard();
     } catch (err: any) {
-      toast.error(err.message || "Failed to start bank consent.");
+      toast.error(err.message || "Failed to start consent sandbox.");
     } finally {
       setAaBusyAction(null);
     }
@@ -352,12 +345,12 @@ function PrivacyPage() {
 
   async function handleAASandboxAction(action: "approve" | "reject" | "revoke" | "expire" | "fetch_success" | "fetch_failed") {
     if (!currentAAConsent?.id) {
-      toast.error("No bank consent selected.");
+      toast.error("No sandbox consent selected.");
       return;
     }
     if (
       action === "revoke" &&
-      !confirm("Revoke bank consent? PocketBuddy will stop future bank-source fetches and delete fetched sandbox records tied to this consent.")
+      !confirm("Revoke sandbox consent? PocketBuddy will stop future sandbox fetches and delete fetched sandbox records tied to this consent.")
     ) {
       return;
     }
@@ -370,7 +363,7 @@ function PrivacyPage() {
       await refreshAA();
       toast.success(bankConsentActionToast(action));
     } catch (err: any) {
-      toast.error(err.message || "Bank consent action failed.");
+      toast.error(err.message || "Consent sandbox action failed.");
     } finally {
       setAaBusyAction(null);
     }
@@ -492,8 +485,8 @@ function PrivacyPage() {
                     Your data sources stay visible and controllable.
                   </p>
                   <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
-                    Bank consent is read-only and revocable. Phone sync is optional, parses supported
-                    payment alerts on-device, and does not upload raw alert text in the current flow.
+                    Android sync is the primary live tracking path. The consent sandbox is read-only,
+                    revocable, and used to preview a regulated AA-style control flow.
                   </p>
                 </div>
               </div>
@@ -501,8 +494,16 @@ function PrivacyPage() {
                 <Button
                   size="sm"
                   className="w-full shrink-0 text-xs sm:w-fit"
+                  onClick={() => nav({ to: "/companion" })}
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                  Manage sync
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full shrink-0 text-xs sm:w-fit"
                   disabled={Boolean(aaBusyAction) || (!bankConsentCanStart && !currentAAConsent)}
-                  variant={bankConsentCanStart ? "default" : "outline"}
                   onClick={bankConsentCanStart ? () => setBankConsentDialogOpen(true) : focusBankConsentCard}
                 >
                   {aaBusyAction === "start" ? (
@@ -512,29 +513,10 @@ function PrivacyPage() {
                   )}
                   {bankConsentPrimaryAction}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full shrink-0 text-xs sm:w-fit"
-                  onClick={() => nav({ to: "/companion" })}
-                >
-                  Manage sync
-                </Button>
               </div>
             </div>
 
             <div className="mt-4 divide-y divide-border rounded-xl border border-border bg-background/70">
-              <SourceRow
-                label="Bank consent"
-                status={aaTrustStatus}
-                detail={
-                  currentAAConsent
-                    ? `${currentAAConsent.financial_institution_name || currentAAConsent.provider_label || "Connected bank"} - ${currentAAConsent.fetch_status || "fetch not started"}`
-                    : bankConsentCanStart
-                      ? bankConsentConnectMessage
-                      : "Not connected."
-                }
-              />
               <SourceRow
                 label="Phone auto-sync"
                 status={profile?.companion_paired ? (syncEnabled ? "Active" : "Paused") : "Optional"}
@@ -542,6 +524,17 @@ function PrivacyPage() {
                   profile?.companion_paired
                     ? `${profile.companion_device_name || activeAndroidConsent?.device_name || "Android connector"} · ${syncEnabled ? "new structured events allowed" : "paused before parsing"}`
                     : "Pair only if you want instant on-device UPI alert parsing."
+                }
+              />
+              <SourceRow
+                label="Consent sandbox"
+                status={aaTrustStatus}
+                detail={
+                  currentAAConsent
+                    ? `${currentAAConsent.financial_institution_name || currentAAConsent.provider_label || "Connected institution"} - ${currentAAConsent.fetch_status || "fetch not started"}`
+                    : bankConsentCanStart
+                      ? bankConsentConnectMessage
+                      : "Not connected."
                 }
               />
               <SourceRow
@@ -565,7 +558,8 @@ function PrivacyPage() {
                 Data Sources
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                Two separate paths can help PocketBuddy track transactions. Active sources are shown here; revoked bank consent stays only in consent activity.
+                Android sync is the live tracking path. The consent sandbox is a separate, read-only
+                control-flow demo; revoked sandbox consent stays only in consent activity.
               </p>
             </div>
           </div>
@@ -573,7 +567,7 @@ function PrivacyPage() {
           <div className="grid gap-3 lg:grid-cols-2">
             <DataSourceStatusCard
               icon={<Landmark className="h-4 w-4" />}
-              title="Bank consent"
+              title="Consent sandbox"
               status={currentAAConsent ? humanConsentStatus(currentAAConsent.status) : bankConsentCanStart ? "Ready" : "Off"}
               tone={
                 currentAAConsent?.status === "active"
@@ -587,15 +581,18 @@ function PrivacyPage() {
               description={bankConsentPathDescription}
               detail={
                 currentAAConsent
-                  ? `${currentAAConsent.financial_institution_name || currentAAConsent.provider_label || "Connected bank"} - ${currentAAConsent.fetch_status || "fetch not started"}`
+                  ? `${currentAAConsent.financial_institution_name || currentAAConsent.provider_label || "Connected institution"} - ${currentAAConsent.fetch_status || "fetch not started"}`
                   : aaConsents.some((consent) => ["revoked", "expired", "rejected"].includes(consent.status || ""))
-                    ? "No active bank consent. Past revoked or expired requests remain visible in activity only."
-                    : "No active bank consent connected."
+                    ? "No active sandbox consent. Past revoked or expired requests remain visible in activity only."
+                    : bankConsentRuntimeIsProvider
+                      ? "No active consent connected."
+                      : "No active consent sandbox connected."
               }
-              actionLabel={bankConsentCanStart ? "Connect bank" : currentAAConsent ? "Review" : "Unavailable"}
+              actionLabel={bankConsentCanStart ? bankConsentStartLabel : currentAAConsent ? "Review" : "Unavailable"}
               onAction={bankConsentCanStart ? () => setBankConsentDialogOpen(true) : focusBankConsentCard}
               actionDisabled={!bankConsentCanStart && !currentAAConsent}
-              points={["Read-only", "Revocable", "No bank password"]}
+              points={["Read-only demo", "Revocable", "No live bank data"]}
+              className="order-2"
             />
 
             <DataSourceStatusCard
@@ -603,7 +600,7 @@ function PrivacyPage() {
               title="Phone auto-sync"
               status={profile?.companion_paired ? (syncEnabled ? "Active" : "Paused") : "Off"}
               tone={profile?.companion_paired ? (syncEnabled ? "success" : "warning") : "muted"}
-              description="Optional Android connector for supported payment alerts when bank consent is not enough for instant tracking."
+              description="Primary live path for passive expense tracking from supported Android payment alerts."
               detail={
                 profile?.companion_paired
                   ? `${profile.companion_device_name || activeAndroidConsent?.device_name || "Android connector"} · ${
@@ -614,6 +611,7 @@ function PrivacyPage() {
               actionLabel="Manage sync"
               onAction={() => nav({ to: "/companion" })}
               points={["On-device parsing", "Structured fields", "Pause anytime"]}
+              className="order-1"
             />
           </div>
         </section>
@@ -632,13 +630,13 @@ function PrivacyPage() {
             <div className="grid gap-3 md:grid-cols-2">
               <ReceiptBlock
                 icon={<Landmark className="h-4 w-4" />}
-                title="Bank consent"
+                title="Consent sandbox"
                 status={currentAAConsent ? humanConsentStatus(currentAAConsent.status) : "Not connected"}
                 rows={[
-                  ["Purpose", currentAAConsent?.purpose || "Verify bank transactions for insights"],
+                  ["Purpose", currentAAConsent?.purpose || "Preview the consent-flow sandbox"],
                   ["Accounts", currentAAConsent?.account_count ? `${currentAAConsent.account_count} masked account${currentAAConsent.account_count === 1 ? "" : "s"}` : "None selected"],
                   ["Fetched records", currentAAConsent?.fetched_records_count ? `${currentAAConsent.fetched_records_count}` : "No fetch yet"],
-                  ["Control", currentAAConsent?.status === "active" ? "Can revoke anytime" : bankConsentCanStart ? "Ready to connect" : "Unavailable"],
+                  ["Control", currentAAConsent?.status === "active" ? "Can revoke anytime" : bankConsentCanStart ? bankConsentStartLabel : "Unavailable"],
                 ]}
               />
               <ReceiptBlock
@@ -656,10 +654,10 @@ function PrivacyPage() {
           </Card>
         </section>
 
-        {/* Bank Consent */}
+        {/* Consent Sandbox */}
         <section id="bank-consent-section" className="scroll-mt-20">
           <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-muted-foreground mb-3">
-            Bank Consent
+            Consent Sandbox
           </p>
           <AccountAggregatorSandboxCard
             aaStatus={aaStatus}
@@ -685,7 +683,7 @@ function PrivacyPage() {
                 <Landmark className="mt-0.5 h-4.5 w-4.5 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[13px] font-semibold text-foreground">Bank consent</p>
+                    <p className="text-[13px] font-semibold text-foreground">Consent sandbox</p>
                     <Badge variant="outline" className={`text-[9px] ${consentStatusClass(currentAAConsent?.status)}`}>
                       {aaTrustStatus}
                     </Badge>
@@ -704,17 +702,17 @@ function PrivacyPage() {
                       variant="outline"
                       size="sm"
                       className="h-8 flex-1 text-xs sm:flex-none"
-                      disabled={Boolean(aaBusyAction) || !aaStatus?.can_start_sandbox}
+                    disabled={Boolean(aaBusyAction)}
                       onClick={() => handleAASandboxAction("fetch_success")}
                     >
                       {aaBusyAction === "fetch_success" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <FileCheck2 className="h-3.5 w-3.5" />}
-                      Refresh bank data
+                      Refresh sandbox data
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-8 flex-1 border-destructive/30 text-xs text-destructive hover:bg-destructive/10 sm:flex-none"
-                      disabled={Boolean(aaBusyAction) || !aaStatus?.can_start_sandbox}
+                      disabled={Boolean(aaBusyAction)}
                       onClick={() => handleAASandboxAction("revoke")}
                     >
                       Revoke
@@ -725,7 +723,7 @@ function PrivacyPage() {
                     <Button
                       size="sm"
                       className="h-8 flex-1 text-xs sm:flex-none"
-                      disabled={Boolean(aaBusyAction) || !aaStatus?.can_start_sandbox}
+                      disabled={Boolean(aaBusyAction)}
                       onClick={() => handleAASandboxAction("approve")}
                     >
                       Approve consent
@@ -734,7 +732,7 @@ function PrivacyPage() {
                       variant="outline"
                       size="sm"
                       className="h-8 flex-1 text-xs sm:flex-none"
-                      disabled={Boolean(aaBusyAction) || !aaStatus?.can_start_sandbox}
+                      disabled={Boolean(aaBusyAction)}
                       onClick={() => handleAASandboxAction("reject")}
                     >
                       Reject
@@ -748,7 +746,7 @@ function PrivacyPage() {
                     disabled={Boolean(aaBusyAction) || !bankConsentCanStart}
                     onClick={() => setBankConsentDialogOpen(true)}
                   >
-                    Connect bank
+                    {bankConsentStartLabel}
                   </Button>
                 )}
               </div>
@@ -991,9 +989,9 @@ function PrivacyPage() {
                 <div className="flex items-start gap-3">
                   <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-[13px] font-semibold text-foreground">Delete My Account & All Data</p>
+                    <p className="text-[13px] font-semibold text-foreground">Delete My Account</p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-                      Permanently removes your profile, all transactions, subscriptions, companion logs, and cart pool data. <b className="text-destructive">This is irreversible.</b>
+                      Permanently removes your profile, transactions, subscriptions, consent records, companion logs, and pools you hosted. <b className="text-destructive">This is irreversible.</b>
                     </p>
                   </div>
                 </div>
@@ -1012,7 +1010,7 @@ function PrivacyPage() {
               <div className="p-5 space-y-4">
                 <div className="rounded-lg bg-destructive/10 border border-destructive/25 p-3">
                   <p className="text-[12px] text-destructive font-semibold leading-relaxed">
-                    This will immediately and permanently delete everything tied to your account. Type <b>delete my account</b> below to confirm.
+                    This will immediately and permanently delete your account-owned PocketBuddy records. Type <b>delete my account</b> below to confirm.
                   </p>
                 </div>
                 <input
@@ -1035,7 +1033,7 @@ function PrivacyPage() {
                     ) : (
                       <Trash2 className="h-3.5 w-3.5" />
                     )}
-                    Permanently Delete Everything
+                    Permanently Delete Account
                   </Button>
                   <Button
                     variant="outline"
@@ -1116,13 +1114,14 @@ function AccountAggregatorSandboxCard({
 }) {
   const [showAllRecords, setShowAllRecords] = useState(false);
   const [showAllActivity, setShowAllActivity] = useState(false);
-  const runtimeStatus = aaStatus?.status || "loading";
+  const runtimeStatus = aaStatus?.status || "sandbox_ready";
   const consentStatus = consent?.status || "none";
-  const canUseLocalSandbox = Boolean(aaStatus?.can_start_sandbox);
+  const bankConsentStartLabel = "Start sandbox";
+  const canUseLocalSandbox = true;
   const canStart = canUseLocalSandbox && !["pending", "active"].includes(consentStatus);
   const canApprove = canUseLocalSandbox && consentStatus === "pending";
   const canFetch = canUseLocalSandbox && consentStatus === "active";
-  const disabled = Boolean(busyAction) || runtimeStatus === "loading";
+  const disabled = Boolean(busyAction);
   const hasActiveConsent = consentStatus === "active";
   const consentSnapshots = consent?.id ? snapshots.filter((snapshot) => snapshot.consent_id === consent.id) : [];
   const latestSnapshot = hasActiveConsent ? consentSnapshots[0] : undefined;
@@ -1130,7 +1129,7 @@ function AccountAggregatorSandboxCard({
   const visibleRecords = showAllRecords ? records : records.slice(0, 4);
   const visibleEvents = showAllActivity ? events : events.slice(0, 4);
   const fetchedRecordCount = hasActiveConsent ? latestSnapshot?.record_count || records.length || consent?.fetched_records_count || 0 : 0;
-  const institutionName = consent?.financial_institution_name || consent?.provider_label || "No bank connected";
+  const institutionName = consent?.financial_institution_name || consent?.provider_label || "No sandbox institution selected";
   const institutionShortName = consent?.financial_institution_short_name || consent?.financial_institution_code || "AA";
   const selectedAccounts = consent?.selected_accounts?.length ? consent.selected_accounts : latestSnapshot?.accounts ?? [];
   const maskedAccountRefs =
@@ -1158,7 +1157,7 @@ function AccountAggregatorSandboxCard({
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[14px] font-semibold text-foreground">Bank consent</p>
+                <p className="text-[14px] font-semibold text-foreground">Consent sandbox</p>
                 <Badge variant="outline" className={`text-[9px] ${consentStatusClass(consentStatus)}`}>
                   {humanConsentStatus(consentStatus)}
                 </Badge>
@@ -1182,7 +1181,7 @@ function AccountAggregatorSandboxCard({
             <div className="min-w-0">
               <p className="truncate text-[14px] font-semibold text-foreground">{institutionName}</p>
               <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                {consent ? accountSummary : "Connect a bank to enable verified tracking."}
+                {consent ? accountSummary : "Start the sandbox to preview consent controls."}
               </p>
             </div>
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-[11px] font-bold text-primary">
@@ -1190,7 +1189,7 @@ function AccountAggregatorSandboxCard({
             </div>
           </div>
           <div className="divide-y divide-border">
-            <ConsentDetailRow label="Purpose" value={consent?.purpose || "Verified transaction tracking"} />
+            <ConsentDetailRow label="Purpose" value={consent?.purpose || "Sandbox consent-flow preview"} />
             <ConsentDetailRow label="Accounts" value={consent ? maskedAccountRefs : "No account selected"} />
             <ConsentDetailRow label="Scope" value={scope} />
             <ConsentDetailRow label="Last activity" value={lastActivity ? relativeTime(lastActivity) : "No activity yet"} />
@@ -1211,15 +1210,10 @@ function AccountAggregatorSandboxCard({
         ) : null}
 
         <div className="mt-4 flex flex-wrap gap-2 rounded-xl border border-border bg-background/70 p-3">
-          {!aaStatus?.can_start_sandbox && (
-            <Button disabled variant="outline" size="sm" className="text-xs">
-              Bank consent unavailable
-            </Button>
-          )}
           {canStart && (
             <Button disabled={disabled} size="sm" className="text-xs" onClick={onStart}>
               {busyAction === "start" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-              Connect bank
+              {bankConsentStartLabel}
             </Button>
           )}
           {canApprove && (
@@ -1236,7 +1230,7 @@ function AccountAggregatorSandboxCard({
             <>
               <Button disabled={disabled} size="sm" className="text-xs" onClick={() => onAction("fetch_success")}>
                 {busyAction === "fetch_success" ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <FileCheck2 className="h-3.5 w-3.5" />}
-                Refresh bank data
+                Refresh sandbox data
               </Button>
               <Button disabled={disabled} variant="outline" size="sm" className="border-destructive/30 text-xs text-destructive hover:bg-destructive/10" onClick={() => onAction("revoke")}>
                 Revoke
@@ -1249,9 +1243,11 @@ function AccountAggregatorSandboxCard({
           <div className="rounded-xl border border-border bg-background/70 p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="text-[13px] font-semibold text-foreground">Recent bank records</p>
+                <p className="text-[13px] font-semibold text-foreground">
+                  Recent sandbox records
+                </p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                  Preview from the latest consented fetch. Full bank data stays behind consent.
+                  Preview from the latest local sandbox fetch. No live bank data is used.
                 </p>
               </div>
               <Badge variant="outline" className="text-[9px] text-muted-foreground">
@@ -1265,7 +1261,7 @@ function AccountAggregatorSandboxCard({
                   <div key={`${record.transaction_reference || index}`} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2.5">
                     <div className="min-w-0">
                       <p className="truncate text-[12px] font-semibold text-foreground">
-                        {record.merchant || "Verified transaction"}
+                        {record.merchant || "Sandbox transaction"}
                       </p>
                       <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
                         {record.direction || "DEBIT"} · {record.masked_account_ref || "masked account"}
@@ -1283,7 +1279,13 @@ function AccountAggregatorSandboxCard({
                 )}
               </div>
             ) : (
-              <EmptySourceState text={consentStatus === "active" ? "No records fetched yet. Use Refresh bank data when you want to verify recent transactions." : "Bank records appear here only after active consent and a successful fetch."} />
+              <EmptySourceState
+                text={
+                  consentStatus === "active"
+                    ? "No sandbox records generated yet. Use Refresh sandbox data to preview the review flow."
+                    : "Sandbox records appear here only after active consent and a sandbox fetch."
+                }
+              />
             )}
           </div>
 
@@ -1322,7 +1324,7 @@ function AccountAggregatorSandboxCard({
                 )}
               </div>
             ) : (
-              <EmptySourceState text="No bank consent activity yet." />
+              <EmptySourceState text="No consent sandbox activity yet." />
             )}
           </div>
         </div>
@@ -1357,25 +1359,23 @@ function humanAAStatus(aaStatus?: AAStatus, consent?: DataConsent) {
   if (consent?.status === "rejected") return "Rejected";
   if (consent?.status === "expired") return "Expired";
   if (aaStatus?.status === "sandbox_ready") return "Ready";
-  if (aaStatus?.status === "misconfigured") return "Needs config";
-  if (aaStatus?.status === "provider_configured") return "Provider configured";
+  if (aaStatus?.status === "misconfigured") return "Local sandbox";
   return "Not connected";
 }
 
 function humanAARuntimeStatus(status?: string) {
   if (status === "sandbox_ready") return "Ready";
-  if (status === "misconfigured") return "Needs config";
-  if (status === "provider_configured") return "Provider configured";
-  if (status === "not_configured") return "Disabled";
+  if (status === "misconfigured") return "Local sandbox";
+  if (status === "not_configured") return "Local sandbox";
   return "Loading";
 }
 
 function bankConsentMessage(runtimeStatus?: string, consentStatus?: string) {
-  if (runtimeStatus === "misconfigured") {
-    return "Bank consent needs configuration before it can be used.";
-  }
   if (runtimeStatus === "not_configured") {
-    return "Bank consent is optional and can be enabled when you want a controlled consent trail.";
+    return "Start the local consent sandbox. It uses demo accounts only and does not connect to a live bank.";
+  }
+  if (runtimeStatus === "misconfigured") {
+    return "Start the local consent sandbox. Provider credentials are not required for this demo flow.";
   }
   if (consentStatus === "active") {
     return "Consent is active. You can fetch consented records, revoke access, or review the activity here.";
@@ -1392,13 +1392,10 @@ function bankConsentMessage(runtimeStatus?: string, consentStatus?: string) {
   if (consentStatus === "expired") {
     return "Consent expired. Start a new request to continue consent-based tracking.";
   }
-  if (runtimeStatus === "provider_configured") {
-    return "Start provider-backed bank consent.";
-  }
   if (runtimeStatus === "sandbox_ready") {
-    return "Start the local bank-consent sandbox.";
+    return "Start the local consent sandbox.";
   }
-  return "Checking bank consent status.";
+  return "Checking consent sandbox status.";
 }
 
 function bankConsentActionToast(action: AASandboxAction) {
@@ -1408,7 +1405,7 @@ function bankConsentActionToast(action: AASandboxAction) {
   if (action === "expire") return "Consent expired.";
   if (action === "fetch_success") return "Consent data fetched.";
   if (action === "fetch_failed") return "Consent fetch marked failed.";
-  return "Bank consent updated.";
+  return "Consent sandbox updated.";
 }
 
 function bankConsentEventMessage(eventType?: string) {
@@ -1423,11 +1420,11 @@ function bankConsentEventMessage(eventType?: string) {
   if (eventType === "consent_callback") return "A consent callback was received.";
   if (eventType === "fi_callback") return "A financial information callback was received.";
   if (eventType === "orphan_consent_callback" || eventType === "orphan_fi_callback") return "A callback could not be linked to an active consent.";
-  return "Bank consent activity was updated.";
+  return "Consent sandbox activity was updated.";
 }
 
 function aaStatusClass(status?: string) {
-  if (status === "sandbox_ready" || status === "provider_configured") return "border-success/35 text-success";
+  if (status === "sandbox_ready") return "border-success/35 text-success";
   if (status === "misconfigured") return "border-warning/40 text-warning";
   return "text-muted-foreground";
 }
@@ -1526,6 +1523,7 @@ function DataSourceStatusCard({
   onAction,
   actionDisabled,
   points,
+  className = "",
 }: {
   icon: ReactNode;
   title: string;
@@ -1537,9 +1535,10 @@ function DataSourceStatusCard({
   onAction: () => void;
   actionDisabled?: boolean;
   points: string[];
+  className?: string;
 }) {
   return (
-    <Card className="bg-surface-raised p-4">
+    <Card className={`bg-surface-raised p-4 ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 gap-3">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-background text-primary">
@@ -1604,11 +1603,11 @@ function ConsentLedgerRow({ consent, compact = false }: { consent: DataConsent; 
   const lastActivity = consent.revoked_at || consent.last_sync_at || consent.updated_at || consent.granted_at;
   const isBankConsent = consent.source === "account_aggregator";
   const sourceLabel = isBankConsent
-    ? consent.financial_institution_name || consent.provider_label || "Bank consent"
+    ? consent.financial_institution_name || consent.provider_label || "Consent sandbox"
     : consent.device_name || "PocketBuddy Android Connector";
-  const purpose = consent.purpose || (isBankConsent ? "bank-consent transaction review" : "instant payment tracking");
+  const purpose = consent.purpose || (isBankConsent ? "consent sandbox preview" : "instant payment tracking");
   const rawPolicy = isBankConsent
-    ? "Encrypted bank data only"
+    ? "Sandbox records only"
     : consent.raw_text_policy === "not_required_for_v2"
       ? "Not required for v2"
       : consent.raw_text_policy || "Masked only";

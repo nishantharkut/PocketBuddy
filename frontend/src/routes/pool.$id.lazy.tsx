@@ -211,7 +211,7 @@ function PoolDetail() {
   const [cancelReasonOption, setCancelReasonOption] = useState("Minimum cart value not met");
   const [cancelCustomReason, setCancelCustomReason] = useState("");
 
-  // Amazon Pay integration states
+  // Amazon Pay sandbox contract states
   const [showAmazonMockGateway, setShowAmazonMockGateway] = useState(false);
   const [amazonSessionId, setAmazonSessionId] = useState("");
 
@@ -670,7 +670,7 @@ function PoolDetail() {
         pool_id: id,
         session_id: amazonSessionId,
       });
-      toast.success("Amazon Pay Checkout approved & order split finalized!");
+      toast.success("Amazon Pay sandbox checkout approved and order split finalized!");
       setShowAmazonMockGateway(false);
       qc.invalidateQueries({ queryKey: ["pool", id] });
       qc.invalidateQueries({ queryKey: ["pool-items", id] });
@@ -691,7 +691,7 @@ function PoolDetail() {
           amount: amount,
         }
       });
-      toast.success("Split settled instantly via Amazon Pay Later!");
+      toast.success("Sandbox settlement recorded for this split.");
       qc.invalidateQueries({ queryKey: ["pool", id] });
       qc.invalidateQueries({ queryKey: ["pool-items", id] });
     } catch (err: any) {
@@ -762,7 +762,7 @@ function PoolDetail() {
           action
         }
       });
-      toast.success(action === "verify" ? `Verified payment for ${roommateName}` : action === "settle_in_kind" ? `Settled in kind for ${roommateName}` : `Rejected payment for ${roommateName}`);
+      toast.success(action === "verify" ? `Marked credit seen for ${roommateName}` : action === "settle_in_kind" ? `Settled in kind for ${roommateName}` : `Rejected payment for ${roommateName}`);
       qc.invalidateQueries({ queryKey: ["pool", id] });
     } catch (err: any) {
       toast.error(err.message || "Verification action failed");
@@ -1158,7 +1158,7 @@ function PoolDetail() {
             ) : pool.status === "completed" ? (
               <div className="space-y-4">
                 <p className="text-xs text-muted-foreground font-semibold">
-                  Order split active. Verify incoming transactions in the queue below:
+                  Order split active. Mark credits only after the host has seen the incoming transfer:
                 </p>
 
                 {/* Host Payment Verification Checklist */}
@@ -1227,7 +1227,7 @@ function PoolDetail() {
                                       onClick={() => handleVerifyPayment(rName, "verify")}
                                       className="h-8 bg-green-600 text-white hover:bg-green-700 py-1 px-2 text-[10px] md:text-xs uppercase font-bold tracking-wider"
                                     >
-                                      Approve
+                                      Credit Seen
                                     </Button>
                                     <Button
                                       size="sm"
@@ -1487,11 +1487,11 @@ function PoolDetail() {
                         </div>
                       )}
 
-                      {/* Step 3: Instant Settle via Amazon Pay Later - ALWAYS available */}
+                      {/* Step 3: Amazon Pay sandbox settlement - always available in demo */}
                       <div className="w-full space-y-2 text-left bg-surface-raised/40 p-4 rounded-xl border border-border">
                         <p className="text-xs font-bold text-[#FF9900] uppercase tracking-widest flex items-center gap-1.5">
                           <span className="bg-[#FF9900] text-black w-4 h-4 rounded-full inline-flex items-center justify-center text-xs font-bold">{pool.upi_id ? '3' : '1'}</span>
-                          <span>Amazon Pay Later</span>
+                          <span>Amazon Pay Sandbox</span>
                         </p>
                         <Button
                           className="w-full text-xs font-black uppercase tracking-wider bg-[#FF9900] hover:bg-[#E48A00] text-black flex items-center justify-center gap-1.5 h-10 shadow-sm border border-[#D58000]"
@@ -1500,10 +1500,10 @@ function PoolDetail() {
                           }}
                           disabled={busy}
                         >
-                          Pay Instantly (Later)
+                          Simulate Settlement
                         </Button>
                         <p className="text-xs text-muted-foreground mt-1.5 leading-normal">
-                          Settle instantly using pre-authorized billing agreement. No manual UTR checks needed!
+                          Demo-only settlement using the sandbox flow. Manual UTR remains the real fallback.
                         </p>
                       </div>
                     </div>
@@ -1877,7 +1877,7 @@ function PoolDetail() {
                 disabled={busy} 
                 className="w-full bg-[#FF9900] hover:bg-[#E48A00] text-black font-extrabold flex items-center justify-center gap-2 rounded-xl py-2.5 h-11 border border-[#D58000] shadow-sm tracking-wide"
               >
-                <span>{busy ? "Connecting..." : "Pay & Split via Amazon Pay"}</span>
+                <span>{busy ? "Connecting..." : "Pay & Split via Amazon Pay Sandbox"}</span>
               </Button>
               
               <div className="flex gap-2">
@@ -2048,9 +2048,9 @@ function PoolDetail() {
 
           <div className="p-6 space-y-5 text-left text-sm">
             <div className="border-b border-zinc-100 pb-3">
-              <h2 className="text-base font-bold text-zinc-800 tracking-tight">Confirm Payment & Stored Consent</h2>
+              <h2 className="text-base font-bold text-zinc-800 tracking-tight">Confirm Sandbox Checkout</h2>
               <p className="text-[11px] md:text-xs text-zinc-500 mt-0.5">
-                Authorise PocketBuddy to charge your payment method for this pool.
+                Simulate approval for this pool checkout. No live payment method is charged.
               </p>
             </div>
 
@@ -2072,7 +2072,7 @@ function PoolDetail() {
             <div className="bg-amber-50 border border-amber-200 text-amber-800 text-[11px] md:text-xs leading-relaxed rounded-xl p-3.5 flex gap-2 font-medium">
               <Sparkles className="h-4 w-4 shrink-0 text-[#FF9900]" />
               <div>
-                <strong>Prototype Notice:</strong> This flow simulates a production-grade Amazon Pay Checkout Session. Confirming will finalize the pool split and notify your roommates.
+                <strong>Prototype Notice:</strong> This flow simulates the Amazon Pay checkout contract for demo purposes. Confirming will finalize the pool split and notify your roommates.
               </div>
             </div>
 
@@ -2082,7 +2082,7 @@ function PoolDetail() {
                 disabled={busy} 
                 className="w-full bg-[#FF9900] hover:bg-[#E48A00] text-black font-extrabold py-2.5 h-11 border border-[#D58000] shadow-sm rounded-xl"
               >
-                {busy ? "Authorizing..." : "Authorize and Pay"}
+                {busy ? "Approving..." : "Approve Sandbox Checkout"}
               </Button>
               <Button 
                 variant="ghost" 

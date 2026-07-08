@@ -2971,6 +2971,33 @@ async def compute_route(
     Uses OSRM public API for real driving routes with turn-by-turn geometry.
     Falls back to Haversine x 1.35 road-factor if OSRM is unreachable.
     """
+    # Prefer a valid cached road route before calling external providers. This
+    # keeps repeated estimates deterministic, reduces provider calls, and avoids
+    # falling back to straight-line estimates when the network is unavailable.
+    base_url = _osrm_base_url()
+    route_cache_key = build_geo_cache_key("osrm_route", base_url, lat1, lon1, lat2, lon2)
+    cached_route = await _read_geo_cache(db, route_cache_key)
+    if cached_route:
+        try:
+            geometry = cached_route.get("geometry") or []
+            if (
+                cached_route.get("distance_km")
+                and cached_route.get("duration_mins")
+                and isinstance(geometry, list)
+            ):
+                return (
+                    float(cached_route["distance_km"]),
+                    int(cached_route["duration_mins"]),
+                    geometry,
+                    "osrm_route",
+                    False,
+                    0,
+                    "OSRM cached",
+                    True,
+                )
+        except Exception:
+            logger.info("Ignoring malformed OSRM cache entry for %.5f,%.5f -> %.5f,%.5f", lat1, lon1, lat2, lon2)
+
     if settings.TOMTOM_API_KEY:
         try:
             base_url = (settings.TOMTOM_ROUTE_URL or "https://api.tomtom.com").rstrip("/")

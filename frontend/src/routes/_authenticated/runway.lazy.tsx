@@ -8,7 +8,8 @@ import {
   TrendingUp, TrendingDown, AlertTriangle, AlertCircle, CheckCircle2,
   Calendar, CreditCard, PieChart, Info, HelpCircle, ChevronRight,
   ShieldCheck, ArrowRight, Activity, Wallet,
-  Clock, Zap, Compass, RefreshCw, Layers, TrendingUp as TrendUpIcon, ArrowUpRight
+  Clock, Zap, Compass, RefreshCw, Layers, TrendingUp as TrendUpIcon, ArrowUpRight,
+  Check, Utensils, Coffee, Car, ShoppingBag, Calculator, Sparkles, Users
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -17,6 +18,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Tooltip as UITooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -173,6 +181,27 @@ function RunwayPage() {
     return forecast.commitments.total;
   }, [forecast]);
 
+  const chaiEquivalent = useMemo(() => {
+    const val = Number(affordAmountRs) || 0;
+    return Math.max(1, Math.round(val / 15)); // ₹15 per chai
+  }, [affordAmountRs]);
+
+  const mealEquivalent = useMemo(() => {
+    const val = Number(affordAmountRs) || 0;
+    return Math.max(1, Math.round(val / 80)); // ₹80 per meal
+  }, [affordAmountRs]);
+
+  const AFFORD_PRESETS = [
+    { label: "Chai & Maggi", amount: "35", category: "food" as const, icon: Coffee },
+    { label: "Canteen Meal", amount: "80", category: "food" as const, icon: Utensils },
+    { label: "Auto Ride", amount: "60", category: "travel" as const, icon: Car },
+    { label: "Swiggy Order", amount: "250", category: "food" as const, icon: Utensils },
+    { label: "Stationery", amount: "100", category: "other" as const, icon: CreditCard },
+    { label: "Movie / Outing", amount: "450", category: "shopping" as const, icon: ShoppingBag },
+  ];
+
+
+
   const adjustedSpent = useMemo(() => {
     if (!forecast) return 0;
     return forecast.current_cycle.spent + (scenarioHighSpendDay ? highSpendDayAmount : 0);
@@ -257,6 +286,17 @@ function RunwayPage() {
       runwayDaysLost,
     };
   }, [forecast, affordAmountPaise, affordCategory, safeDailyPaise, safeDailyIsZero, remainingDiscretionary, daysLeftInCycle, foodRoutine]);
+
+  const calculatorRunwayPct = useMemo(() => {
+    return Math.min(100, (affordCheck.runwayDaysLost / daysLeftInCycle) * 100);
+  }, [affordCheck.runwayDaysLost, daysLeftInCycle]);
+
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  const gaugePercentage = Math.min(100, (simulatedDays / Math.max(1, daysLeftInCycle)) * 100);
+  const strokeDashoffset = circumference - (gaugePercentage / 100) * circumference;
+  const strokeColor = isSimulatedSafe ? "stroke-pb-green" : "stroke-pb-red";
+  const gaugeFilter = `drop-shadow(0 0 5px ${isSimulatedSafe ? "rgba(22,163,74,0.25)" : "rgba(220,38,38,0.25)"})`;
 
   const copyFlightBrief = () => {
     if (!forecast) return;
@@ -431,6 +471,66 @@ Generated via PocketBuddy Runway.`;
       ? `First projected deficit appears around ${projectionSignal.label}.`
       : `Long-range view stays positive through ${projectionSignal.label}.`
     : "Projection will appear once horizon data is available.";
+  const [selectedActionId, setSelectedActionId] = useState("priority");
+  const runwayActions = useMemo(() => {
+    if (!forecast) return [];
+    const actionsList = [
+      {
+        id: "priority",
+        label: `Priority: ${activeActionTitle}`,
+        detail: activeActionDetail,
+        severity: activeActionType === "ask_home" ? "high" : forecast.status === "watch" ? "medium" : "low"
+      }
+    ];
+
+    if (forecast.status === "shortfall") {
+      actionsList.push({
+        id: "action-1",
+        label: "1. Shield Your Exam Safety Buffer",
+        detail: examBufferCommitmentTotal > 0
+          ? `Your configured buffer of ${formatRs(examBufferCommitmentTotal)} is locked. Avoid dipping into it for regular food spending.`
+          : "No exam buffer is configured yet. Keep essentials separate before reducing food or travel spend.",
+        severity: "high"
+      });
+      actionsList.push({
+        id: "action-2",
+        label: "2. Auto-Debit Subscription Alert",
+        detail: `You have ${forecast.commitments.items?.filter((i: any) => i.kind === "subscription").length || 0} recurring subscriptions active. Temporarily pause one to reclaim breathing room.`,
+        severity: "medium"
+      });
+      actionsList.push({
+        id: "action-3",
+        label: `3. ${foodRoutine?.action?.title ?? "Stabilize food pace"}`,
+        detail: foodRoutine?.action?.detail ?? "Use routine meals before delivery becomes the default. This keeps daily food spend inside your safe runway limit.",
+        severity: "low"
+      });
+    } else {
+      actionsList.push({
+        id: "action-1",
+        label: "1. Lock in an Emergency Reserve",
+        detail: examBufferCommitmentTotal > 0
+          ? `Your ${formatRs(examBufferCommitmentTotal)} exam reserve is already protected in the runway calculation.`
+          : "Since you're on track, set an emergency reserve in settings so future spending cannot consume essentials.",
+        severity: "low"
+      });
+      actionsList.push({
+        id: "action-2",
+        label: "2. Spending Pace Guardrails",
+        detail: decisionEngine?.summary ?? `Try to stay within ${formatRs(forecast.projection.safe_daily_spend)} per day to keep your runway healthy.`,
+        severity: "medium"
+      });
+      actionsList.push({
+        id: "action-3",
+        label: `3. ${foodRoutine?.action?.title ?? "Keep meals predictable"}`,
+        detail: foodRoutine?.action?.detail ?? "Keep food pace predictable so runway can reserve enough for travel, exams, and shared-pool dues.",
+        severity: "low"
+      });
+    }
+
+    return actionsList;
+  }, [forecast, activeActionTitle, activeActionDetail, activeActionType, examBufferCommitmentTotal, foodRoutine, decisionEngine]);
+
+
 
   if (forecastLoading) {
     return (
@@ -667,53 +767,29 @@ Generated via PocketBuddy Runway.`;
       </div>
 
       <div className="py-4 pb-32 space-y-6 animate-[fadeIn_0.3s_ease-out]">
-        {/* ── Runway Advisor Narration ── */}
-        <div className={`rounded-2xl border p-4 sm:p-5 ${
+        {/* ── Runway Advisor Narration (Sleek Notification Bar) ── */}
+        <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-xs font-medium border transition-all duration-300 ${
           activeActionType === "ask_home"
-            ? "border-pb-red/25 bg-pb-red/5"
+            ? "border-pb-red/30 bg-pb-red/5 text-pb-red"
             : forecast.status === "watch"
-              ? "border-pb-amber/25 bg-pb-amber/5"
-              : "border-primary/20 bg-surface"
+              ? "border-pb-amber/30 bg-pb-amber/5 text-pb-amber"
+              : "border-primary/20 bg-primary/5 text-primary"
         }`}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex min-w-0 gap-3">
-              <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                activeActionType === "ask_home"
-                  ? "bg-pb-red/10 text-pb-red"
-                  : forecast.status === "watch"
-                    ? "bg-pb-amber/10 text-pb-amber"
-                    : "bg-primary/10 text-primary"
-              }`}>
-                {activeActionType === "ask_home" ? <AlertCircle className="h-4.5 w-4.5" /> : <Zap className="h-4.5 w-4.5" />}
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Runway priority</p>
-                  <Badge variant="outline" className="border-border bg-surface text-[9px] uppercase tracking-wider text-muted-foreground px-1.5 py-0">
-                    Live forecast
-                  </Badge>
-                </div>
-                <h2 className="mt-1 text-sm sm:text-base font-semibold leading-snug text-foreground">
-                  {activeActionTitle}
-                </h2>
-                <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  {activeActionDetail || intel?.summary || "Runway is calculating the next best action from your allowance, commitments, and current pace."}
-                </p>
-                {intelLoading && (
-                  <div className="mt-2 space-y-1.5">
-                    <Skeleton className="h-3 w-full max-w-md" />
-                    <Skeleton className="h-3 w-3/4 max-w-sm" />
-                  </div>
-                )}
-              </div>
-            </div>
-            {activeActionType === "ask_home" && actualAskHomeAmount > 0 && (
-              <div className="rounded-xl border border-pb-red/20 bg-background/60 px-3 py-2 text-left sm:text-right">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-pb-red">Buffer needed</p>
-                <p className="mt-0.5 text-base font-semibold text-pb-red tnum">{formatRs(actualAskHomeAmount)}</p>
-              </div>
+          <div className="flex items-center gap-2 min-w-0">
+            {activeActionType === "ask_home" ? (
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+            ) : (
+              <Sparkles className="h-4 w-4 shrink-0 text-pb-amber" />
             )}
+            <span className="truncate">
+              <strong>Advisor:</strong> {activeActionTitle} &mdash; {activeActionDetail}
+            </span>
           </div>
+          {activeActionType === "ask_home" && actualAskHomeAmount > 0 && (
+            <span className="shrink-0 font-mono font-bold text-pb-red bg-pb-red/10 px-2 py-0.5 rounded text-[10px]">
+              Need {formatRs(actualAskHomeAmount)}
+            </span>
+          )}
         </div>
 
         <div className="flex border-b border-border overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth">
@@ -1035,7 +1111,7 @@ Generated via PocketBuddy Runway.`;
             )}
 
             {/* Runway Safety Grade & Fuel Gauge Card */}
-            <Card className={`overflow-hidden border ${safetyGrade.border} bg-card/30 shadow-sm`}>
+            <Card className="overflow-hidden border border-border bg-surface shadow-sm rounded-2xl">
               <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_300px]">
                 <div className="p-5 sm:p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -1063,16 +1139,18 @@ Generated via PocketBuddy Runway.`;
                             ? "Allowance is configured, but recent payment history is still thin. Use the safe/day limit as a temporary guardrail."
                             : safetyGrade.description}
                       </p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        <div className="rounded-lg border border-border/60 bg-surface/50 px-3 py-2">
+                      
+                      {/* Calm, Expected, Stress grid - simplified without nested boxes */}
+                      <div className="mt-4 grid grid-cols-3 divide-x divide-border/60 border-y border-border/50 py-3">
+                        <div className="text-center px-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Calm</p>
                           <p className="mt-0.5 text-sm font-semibold text-foreground tnum">{calmRunwayDays} days</p>
                         </div>
-                        <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                        <div className="text-center px-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Expected</p>
                           <p className="mt-0.5 text-sm font-semibold text-foreground tnum">{expectedRunwayDays} days</p>
                         </div>
-                        <div className="rounded-lg border border-pb-amber/20 bg-pb-amber/5 px-3 py-2">
+                        <div className="text-center px-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-pb-amber">Stress</p>
                           <p className="mt-0.5 text-sm font-semibold text-foreground tnum">{stressRunwayDays} days</p>
                         </div>
@@ -1080,28 +1158,29 @@ Generated via PocketBuddy Runway.`;
                     </div>
                   </div>
 
-                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border border-border/70 bg-surface/60 p-3">
+                  {/* Spend today, Flexible cash, Reset window grid - simplified without nested cards */}
+                  <div className="mt-6 grid grid-cols-3 gap-4 border-b border-border/40 pb-5">
+                    <div className="space-y-1">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Spend today</p>
-                      <p className="mt-1 text-base font-semibold text-primary tnum">
+                      <p className="text-base font-semibold text-primary tnum">
                         {safeDailyDisplay}
-                        {!safeDailyIsZero && <span className="text-[11px] text-zinc-500">/day</span>}
+                        {!safeDailyIsZero && <span className="text-[11px] text-zinc-500 font-medium">/day</span>}
                       </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground leading-snug">{paceMessage}</p>
+                      <p className="text-[11px] text-muted-foreground leading-snug">{paceMessage}</p>
                     </div>
-                    <div className="rounded-xl border border-border/70 bg-surface/60 p-3">
+                    <div className="space-y-1">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Flexible cash</p>
-                      <p className="mt-1 text-base font-semibold text-foreground tnum">{formatRs(remainingDiscretionary)}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground leading-snug">After spent money and reserved costs.</p>
+                      <p className="text-base font-semibold text-foreground tnum">{formatRs(remainingDiscretionary)}</p>
+                      <p className="text-[11px] text-muted-foreground leading-snug">Available flexible pool.</p>
                     </div>
-                    <div className="rounded-xl border border-border/70 bg-surface/60 p-3">
+                    <div className="space-y-1">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Reset window</p>
-                      <p className="mt-1 text-base font-semibold text-foreground tnum">{daysLeftInCycle} days</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground leading-snug">Until the current allowance cycle ends.</p>
+                      <p className="text-base font-semibold text-foreground tnum">{daysLeftInCycle} days</p>
+                      <p className="text-[11px] text-muted-foreground leading-snug">Until cycle resets.</p>
                     </div>
                   </div>
 
-                  <div className="mt-5 space-y-1.5">
+                  <div className="mt-4 space-y-1.5">
                     <div className="flex justify-between text-[9px] md:text-xs font-bold text-zinc-500 uppercase tracking-wider">
                       <span>Discretionary fuel</span>
                       <span>{discretionaryFuelPct}% remaining</span>
@@ -1111,7 +1190,7 @@ Generated via PocketBuddy Runway.`;
                 </div>
 
                 <div className={`border-t border-border p-5 sm:p-6 lg:border-l lg:border-t-0 ${
-                  activeActionType === "ask_home" ? "bg-pb-red/5" : "bg-surface/50"
+                  activeActionType === "ask_home" ? "bg-pb-red/5" : "bg-surface/55"
                 }`}>
                   <p className={`text-[10px] font-bold uppercase tracking-wider ${
                     activeActionType === "ask_home" ? "text-pb-red" : "text-primary"
@@ -1202,25 +1281,25 @@ Generated via PocketBuddy Runway.`;
                 </Badge>
               </div>
               {topDrivers.length ? (
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-3 mt-2">
                   {topDrivers.map((driver) => (
-                    <div key={driver.kind} className={`rounded-xl border p-3 ${
+                    <div key={driver.kind} className={`pl-3.5 py-1 border-l-2 ${
                       driver.severity === "high"
-                        ? "border-pb-red/20 bg-pb-red/5"
+                        ? "border-pb-red"
                         : driver.severity === "medium"
-                          ? "border-pb-amber/20 bg-pb-amber/5"
-                          : "border-border bg-surface/50"
+                          ? "border-pb-amber"
+                          : "border-primary"
                     }`}>
                       <p className="text-xs font-semibold text-foreground">{driver.label}</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{driver.detail}</p>
                       {Number(driver.impact || 0) > 0 && (
-                        <p className="mt-2 text-[11px] font-semibold text-foreground tnum">{formatRs(Number(driver.impact))} impact</p>
+                        <p className="mt-1.5 text-[11px] font-semibold text-foreground tnum">{formatRs(Number(driver.impact))} impact</p>
                       )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-border bg-surface/40 p-4 text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground italic py-1">
                   No major pressure point detected yet. Runway will explain changes once transactions, food pace, pool dues, or recurring costs affect the forecast.
                 </div>
               )}
@@ -1306,57 +1385,175 @@ Generated via PocketBuddy Runway.`;
               </Card>
             </div>
 
-            <Card className="p-5 sm:p-6 border border-border bg-card/25">
-              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+            <Card className="border border-border bg-surface p-5 sm:p-6 shadow-sm rounded-2xl relative overflow-hidden transition-all duration-300 hover:shadow-md">
+              {/* Decorative accent bar */}
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/30 via-pb-amber/30 to-pb-green/30" />
+
+              <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Can I afford this?</h3>
-                  <p className="mt-1 text-xs text-zinc-500">Check one payment before you make it.</p>
+                  <h3 className="flex items-center gap-1.5 text-base font-semibold tracking-tight text-foreground">
+                    <Calculator className="h-4.5 w-4.5 text-primary" />
+                    <span>Can I afford this?</span>
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Check how a purchase impacts your runway before spending.</p>
                 </div>
-                <Badge variant="outline" className="w-fit border-border bg-surface text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Uses safe/day
+                <Badge variant="outline" className="w-fit shrink-0 border-border bg-background/50 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Limit: {safeDailyDisplay}/day
                 </Badge>
               </div>
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]">
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Amount</label>
-                    <div className="mt-1 flex h-10 items-center rounded-lg border border-border bg-surface px-3">
-                      <span className="text-sm text-muted-foreground">₹</span>
+
+              <div className="space-y-4">
+                {/* Inputs row */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Amount (₹)</label>
+                    <div className="flex h-11 items-center rounded-xl border border-border bg-background px-3 transition focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
+                      <span className="text-sm font-semibold text-muted-foreground">₹</span>
                       <input
                         value={affordAmountRs}
                         onChange={(event) => setAffordAmountRs(event.target.value.replace(/[^\d.]/g, ""))}
                         inputMode="decimal"
-                        placeholder="180"
-                        className="ml-2 min-w-0 flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground"
+                        placeholder="e.g. 150"
+                        className="ml-2 min-w-0 flex-1 bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/40"
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Category</label>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Category</label>
                     <select
                       value={affordCategory}
                       onChange={(event) => setAffordCategory(event.target.value as typeof affordCategory)}
-                      className="mt-1 h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm font-semibold text-foreground outline-none"
+                      className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-semibold text-foreground outline-none transition hover:bg-surface focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
                     >
-                      <option value="food">Food</option>
-                      <option value="travel">Travel</option>
-                      <option value="shopping">Shopping</option>
-                      <option value="other">Other</option>
+                      <option value="food">Food &amp; Drinks</option>
+                      <option value="travel">Travel &amp; Auto</option>
+                      <option value="shopping">Shopping &amp; Fun</option>
+                      <option value="other">Other / Misc</option>
                     </select>
                   </div>
                 </div>
 
-                <div className={`rounded-xl border p-3 ${affordCheck.tone}`}>
-                  <p className="text-xs font-semibold text-foreground">{affordCheck.title}</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{affordCheck.detail}</p>
-                  {affordAmountPaise > 0 && (
-                    <p className="mt-2 text-[11px] font-semibold text-foreground">
-                      Runway impact: about {affordCheck.runwayDaysLost.toFixed(1)} day{affordCheck.runwayDaysLost.toFixed(1) === "1.0" ? "" : "s"}
-                    </p>
-                  )}
+                {/* Student Quick Presets */}
+                <div className="space-y-1.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Quick Presets</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {AFFORD_PRESETS.map((preset) => {
+                      const PresetIcon = preset.icon;
+                      const isActive = affordAmountRs === preset.amount && affordCategory === preset.category;
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            setAffordAmountRs(preset.amount);
+                            setAffordCategory(preset.category);
+                          }}
+                          className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all ${
+                            isActive
+                              ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm"
+                              : "border-border bg-background text-muted-foreground hover:bg-surface hover:text-foreground"
+                          }`}
+                        >
+                          <PresetIcon className="h-3 w-3" />
+                          <span>{preset.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Result panel */}
+                <div className={`rounded-xl p-4 transition-all duration-300 border-l-4 ${
+                  affordAmountPaise <= 0
+                    ? "border-border bg-surface-raised/40"
+                    : affordCheck.status === "safe"
+                      ? "border-pb-green bg-pb-green/5"
+                      : affordCheck.status === "tight"
+                        ? "border-pb-amber bg-pb-amber/5"
+                        : "border-pb-red bg-pb-red/5"
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                      affordAmountPaise <= 0
+                        ? "bg-muted text-muted-foreground"
+                        : affordCheck.status === "safe"
+                          ? "bg-pb-green/15 text-pb-green"
+                          : affordCheck.status === "tight"
+                            ? "bg-pb-amber/15 text-pb-amber"
+                            : "bg-pb-red/15 text-pb-red"
+                    }`}>
+                      {affordAmountPaise <= 0 ? (
+                        <Calculator className="h-4 w-4" />
+                      ) : affordCheck.status === "safe" ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : affordCheck.status === "tight" ? (
+                        <AlertTriangle className="h-4 w-4" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-bold leading-tight">
+                          {affordAmountPaise <= 0
+                            ? "Enter an amount to check"
+                            : affordCheck.status === "safe"
+                              ? "Safe to spend"
+                              : affordCheck.status === "tight"
+                                ? "Spending is tight"
+                                : "Reconsider this"}
+                        </h4>
+                        {affordAmountPaise > 0 && (
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${
+                            affordCheck.status === "safe" ? "border-pb-green/30 bg-pb-green/10 text-pb-green" :
+                            affordCheck.status === "tight" ? "border-pb-amber/30 bg-pb-amber/10 text-pb-amber" :
+                            "border-pb-red/30 bg-pb-red/10 text-pb-red"
+                          }`}>
+                            {affordCheck.status}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{affordCheck.detail}</p>
+
+                      {affordAmountPaise > 0 && (
+                        <>
+                          {/* Student comparisons */}
+                          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border/40 pt-3 text-[11px]">
+                            <div>
+                              <span className="block text-muted-foreground">= Chai equivalent</span>
+                              <span className="font-semibold text-foreground">{chaiEquivalent} cups</span>
+                            </div>
+                            <div>
+                              <span className="block text-muted-foreground">= Canteen meals</span>
+                              <span className="font-semibold text-foreground">{mealEquivalent} meals</span>
+                            </div>
+                          </div>
+
+                          {/* Runway impact bar */}
+                          <div className="mt-3 space-y-1">
+                            <div className="flex justify-between text-[10px] font-semibold text-muted-foreground">
+                              <span>Runway impact: -{affordCheck.runwayDaysLost.toFixed(1)} days</span>
+                              <span>Remaining: {Math.max(0, 100 - calculatorRunwayPct).toFixed(0)}%</span>
+                            </div>
+                            <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-surface-raised">
+                              <div
+                                className={`h-full transition-all duration-500 ${
+                                  affordCheck.status === "safe" ? "bg-pb-green" :
+                                  affordCheck.status === "tight" ? "bg-pb-amber" : "bg-pb-red"
+                                }`}
+                                style={{ width: `${Math.max(4, 100 - calculatorRunwayPct)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card>
+
 
             {foodRoutine && (
               <Card className="p-5 sm:p-6 border border-border bg-card/25">
@@ -1407,357 +1604,368 @@ Generated via PocketBuddy Runway.`;
               </Card>
             )}
 
-            {/* 🛫 INTERACTIVE RUNWAY SANDBOX & SIMULATOR */}
-            <Card className="p-5 sm:p-6 border border-primary/20 bg-card/30 shadow-sm">
-              <div className="flex flex-col lg:flex-row gap-6 items-stretch justify-between">
-                
-                {/* Left side: Interactive Sandbox Controls */}
-                <div className="flex-1 space-y-4">
+            {/* 🛫 DAILY SPEND CHECK — SURVIVAL COCKPIT */}
+            <Card className="border border-border bg-surface p-5 sm:p-6 shadow-sm rounded-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/30 via-pb-amber/30 to-pb-green/30" />
+
+              <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+
+                {/* ── Left: Controls ── */}
+                <div className="flex-1 space-y-5">
+
+                  {/* Header */}
                   <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Compass className="h-4.5 w-4.5 text-primary" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Daily Spend Simulator</h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Compass className="h-5 w-5 text-primary" />
+                      <h3 className="text-base font-semibold tracking-tight text-foreground">Daily spend check</h3>
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Test Current, Stretch, or Emergency mode without changing real transactions.
+                      Simulate scenarios and see how lifestyle changes extend your runway — without touching real data.
                     </p>
                   </div>
 
-                  <div className="space-y-2">
+                  {/* Slider */}
+                  <div className="p-1 space-y-3">
                     <div className="flex justify-between items-baseline">
-                      <span className="text-xs font-bold text-muted-foreground">Simulated Daily Budget</span>
-                      <span className="text-base sm:text-lg font-semibold text-primary tnum">
+                      <span className="text-xs font-semibold text-muted-foreground">Adjust Daily Spend</span>
+                      <span className="text-base font-bold text-primary tnum">
                         {safeDailyIsZero ? "Pause" : formatRs(activeSimulatedSpend * 100)}
-                        {!safeDailyIsZero && <span className="text-xs text-muted-foreground font-semibold"> /day</span>}
+                        {!safeDailyIsZero && <span className="text-xs font-medium text-muted-foreground"> /day</span>}
                       </span>
                     </div>
                     {!safeDailyIsZero ? (
-                    <input 
-                      type="range" 
-                      min={simulatorMinSpend} 
-                      max={sliderMaxSpend} 
-                      step="10"
-                      value={activeSimulatedSpend} 
-                      onChange={(e) => setSimulatedDailySpend(parseInt(e.target.value, 10))}
-                      onMouseUp={() => {
-                        toast.info(`Daily budget simulated at ${formatRs(activeSimulatedSpend * 100)}/day. Runway: ${simulatedDays} days.`);
-                      }}
-                      onTouchEnd={() => {
-                        toast.info(`Daily budget simulated at ${formatRs(activeSimulatedSpend * 100)}/day. Runway: ${simulatedDays} days.`);
-                      }}
-                      className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-primary focus:outline-none"
-                    />
+                      <>
+                        <input
+                          type="range"
+                          min={simulatorMinSpend}
+                          max={sliderMaxSpend}
+                          step="10"
+                          value={activeSimulatedSpend}
+                          onChange={(e) => setSimulatedDailySpend(parseInt(e.target.value, 10))}
+                          onMouseUp={() => toast.info(`Simulated at ${formatRs(activeSimulatedSpend * 100)}/day → ${simulatedDays} days runway`)}
+                          onTouchEnd={() => toast.info(`Simulated at ${formatRs(activeSimulatedSpend * 100)}/day → ${simulatedDays} days runway`)}
+                          className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-gradient-to-r from-pb-green via-pb-amber to-pb-red accent-primary focus:outline-none"
+                        />
+                        <div className="flex justify-between font-mono text-[10px] text-muted-foreground font-semibold">
+                          <span>{formatRs(simulatorMinSpend * 100)}</span>
+                          <span className="text-center">Mid: {formatRs(Math.round(sliderMaxSpend * 50))}</span>
+                          <span>{formatRs(sliderMaxSpend * 100)}</span>
+                        </div>
+                      </>
                     ) : (
-                      <div className="rounded-lg border border-pb-red/15 bg-pb-red/5 px-3 py-2 text-xs text-pb-red">
-                        Non-essential spend should stay paused until funding or commitments change.
+                      <div className="rounded-xl border border-pb-red/20 bg-pb-red/5 px-3 py-2.5 text-xs font-medium text-pb-red">
+                        Discretionary budget exhausted. Pause non-essential spending.
                       </div>
-                    )}
-                    {!safeDailyIsZero && (
-                    <div className="flex justify-between text-[10px] md:text-xs font-mono text-zinc-500">
-                      <span>{formatRs(simulatorMinSpend * 100)}/day</span>
-                      <span>{formatRs(Math.round(sliderMaxSpend * 50))}/day</span>
-                      <span>{formatRs(sliderMaxSpend * 100)}/day</span>
-                    </div>
                     )}
                   </div>
 
-                  {/* Presets */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest block">Quick Presets</span>
-                    <div className="flex flex-wrap gap-2">
+                  {/* Quick targets */}
+                  <div className="space-y-2">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quick Targets</span>
+                    <div className="flex flex-wrap gap-1.5">
                       {simulatorPresets.map((preset) => (
-                        <button 
+                        <button
                           key={`${preset.label}-${preset.value}`}
-                          onClick={() => setSimulatedDailySpend(preset.value)}
-                          className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${activeSimulatedSpend === preset.value ? "bg-primary/10 border-primary text-primary" : "bg-surface border-border hover:bg-surface-raised"}`}
+                          type="button"
+                          onClick={() => {
+                            setSimulatedDailySpend(preset.value);
+                            toast.info(`Target: ${preset.label} (${formatRs(preset.value * 100)}/day)`);
+                          }}
+                          className={`rounded-full border px-3 py-1 text-[11px] font-medium transition-colors ${
+                            activeSimulatedSpend === preset.value
+                              ? "border-primary bg-primary/10 text-primary font-semibold"
+                              : "border-border bg-background text-muted-foreground hover:bg-surface hover:text-foreground"
+                          }`}
                         >
                           {preset.label} ({formatRs(preset.value * 100)})
                         </button>
                       ))}
                       {simulatedDailySpend !== null && (
-                        <button 
-                          onClick={() => setSimulatedDailySpend(null)}
-                          className="px-2.5 py-1 text-[11px] md:text-xs font-bold rounded-lg border border-dashed border-zinc-500 hover:border-zinc-300 text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer"
+                        <button
+                          type="button"
+                          onClick={() => { setSimulatedDailySpend(null); toast.info("Reset to actual pace."); }}
+                          className="rounded-full border border-dashed border-border px-3 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
                         >
-                          {defaultPace > 0 ? `Reset to Actual (${formatRs(defaultPace * 100)})` : "Reset to Actual"}
+                          {defaultPace > 0 ? `Reset (${formatRs(defaultPace * 100)}/day)` : "Reset"}
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Budget Modes */}
-                  <div className="border-t border-border/40 pt-4 space-y-2">
+                  {/* Mode cards */}
+                  <div className="border-t border-border/40 pt-4 space-y-2.5">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest block">Budget Modes</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Plan Intensity</span>
                       <TooltipProvider>
                         <UITooltip>
                           <TooltipTrigger asChild>
-                            <button className="text-zinc-500 hover:text-foreground cursor-pointer focus:outline-none transition-colors">
-                              <Info className="h-3 w-3" />
+                            <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                              <Info className="h-3.5 w-3.5" />
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent className="max-w-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 p-3 space-y-2 text-[11px] md:text-xs leading-relaxed shadow-xl">
-                            <div>
-                              <p className="font-bold text-zinc-900 dark:text-zinc-50">Stretch mode</p>
-                              <p className="text-zinc-600 dark:text-zinc-400">Tests a lower daily target. Optional switches can show realistic recovery levers.</p>
-                            </div>
-                            <div>
-                              <p className="font-bold text-zinc-900 dark:text-zinc-50">Emergency mode</p>
-                              <p className="text-zinc-600 dark:text-zinc-400">Protects essentials first, then applies available recovery levers for a stricter plan.</p>
-                            </div>
+                          <TooltipContent className="max-w-xs rounded-xl border border-border bg-card p-3 space-y-2 text-xs shadow-xl">
+                            <p className="font-bold text-foreground flex items-center gap-1">
+                              <Sparkles className="h-3 w-3 text-pb-amber" /> Stretch mode
+                            </p>
+                            <p className="text-muted-foreground">Lower daily target with optional student recovery levers.</p>
+                            <p className="font-bold text-foreground flex items-center gap-1 pt-1">
+                              <AlertTriangle className="h-3 w-3 text-pb-red" /> Emergency mode
+                            </p>
+                            <p className="text-muted-foreground">Protects essentials first, auto-applies all levers.</p>
                           </TooltipContent>
                         </UITooltip>
                       </TooltipProvider>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
+                        type="button"
                         onClick={() => selectRunwayMode("normal")}
-                        className={`py-2 text-[10px] font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                        className={`rounded-xl border p-3 text-left transition-all ${
                           flightProtocol === "normal"
-                            ? "bg-primary/10 border-primary text-primary"
-                            : "bg-surface border-border hover:bg-surface-raised text-muted-foreground"
+                            ? "border-primary bg-primary/10 shadow-[0_0_12px_rgba(99,102,241,0.12)]"
+                            : "border-border bg-background text-muted-foreground hover:bg-surface"
                         }`}
                       >
-                        <span className="block">Current Pace</span>
-                        <span className="mt-0.5 block text-[10px] font-semibold opacity-75">
-                          {noSpendHistory ? "Needs history" : `${formatRs((defaultPace || safeDailyRs) * 100)}/day`}
+                        <span className="block text-xs font-bold text-foreground">Current Pace</span>
+                        <span className="mt-1 block text-sm font-bold text-foreground tnum">
+                          {noSpendHistory ? "—" : `${formatRs((defaultPace || safeDailyRs) * 100)}`}
                         </span>
+                        <span className="mt-1 block text-[10px] text-muted-foreground leading-snug">No changes applied</span>
                       </button>
                       <button
+                        type="button"
                         onClick={() => selectRunwayMode("glide")}
-                        className={`py-2 text-[10px] font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                        className={`rounded-xl border p-3 text-left transition-all ${
                           flightProtocol === "glide"
-                            ? "bg-pb-amber/15 border-pb-amber text-pb-amber"
-                            : "bg-surface border-border hover:bg-surface-raised text-muted-foreground"
+                            ? "border-pb-amber bg-pb-amber/10 shadow-[0_0_12px_rgba(213,155,82,0.12)]"
+                            : "border-border bg-background text-muted-foreground hover:bg-surface"
                         }`}
                       >
-                        <span className="block">Stretch Mode</span>
-                        <span className="mt-0.5 block text-[10px] font-semibold opacity-75">
-                          {safeDailyIsZero ? "Paused" : `${formatRs(stretchModeDailyRs * 100)}/day`}
+                        <span className="block text-xs font-bold text-foreground">Stretch</span>
+                        <span className="mt-1 block text-sm font-bold text-pb-amber tnum">
+                          {safeDailyIsZero ? "Pause" : `${formatRs(stretchModeDailyRs * 100)}`}
                         </span>
+                        <span className="mt-1 block text-[10px] text-muted-foreground leading-snug">Lower target + optional levers</span>
                       </button>
                       <button
+                        type="button"
                         onClick={() => selectRunwayMode("turbulence")}
-                        className={`py-2 text-[10px] font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                        className={`rounded-xl border p-3 text-left transition-all ${
                           flightProtocol === "turbulence"
-                            ? "bg-pb-red/15 border-pb-red text-pb-red"
-                            : "bg-surface border-border hover:bg-surface-raised text-muted-foreground"
+                            ? "border-pb-red bg-pb-red/10 shadow-[0_0_12px_rgba(220,38,38,0.12)]"
+                            : "border-border bg-background text-muted-foreground hover:bg-surface"
                         }`}
                       >
-                        <span className="block">Emergency Mode</span>
-                        <span className="mt-0.5 block text-[10px] font-semibold opacity-75">
-                          {safeDailyIsZero ? "Paused" : `${formatRs(emergencyModeDailyRs * 100)}/day`}
+                        <span className="block text-xs font-bold text-foreground">Emergency</span>
+                        <span className="mt-1 block text-sm font-bold text-pb-red tnum">
+                          {safeDailyIsZero ? "Pause" : `${formatRs(emergencyModeDailyRs * 100)}`}
                         </span>
+                        <span className="mt-1 block text-[10px] text-muted-foreground leading-snug">Essentials first</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Interactive runway levers */}
+                  {/* Levers */}
                   <div className="border-t border-border/40 pt-4 space-y-3">
                     {flightProtocol === "normal" && (
-                      <div className="rounded-xl border border-border bg-surface/60 p-3 text-xs text-muted-foreground">
-                        Current Pace keeps recovery switches off. Use it as the baseline before testing stricter plans.
+                      <div className="flex items-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
+                        <Info className="h-4 w-4 shrink-0" />
+                        <span>Switch to Stretch or Emergency mode to unlock recovery levers.</span>
                       </div>
                     )}
 
                     {flightProtocol === "glide" && (
-                      <>
-                        <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest block">Stretch actions</span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <label className={`flex items-center gap-2 text-xs select-none ${canUseMealLever ? "text-foreground cursor-pointer" : "text-muted-foreground cursor-not-allowed opacity-60"}`}>
-                            <input
-                              type="checkbox"
-                              disabled={!canUseMealLever}
-                              checked={scenarioFoodSwitch}
-                              onChange={(e) => {
-                                const val = e.target.checked;
-                                setScenarioFoodSwitch(val);
-                                if (val) {
-                                  toast.success(`Meal routine switch adds ${formatRs(mealPlanLeverAmount)} back to flexible runway.`);
-                                } else {
-                                  toast.info("Meal routine switch removed from the sandbox.");
-                                }
-                              }}
-                              className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5 accent-primary"
-                            />
-                            <span>
-                              {foodSwitchSaving > 0 ? "Replace two delivery orders" : "Tighten meal routine"} {canUseMealLever ? `(${formatRs(mealPlanLeverAmount)})` : "(needs food history)"}
-                            </span>
-                          </label>
-
-                          <label className={`flex items-center gap-2 text-xs select-none ${canUseFixedCostLever ? "text-foreground cursor-pointer" : "text-muted-foreground cursor-not-allowed opacity-60"}`}>
-                            <input
-                              type="checkbox"
-                              disabled={!canUseFixedCostLever}
-                              checked={scenarioSubscriptionsPaused}
-                              onChange={(e) => {
-                                const val = e.target.checked;
-                                setScenarioSubscriptionsPaused(val);
-                                if (val) {
-                                  toast.success(`${fixedCostLeverLabel}: ${formatRs(fixedCostLeverAmount)} freed in the sandbox.`);
-                                } else {
-                                  toast.info("Fixed-cost lever removed from the sandbox.");
-                                }
-                              }}
-                              className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5 accent-primary"
-                            />
-                            <span>{fixedCostLeverLabel}{canUseFixedCostLever ? ` (${formatRs(fixedCostLeverAmount)})` : ""}</span>
-                          </label>
-
-                          <label className={`flex items-center gap-2 text-xs select-none ${canUseSharedPlanLever ? "text-foreground cursor-pointer" : "text-muted-foreground cursor-not-allowed opacity-60"}`}>
-                            <input
-                              type="checkbox"
-                              disabled={!canUseSharedPlanLever}
-                              checked={scenarioPoolSettled}
-                              onChange={(e) => {
-                                const val = e.target.checked;
-                                setScenarioPoolSettled(val);
-                                if (val) {
-                                  toast.success(`${sharedPlanLeverLabel}: ${formatRs(sharedPlanLeverAmount)} improvement applied.`);
-                                } else {
-                                  toast.info("Shared-plan lever removed from the sandbox.");
-                                }
-                              }}
-                              className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5 accent-primary"
-                            />
-                            <span>{sharedPlanLeverLabel}{canUseSharedPlanLever ? ` (${formatRs(sharedPlanLeverAmount)})` : ""}</span>
-                          </label>
-
-                          <label className={`flex items-center gap-2 text-xs select-none ${canStressHighSpend ? "text-foreground cursor-pointer" : "text-muted-foreground cursor-not-allowed opacity-60"}`}>
-                            <input
-                              type="checkbox"
-                              disabled={!canStressHighSpend}
-                              checked={scenarioHighSpendDay}
-                              onChange={(e) => {
-                                const val = e.target.checked;
-                                setScenarioHighSpendDay(val);
-                                if (val) {
-                                  toast.warning(`Added one high-spend day: ${formatRs(highSpendDayAmount)} removed from flexible runway.`);
-                                } else {
-                                  toast.info("High-spend day removed from the sandbox.");
-                                }
-                              }}
-                              className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5 accent-primary"
-                            />
-                            <span>{canStressHighSpend ? `Stress one high-spend day (-${formatRs(highSpendDayAmount)})` : "Stress test needs spend history"}</span>
-                          </label>
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          <span>Optional Stretch Levers</span>
                         </div>
-                      </>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {[
+                            { enabled: canUseMealLever, active: scenarioFoodSwitch, icon: Utensils, label: foodSwitchSaving > 0 ? "Replace deliveries" : "Tighten meal routine", detail: canUseMealLever ? `Adds ${formatRs(mealPlanLeverAmount)}` : "Needs food history", onToggle: () => { const v = !scenarioFoodSwitch; setScenarioFoodSwitch(v); if (v) toast.success(`Meal lever: +${formatRs(mealPlanLeverAmount)}`); else toast.info("Meal lever off."); } },
+                            { enabled: canUseFixedCostLever, active: scenarioSubscriptionsPaused, icon: CreditCard, label: "Pause subscriptions", detail: canUseFixedCostLever ? `Frees ${formatRs(fixedCostLeverAmount)}` : "No subs found", onToggle: () => { const v = !scenarioSubscriptionsPaused; setScenarioSubscriptionsPaused(v); if (v) toast.success(`Subs paused: +${formatRs(fixedCostLeverAmount)}`); else toast.info("Subs lever off."); } },
+                            { enabled: canUseSharedPlanLever, active: scenarioPoolSettled, icon: Users, label: sharedPlanLeverLabel, detail: canUseSharedPlanLever ? `Adds ${formatRs(sharedPlanLeverAmount)}` : "No pool dues", onToggle: () => { const v = !scenarioPoolSettled; setScenarioPoolSettled(v); if (v) toast.success(`Pool settled: +${formatRs(sharedPlanLeverAmount)}`); else toast.info("Pool lever off."); } },
+                            { enabled: canStressHighSpend, active: scenarioHighSpendDay, icon: TrendingDown, label: "Stress: high spend day", detail: canStressHighSpend ? `-${formatRs(highSpendDayAmount)}` : "Needs history", onToggle: () => { const v = !scenarioHighSpendDay; setScenarioHighSpendDay(v); if (v) toast.warning(`Stress test: -${formatRs(highSpendDayAmount)}`); else toast.info("Stress removed."); } },
+                          ].map((lever) => {
+                            const LeverIcon = lever.icon;
+                            return (
+                              <button
+                                key={lever.label}
+                                type="button"
+                                disabled={!lever.enabled}
+                                onClick={lever.onToggle}
+                                className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                                  !lever.enabled
+                                    ? "opacity-40 cursor-not-allowed border-border/40 bg-surface-raised/10"
+                                    : lever.active
+                                      ? "border-pb-green bg-pb-green/10 shadow-[0_0_10px_rgba(22,163,74,0.08)]"
+                                      : "border-border bg-background hover:bg-surface hover:border-border-hover"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${lever.active ? "bg-pb-green/20 text-pb-green" : "bg-muted text-muted-foreground"}`}>
+                                    <LeverIcon className="h-4 w-4" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="block text-xs font-semibold truncate text-foreground">{lever.label}</span>
+                                    <span className="block text-[10px] text-muted-foreground">{lever.detail}</span>
+                                  </div>
+                                </div>
+                                {lever.enabled && (
+                                  <div className={`h-4 w-4 shrink-0 rounded-full border flex items-center justify-center transition-colors ${lever.active ? "bg-pb-green border-pb-green" : "border-muted-foreground/30"}`}>
+                                    {lever.active && <Check className="h-2.5 w-2.5 text-white stroke-[3]" />}
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
 
                     {flightProtocol === "turbulence" && (
-                      <div className="rounded-xl border border-pb-red/15 bg-pb-red/5 p-3">
-                        <span className="text-[10px] md:text-xs font-bold text-pb-red uppercase tracking-widest block">Emergency rules applied</span>
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <div className="rounded-lg border border-border/70 bg-surface/70 px-3 py-2 text-xs">
-                            <p className="font-semibold text-foreground">{canUseMealLever ? "Meal lever used" : "No food lever"}</p>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">{canUseMealLever ? formatRs(mealPlanLeverAmount) : "Needs food history"}</p>
-                          </div>
-                          <div className="rounded-lg border border-border/70 bg-surface/70 px-3 py-2 text-xs">
-                            <p className="font-semibold text-foreground">{canUseFixedCostLever ? "Fixed debit paused" : "No fixed debit"}</p>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">{canUseFixedCostLever ? formatRs(fixedCostLeverAmount) : "Nothing to move"}</p>
-                          </div>
-                          <div className="rounded-lg border border-border/70 bg-surface/70 px-3 py-2 text-xs">
-                            <p className="font-semibold text-foreground">{canUseSharedPlanLever ? "Pool dues settled" : "No pool dues"}</p>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">{canUseSharedPlanLever ? formatRs(sharedPlanLeverAmount) : "No shared gap"}</p>
-                          </div>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-pb-red">
+                          <AlertCircle className="h-3.5 w-3.5" /><span>Emergency levers (auto-applied)</span>
                         </div>
-                        <label className={`mt-3 flex items-center gap-2 text-xs select-none ${canStressHighSpend ? "text-foreground cursor-pointer" : "text-muted-foreground cursor-not-allowed opacity-60"}`}>
-                          <input
-                            type="checkbox"
+                        <div className="p-1 space-y-3">
+                          <div className="grid grid-cols-3 gap-2 border-b border-border/40 pb-3">
+                            {[
+                              { label: "Meal", enabled: canUseMealLever, amount: mealPlanLeverAmount },
+                              { label: "Fixed cost", enabled: canUseFixedCostLever, amount: fixedCostLeverAmount },
+                              { label: "Pool", enabled: canUseSharedPlanLever, amount: sharedPlanLeverAmount },
+                            ].map((l) => (
+                              <div key={l.label} className="text-center">
+                                <p className="text-[10px] font-semibold uppercase text-muted-foreground">{l.label}</p>
+                                <p className={`mt-1 text-xs font-bold ${l.enabled ? "text-pb-green" : "text-muted-foreground"}`}>
+                                  {l.enabled ? `+${formatRs(l.amount)}` : "Inactive"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
                             disabled={!canStressHighSpend}
-                            checked={scenarioHighSpendDay}
-                            onChange={(e) => {
-                              const val = e.target.checked;
-                              setScenarioHighSpendDay(val);
-                              if (val) {
-                                toast.warning(`Added one high-spend day: ${formatRs(highSpendDayAmount)} removed from flexible runway.`);
-                              } else {
-                                toast.info("High-spend day removed from the sandbox.");
-                              }
-                            }}
-                            className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5 accent-primary"
-                          />
-                          <span>{canStressHighSpend ? `Include one high-spend day (-${formatRs(highSpendDayAmount)})` : "Stress test needs spend history"}</span>
-                        </label>
+                            onClick={() => { const v = !scenarioHighSpendDay; setScenarioHighSpendDay(v); if (v) toast.warning(`Stress test: -${formatRs(highSpendDayAmount)}`); else toast.info("Stress removed."); }}
+                            className={`flex w-full items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                              !canStressHighSpend ? "opacity-40 cursor-not-allowed border-border/40 bg-surface-raised/10" :
+                              scenarioHighSpendDay ? "border-pb-red bg-pb-red/10" : "border-border bg-background hover:bg-surface"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${scenarioHighSpendDay ? "bg-pb-red/20 text-pb-red" : "bg-muted text-muted-foreground"}`}>
+                                <TrendingDown className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <span className="block text-xs font-semibold text-foreground">Include high-spend day</span>
+                                <span className="block text-[10px] text-muted-foreground">{canStressHighSpend ? `-${formatRs(highSpendDayAmount)}` : "Needs spend history"}</span>
+                              </div>
+                            </div>
+                            {canStressHighSpend && (
+                              <div className={`h-4 w-4 shrink-0 rounded-full border flex items-center justify-center ${scenarioHighSpendDay ? "bg-pb-red border-pb-red" : "border-muted-foreground/30"}`}>
+                                {scenarioHighSpendDay && <Check className="h-2.5 w-2.5 text-white stroke-[3]" />}
+                              </div>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Right side: Real-time Simulation Results */}
-                <div className="w-full lg:w-80 rounded-xl bg-surface-raised p-4 flex flex-col justify-between gap-4 border border-border/50">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest block">Forecast result</span>
-                      <Badge variant="outline" className="border-border bg-surface text-[9px] uppercase tracking-wider text-muted-foreground">
-                        {flightProtocol === "normal" ? "Current" : flightProtocol === "glide" ? "Stretch" : "Emergency"}
+                {/* ── Right: Cockpit Gauge ── */}
+                <div className="flex w-full flex-col justify-between gap-4 border-t border-border pt-5 lg:w-72 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Survival Cockpit</span>
+                      <Badge variant="outline" className={`text-[9px] font-bold uppercase py-0.5 ${
+                        flightProtocol === "normal" ? "border-primary/30 bg-primary/10 text-primary" :
+                        flightProtocol === "glide" ? "border-pb-amber/30 bg-pb-amber/10 text-pb-amber" :
+                        "border-pb-red/30 bg-pb-red/10 text-pb-red animate-pulse"
+                      }`}>
+                        {flightProtocol === "normal" ? "Normal" : flightProtocol === "glide" ? "Stretch" : "Emergency"}
                       </Badge>
                     </div>
-                    
-                    <div>
-                      <span className="text-[11px] md:text-xs text-muted-foreground block">Remaining Discretionary Pool:</span>
-                      <span className="text-sm font-semibold text-foreground tnum">{formatRs(remainingDiscretionary)}</span>
-                    </div>
 
-                    <div>
-                      <span className="text-[11px] md:text-xs text-muted-foreground block">Simulated Runway Length:</span>
-                      <span className="text-xl font-semibold text-foreground tnum">
-                        {safeDailyIsZero ? "Pause" : simulatedDays} {!safeDailyIsZero && <span className="text-xs text-muted-foreground font-semibold">days</span>}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] md:text-xs text-muted-foreground block">Simulated Broke Date:</span>
-                      <span className={`text-xs font-semibold ${isSimulatedSafe ? "text-pb-green" : "text-pb-red"}`}>
-                        {safeDailyIsZero ? "No flexible spend left" : simulatedBrokeDate}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className={`rounded-lg p-3 text-xs leading-relaxed font-semibold flex items-start gap-2 ${
-                    isSimulatedSafe 
-                      ? "bg-pb-green/10 text-pb-green border border-pb-green/20" 
-                      : "bg-pb-red/10 text-pb-red border border-pb-red/20"
-                  }`}>
-                    {isSimulatedSafe ? (
-                      <>
-                        <CheckCircle2 className="h-4.5 w-4.5 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold">Reaches reset</p>
-                          <p className="text-[10px] md:text-xs opacity-80 mt-0.5">This mode stays safe until the allowance resets in {daysLeftInCycle} days.</p>
+                    {/* SVG Circular Gauge */}
+                    <div className="flex justify-center py-2">
+                      <div className="relative h-28 w-28">
+                        <svg className="h-full w-full -rotate-90">
+                          <circle cx="56" cy="56" r={radius} className="fill-none stroke-muted-foreground/10" strokeWidth="6" />
+                          <circle
+                            cx="56" cy="56" r={radius}
+                            className={`${strokeColor} fill-none transition-all duration-700`}
+                            strokeWidth="6"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={strokeDashoffset}
+                            strokeLinecap="round"
+                            style={{ filter: gaugeFilter }}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                          <span className="text-2xl font-black tracking-tight text-foreground tnum">
+                            {safeDailyIsZero ? "0" : simulatedDays}
+                          </span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">days left</span>
                         </div>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold">Simulation gap</p>
-                          <p className="text-[10px] md:text-xs opacity-80 mt-0.5">
-                            {safeDailyIsZero
-                              ? "No discretionary budget remains after commitments. Add funding or reduce a commitment before spending."
-                              : `This sandbox setting runs out ${Math.max(0, daysLeftInCycle - simulatedDays)} days early with a gap of ${formatRs(simulatedGapPaise)}. Slow the daily pace or use a data-backed lever.`}
-                          </p>
-                        </div>
-                      </>
+                      </div>
+                    </div>
+
+                    {/* Status banner */}
+                    <div className={`rounded-xl p-3 border-l-4 flex items-start gap-2.5 text-xs font-medium transition-all duration-300 ${
+                      isSimulatedSafe ? "border-pb-green bg-pb-green/5 text-pb-green" : "border-pb-red bg-pb-red/5 text-pb-red"
+                    }`}>
+                      {isSimulatedSafe ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold">Reaches reset safely</p>
+                            <p className="text-[11px] opacity-80 mt-0.5">Survives the next {daysLeftInCycle} days on this plan.</p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold">Deficit detected</p>
+                            <p className="text-[11px] opacity-80 mt-0.5">
+                              {safeDailyIsZero
+                                ? "All discretionary balance consumed."
+                                : `Runs out ${Math.max(0, daysLeftInCycle - simulatedDays)} days early. Gap: ${formatRs(simulatedGapPaise)}.`}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Stats */}
+                    <div className="space-y-2 border-y border-border/40 py-3 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Flexible cash</span>
+                        <span className="font-bold text-foreground tnum">{formatRs(remainingDiscretionary)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Simulated rate</span>
+                        <span className="font-bold text-primary tnum">{safeDailyIsZero ? "₹0" : `${formatRs(activeSimulatedSpend * 100)}/day`}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Reset in</span>
+                        <span className="font-bold text-foreground tnum">{daysLeftInCycle} days</span>
+                      </div>
+                    </div>
+
+                    {!isSimulatedSafe && actualAskHomeAmount > 0 && (
+                      <div className="p-1 space-y-1 text-xs">
+                        <p className="text-muted-foreground">
+                          Actual ask-home buffer: <span className="text-primary font-bold tnum">{formatRs(actualAskHomeAmount)}</span>
+                        </p>
+                      </div>
                     )}
                   </div>
 
-                  {!isSimulatedSafe && (
-                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 space-y-1.5 animate-[fadeIn_0.2s_ease-out]">
-                      <div className="flex items-center gap-1 text-[9px] md:text-xs font-bold uppercase tracking-wider text-primary">
-                        <Zap className="h-3 w-3" />
-                        <span>Simulation note</span>
-                      </div>
-                      <p className="text-xs font-bold text-foreground leading-snug">
-                        This is not the real ask-home amount. Actual forecast amount: <span className="text-primary underline tnum text-sm">{actualAskHomeAmount > 0 ? formatRs(actualAskHomeAmount) : "none"}</span>.
-                      </p>
-                    </div>
-                  )}
-
                   <button
+                    type="button"
                     onClick={copyFlightBrief}
-                    className="w-full flex items-center justify-center gap-1.5 h-9 rounded-lg border border-border bg-surface hover:bg-surface-raised text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+                    className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-background text-xs font-bold uppercase tracking-wider text-foreground transition-all hover:bg-surface-raised active:scale-[0.98] shadow-sm"
                   >
                     <ArrowUpRight className="h-4 w-4 text-primary" />
                     <span>Copy Runway Brief</span>
@@ -1768,101 +1976,51 @@ Generated via PocketBuddy Runway.`;
             </Card>
 
             {/* 💡 RUNWAY SURVIVAL NUDGES */}
-            <Card className="p-5 sm:p-6 border border-border bg-card/20 space-y-4">
-              <div className="flex items-center gap-1.5 border-b border-border/40 pb-3">
-                <Zap className="h-4.5 w-4.5 text-pb-amber" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Runway Actions</h3>
-              </div>
-
-              <div className="space-y-3">
-                <div className={`flex items-start gap-3 p-3 rounded-lg text-xs ${
-                  activeActionType === "ask_home"
-                    ? "bg-pb-red/5 border border-pb-red/15"
-                    : forecast.status === "watch"
-                      ? "bg-pb-amber/5 border border-pb-amber/15"
-                      : "bg-primary/5 border border-primary/15"
-                }`}>
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] md:text-xs font-bold shrink-0 ${
-                    activeActionType === "ask_home"
-                      ? "bg-pb-red/10 text-pb-red"
-                      : forecast.status === "watch"
-                        ? "bg-pb-amber/10 text-pb-amber"
-                        : "bg-primary/10 text-primary"
-                  }`}>
-                    !
-                  </span>
-                  <div className="space-y-1">
-                    <p className="font-bold text-foreground">First priority: {activeActionTitle}</p>
-                    <p className="text-[11px] md:text-xs text-zinc-500">{activeActionDetail}</p>
-                    {activeActionType === "slow_down" && (
-                      <Link to="/pool" className="mt-2 inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[10px] font-bold uppercase tracking-wider text-foreground transition hover:bg-surface-raised">
-                        Open pool dues
-                      </Link>
-                    )}
-                  </div>
+            <Card className="p-5 sm:p-6 border border-border bg-card/20 space-y-4 mt-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/40 pb-3">
+                <div className="flex items-center gap-1.5">
+                  <Zap className="h-4.5 w-4.5 text-pb-amber" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Runway Actions</h3>
                 </div>
-                {forecast.status === "shortfall" ? (
-                  <>
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-pb-red/5 border border-pb-red/10 text-xs">
-                      <span className="w-5 h-5 rounded-full bg-pb-red/10 text-pb-red flex items-center justify-center text-[10px] md:text-xs font-bold shrink-0">1</span>
-                      <div className="space-y-1">
-                        <p className="font-bold text-foreground">Shield Your Exam Safety Buffer</p>
-                        <p className="text-[11px] md:text-xs text-zinc-500">
-                          {examBufferCommitmentTotal > 0
-                            ? `Your configured buffer of ${formatRs(examBufferCommitmentTotal)} is locked. Avoid dipping into it for regular food spending.`
-                            : "No exam buffer is configured yet. Keep essentials separate before reducing food or travel spend."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-pb-amber/5 border border-pb-amber/10 text-xs">
-                      <span className="w-5 h-5 rounded-full bg-pb-amber/10 text-pb-amber flex items-center justify-center text-[10px] md:text-xs font-bold shrink-0">2</span>
-                      <div className="space-y-1">
-                        <p className="font-bold text-foreground">Auto-Debit Subscription Alert</p>
-                        <p className="text-[11px] md:text-xs text-zinc-500">You have {forecast.commitments.items.filter((i: any) => i.kind === "subscription").length} recurring subscriptions active. Temporarily pause one to reclaim breathing room.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/10 text-xs">
-                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] md:text-xs font-bold shrink-0">3</span>
-                      <div className="space-y-1">
-                        <p className="font-bold text-foreground">{foodRoutine?.action?.title ?? "Stabilize food pace"}</p>
-                        <p className="text-[11px] md:text-xs text-zinc-500">{foodRoutine?.action?.detail ?? "Use routine meals before delivery becomes the default. This keeps daily food spend inside your safe runway limit."}</p>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-pb-green/5 border border-pb-green/10 text-xs">
-                      <span className="w-5 h-5 rounded-full bg-pb-green/10 text-pb-green flex items-center justify-center text-[10px] md:text-xs font-bold shrink-0">1</span>
-                      <div className="space-y-1">
-                        <p className="font-bold text-foreground">Lock in an Emergency Reserve</p>
-                        <p className="text-[11px] md:text-xs text-zinc-500">
-                          {examBufferCommitmentTotal > 0
-                            ? `Your ${formatRs(examBufferCommitmentTotal)} exam reserve is already protected in the runway calculation.`
-                            : "Since you're on track, set an emergency reserve in settings so future spending cannot consume essentials."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-pb-amber/5 border border-pb-amber/10 text-xs">
-                      <span className="w-5 h-5 rounded-full bg-pb-amber/10 text-pb-amber flex items-center justify-center text-[10px] md:text-xs font-bold shrink-0">2</span>
-                      <div className="space-y-1">
-                        <p className="font-bold text-foreground">Spending Pace Guardrails</p>
-                        <p className="text-[11px] md:text-xs text-zinc-500">{decisionEngine?.summary ?? `Try to stay within ${formatRs(forecast.projection.safe_daily_spend)} per day to keep your runway healthy.`}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/10 text-xs">
-                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] md:text-xs font-bold shrink-0">3</span>
-                      <div className="space-y-1">
-                        <p className="font-bold text-foreground">{foodRoutine?.action?.title ?? "Keep meals predictable"}</p>
-                        <p className="text-[11px] md:text-xs text-zinc-500">{foodRoutine?.action?.detail ?? "Keep food pace predictable so runway can reserve enough for travel, exams, and shared-pool dues."}</p>
-                      </div>
-                    </div>
-                  </>
-                )}
+                
+                <Select value={selectedActionId} onValueChange={setSelectedActionId}>
+                  <SelectTrigger className="h-9 w-full sm:w-[260px] rounded-lg border-border bg-background text-xs text-left">
+                    <SelectValue placeholder="Select action step" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border border-border text-foreground">
+                    {runwayActions.map((action) => (
+                      <SelectItem key={action.id} value={action.id} className="text-xs font-medium">
+                        {action.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Selected Action Content */}
+              {(() => {
+                const selectedAction = runwayActions.find((a) => a.id === selectedActionId) || runwayActions[0];
+                if (!selectedAction) return null;
+                return (
+                  <div className={`flex items-start gap-3 p-4 rounded-xl text-xs border-l-4 transition-all duration-300 ${
+                    selectedAction.severity === "high"
+                      ? "bg-pb-red/5 border-pb-red text-foreground"
+                      : selectedAction.severity === "medium"
+                        ? "bg-pb-amber/5 border-pb-amber text-foreground"
+                        : "bg-primary/5 border-primary text-foreground"
+                  }`}>
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <h4 className="font-bold text-sm leading-snug">{selectedAction.label}</h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{selectedAction.detail}</p>
+                      {selectedAction.id === "priority" && activeActionType === "slow_down" && (
+                        <Link to="/pool" className="mt-2 inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-[10px] font-bold uppercase tracking-wider text-foreground transition hover:bg-surface-raised">
+                          Open pool dues
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </Card>
 
 
@@ -2054,16 +2212,16 @@ Generated via PocketBuddy Runway.`;
                     Reserved before safe/day is calculated, so essentials do not get mixed with flexible spend.
                   </p>
                 </div>
-                <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 sm:text-right">
-                  <span className="text-[10px] md:text-xs font-bold text-primary uppercase tracking-wider block">Reserved this cycle</span>
-                  <span className="text-lg font-semibold text-primary tnum">{formatRs(forecast.commitments.total)}</span>
+                <div className="sm:text-right">
+                  <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-wider block">Reserved this cycle</span>
+                  <span className="text-xl font-bold text-primary tnum">{formatRs(forecast.commitments.total)}</span>
                 </div>
               </div>
 
               {commitmentSummary.length > 0 && (
-                <div className="mb-5 grid gap-2 border-y border-border/50 py-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mb-6 grid gap-4 border-y border-border/40 py-3 grid-cols-2 lg:grid-cols-4">
                   {commitmentSummary.map((item) => (
-                    <div key={item.key} className="rounded-lg border border-border/60 bg-surface/50 px-3 py-2">
+                    <div key={item.key} className="px-1">
                       <p className="text-[10px] md:text-xs text-zinc-500 uppercase tracking-wider font-semibold">{item.label}</p>
                       <p className="text-sm font-semibold text-foreground tnum mt-0.5">{formatRs(item.amount)}</p>
                     </div>
@@ -2214,7 +2372,7 @@ Generated via PocketBuddy Runway.`;
                     </div>
 
                     {isNegative && (
-                      <div className="mt-4 p-2.5 rounded-lg bg-pb-red/5 border border-pb-red/10 text-[10px] md:text-xs text-pb-red flex items-center justify-between font-semibold">
+                      <div className="mt-4 pl-3.5 py-1 border-l-2 border-pb-red text-[11px] md:text-xs text-pb-red flex items-center justify-between font-semibold">
                         <span>Expected monthly gap:</span>
                         <span>{formatRs(h.monthly_shortfall)} / month</span>
                       </div>

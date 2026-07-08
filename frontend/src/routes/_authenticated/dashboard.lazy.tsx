@@ -1901,8 +1901,9 @@ function Dashboard() {
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
                       {runwayView.possibleCommitments.map((sub: any) => {
-                        const dailyImpact = calc && calc.daysLeft > 0 ? Math.round(sub.amount / 100 / calc.daysLeft) : 0;
-                        const newLimit = calc && calc.daysLeft > 0 ? Math.max(0, Math.round((calc.remaining - sub.amount / 100) / calc.daysLeft)) : 0;
+                        const daysLeft = Math.max(1, runwayView.daysLeft || 0);
+                        const dailyImpactPaise = Math.round((sub.amount || 0) / daysLeft);
+                        const newSafeDailyPaise = Math.max(0, Math.floor(((runwayView.remainingPaise || 0) - (sub.amount || 0)) / daysLeft));
                         return (
                           <div
                             key={sub.id}
@@ -1936,9 +1937,9 @@ function Dashboard() {
                             )}
 
                             {/* Runway Impact */}
-                            {dailyImpact > 0 && (
+                            {dailyImpactPaise > 0 && (
                               <p style={{ fontSize: "11px", color: "#f59e0b", fontWeight: 500, background: "rgba(245,158,11,0.05)", padding: "6px 10px", borderRadius: "6px", border: "1px dashed rgba(245,158,11,0.2)" }}>
-                                <strong>Runway impact if confirmed:</strong> Safe daily spend would drop by <strong>{rupees(dailyImpact * 100)}/day</strong> (adjusting to {rupees(newLimit * 100)}/day).
+                                <strong>Runway impact if confirmed:</strong> Safe daily spend would drop by <strong>{rupees(dailyImpactPaise)}/day</strong> (adjusting to {rupees(newSafeDailyPaise)}/day).
                               </p>
                             )}
 

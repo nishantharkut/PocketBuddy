@@ -12,6 +12,13 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
 from app.services.bedrock import generate_json
+from app.services.travel_geo import (
+    build_geo_cache_key,
+    build_geo_headers,
+    get_geo_cache,
+    set_geo_cache,
+    travel_geo_source_note,
+)
 
 router = APIRouter()
 logger = logging.getLogger("app.api.travel")
@@ -435,6 +442,187 @@ def build_travel_trust_metadata(mode_doc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _route_source_label(route_source: Optional[str], routing_cache_hit: bool = False) -> str:
+    source = (route_source or "").strip().lower()
+    if source in {"osrm_route", "tomtom_traffic_route"}:
+        return "Mapped road route, cached" if routing_cache_hit else "Mapped road route"
+    if source == "haversine_estimate":
+        return "Fallback distance estimate"
+    return "Route estimate"
+
+
+def build_fare_explanation(
+    *,
+    mode_doc: dict[str, Any],
+    route_source: Optional[str],
+    price_basis: Optional[str],
+    eta_basis: Optional[str],
+    time_context: Optional[str],
+    routing_cache_hit: bool = False,
+) -> dict[str, Any]:
+    """Compact, judge-safe provenance for a shown fare."""
+    mode_with_trust = _apply_travel_trust_metadata(mode_doc)
+    sample_size = _safe_int(mode_with_trust.get("report_sample_size"), 0)
+    threshold = max(
+        TRAVEL_REPORT_THRESHOLD_FLOOR,
+        _safe_int(mode_with_trust.get("report_threshold"), compute_travel_verification_threshold(sample_size)),
+    )
+    trust_stage = mode_with_trust.get("trust_stage") or "model_estimate"
+    trust_badge = mode_with_trust.get("trust_badge") or "Model estimate"
+    fare_basis = mode_with_trust.get("fare_basis") or price_basis or "Campus-local fare rule"
+    route_label = _route_source_label(route_source, routing_cache_hit)
+
+    return {
+        "route_source_label": route_label,
+        "fare_source_label": trust_badge,
+        "trust_stage": trust_stage,
+        "trust_score": mode_with_trust.get("trust_score", 35),
+        "trust_reason": mode_with_trust.get("trust_reason"),
+        "reports_label": f"{sample_size}/{threshold} trusted reports",
+        "report_sample_size": sample_size,
+        "report_threshold": threshold,
+        "fare_basis": fare_basis,
+        "price_basis": price_basis or fare_basis,
+        "eta_basis": eta_basis or "ETA depends on the mapped route source.",
+        "timing_label": _travel_time_label(time_context),
+        "pricing_disclaimer": "This is a campus fare guardrail, not live ride-app pricing.",
+    }
+
+
+def _allowance_rupees(profile: Optional[dict[str, Any]]) -> float:
+    if not profile:
+        return 0.0
+    raw = profile.get("monthly_allowance") or profile.get("allowance") or 0
+    try:
+        amount = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    if amount <= 0:
+        return 0.0
+    return amount / 100.0 if amount >= 10000 else amount
+
+
+def _cycle_bounds(profile: Optional[dict[str, Any]], now: Optional[datetime.datetime] = None) -> tuple[datetime.datetime, datetime.datetime]:
+    now = (now or datetime.datetime.utcnow()).replace(tzinfo=None)
+    try:
+        cycle_start_day = int((profile or {}).get("cycle_start_day") or 1)
+    except (TypeError, ValueError):
+        cycle_start_day = 1
+    cycle_start_day = max(1, min(28, cycle_start_day))
+
+    start = now.replace(day=min(cycle_start_day, 28), hour=0, minute=0, second=0, microsecond=0)
+    if start > now:
+        previous_month = (start.replace(day=1) - datetime.timedelta(days=1))
+        start = previous_month.replace(day=min(cycle_start_day, 28), hour=0, minute=0, second=0, microsecond=0)
+
+    next_month_seed = (start.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
+    reset = next_month_seed.replace(day=min(cycle_start_day, 28), hour=0, minute=0, second=0, microsecond=0)
+    return start, reset
+
+
+def build_travel_runway_impact(fare_rs: float, runway_context: Optional[dict[str, Any]]) -> dict[str, Any]:
+    context = runway_context or {}
+    safe_daily = float(context.get("safe_daily_budget_rs") or 0)
+    if safe_daily <= 0:
+        return {
+            "available": False,
+            "summary": "Add allowance details to see runway impact.",
+        }
+
+    fare = max(0.0, float(fare_rs or 0))
+    safe_day_share = round(fare / safe_daily, 2)
+    remaining = float(context.get("remaining_allowance_rs") or 0)
+    after_fare = max(0.0, remaining - fare) if remaining > 0 else None
+    summary = (
+        f"Uses {safe_day_share} safe-day budget at Rs {safe_daily:.0f}/day."
+        if safe_day_share >= 0.1
+        else f"Uses less than 0.1 safe-day budget at Rs {safe_daily:.0f}/day."
+    )
+
+    return {
+        "available": True,
+        "fare_rs": round(fare, 2),
+        "safe_daily_budget_rs": round(safe_daily, 2),
+        "safe_day_share": safe_day_share,
+        "remaining_allowance_rs": round(remaining, 2) if remaining > 0 else None,
+        "after_fare_allowance_rs": round(after_fare, 2) if after_fare is not None else None,
+        "days_until_reset": context.get("days_until_reset"),
+        "summary": summary,
+    }
+
+
+async def _build_user_runway_context(db: Any, user_id: str, profile: Optional[dict[str, Any]]) -> dict[str, Any]:
+    allowance_rs = _allowance_rupees(profile)
+    if allowance_rs <= 0:
+        return {"available": False}
+
+    now = datetime.datetime.utcnow()
+    cycle_start, reset_at = _cycle_bounds(profile, now)
+    spent_paise = 0
+    credit_paise = 0
+    try:
+        cursor = db.transactions.find({
+            "user_id": user_id,
+            "created_at": {"$gte": cycle_start, "$lt": reset_at},
+        })
+        txns = await cursor.to_list(length=1000)
+        for txn in txns:
+            try:
+                amount_paise = int(float(txn.get("amount") or 0))
+            except (TypeError, ValueError):
+                amount_paise = 0
+            direction = str(txn.get("direction") or "debit").lower()
+            if direction == "credit":
+                credit_paise += max(0, amount_paise)
+            else:
+                spent_paise += max(0, amount_paise)
+    except Exception as exc:
+        logger.info("Travel runway context fell back to allowance-only mode: %s", exc)
+
+    remaining_rs = max(0.0, allowance_rs + credit_paise / 100.0 - spent_paise / 100.0)
+    days_until_reset = max(1, (reset_at.date() - now.date()).days + 1)
+    safe_daily = remaining_rs / days_until_reset
+    return {
+        "available": True,
+        "cycle_start": cycle_start.isoformat(),
+        "reset_at": reset_at.isoformat(),
+        "monthly_allowance_rs": round(allowance_rs, 2),
+        "spent_rs": round(spent_paise / 100.0, 2),
+        "credit_rs": round(credit_paise / 100.0, 2),
+        "remaining_allowance_rs": round(remaining_rs, 2),
+        "days_until_reset": days_until_reset,
+        "safe_daily_budget_rs": round(safe_daily, 2),
+    }
+
+
+def _attach_mode_decision_context(
+    modes: list[dict[str, Any]],
+    *,
+    route_source: Optional[str],
+    price_basis: Optional[str],
+    eta_basis: Optional[str],
+    time_context: Optional[str],
+    routing_cache_hit: bool,
+    runway_context: Optional[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    time_factor = _travel_time_fare_factor(time_context)
+    enriched = []
+    for mode in modes:
+        mode_doc = _apply_travel_trust_metadata(mode)
+        time_adjusted_fare = round(float(mode_doc.get("median_fare") or 0) * time_factor)
+        mode_doc["fare_explanation"] = build_fare_explanation(
+            mode_doc=mode_doc,
+            route_source=route_source,
+            price_basis=price_basis,
+            eta_basis=eta_basis,
+            time_context=time_context,
+            routing_cache_hit=routing_cache_hit,
+        )
+        mode_doc["runway_impact"] = build_travel_runway_impact(time_adjusted_fare, runway_context)
+        enriched.append(mode_doc)
+    return enriched
+
+
 def _apply_travel_trust_metadata(mode_doc: dict[str, Any]) -> dict[str, Any]:
     updated = dict(mode_doc)
     updated.update(build_travel_trust_metadata(updated))
@@ -500,6 +688,13 @@ class SavingsLogReq(BaseModel):
 
 class VoteReq(BaseModel):
     vote_type: str
+
+
+class TravelReportCandidateConfirmReq(BaseModel):
+    route_id: str
+    mode: str
+    driver_quote: Optional[float] = None
+    anonymous: bool = True
 
 
 def _clean_text(value: Optional[str], max_len: int) -> str:
@@ -620,11 +815,137 @@ async def _refresh_route_mode_fares(db, route_id: str, selected_mode: str) -> No
     )
 
 
+def _transaction_amount_rupees(txn: dict[str, Any]) -> float:
+    raw = txn.get("amount")
+    try:
+        amount = float(raw or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return amount / 100.0 if amount >= 1000 else amount
+
+
+def _is_travel_like_transaction(txn: dict[str, Any]) -> bool:
+    if str(txn.get("direction") or "debit").lower() == "credit":
+        return False
+    category = str(txn.get("category") or "").lower()
+    merchant = " ".join(
+        str(txn.get(key) or "")
+        for key in ("mapped_merchant_name", "raw_merchant_string", "merchant")
+    ).lower()
+    travel_terms = (
+        "auto", "cab", "taxi", "uber", "ola", "rapido", "namma yatri", "metro",
+        "bus", "railway", "train", "station", "airport", "travel", "ride",
+    )
+    return category == "travel" or any(term in merchant for term in travel_terms)
+
+
+def build_travel_report_candidate(transaction: dict[str, Any], routes: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Suggest one-tap fare reporting from a recent synced payment."""
+    if not _is_travel_like_transaction(transaction):
+        return None
+    amount_rs = _transaction_amount_rupees(transaction)
+    if amount_rs <= 0:
+        return None
+
+    best: Optional[dict[str, Any]] = None
+    best_score = float("inf")
+    for route in routes:
+        for mode in route.get("modes", []) or []:
+            min_fare = float(mode.get("min_fare") or 0)
+            max_fare = float(mode.get("max_fare") or 0)
+            median_fare = float(mode.get("median_fare") or 0)
+            if max_fare <= 0 or median_fare <= 0:
+                continue
+            if amount_rs < max(10.0, min_fare * 0.65) or amount_rs > max_fare * 1.45:
+                continue
+            score = abs(amount_rs - median_fare) / max(1.0, median_fare)
+            if score < best_score:
+                best_score = score
+                best = {
+                    "transaction_id": str(transaction.get("_id") or transaction.get("id") or ""),
+                    "route_id": str(route.get("_id") or route.get("id") or ""),
+                    "route_name": route.get("name"),
+                    "mode": mode.get("mode"),
+                    "amount_paid": round(amount_rs, 2),
+                    "driver_quote": round(max(amount_rs, median_fare), 2),
+                    "merchant": transaction.get("mapped_merchant_name") or transaction.get("raw_merchant_string") or "Travel payment",
+                    "created_at": transaction.get("created_at"),
+                    "confidence": "high" if score <= 0.15 else "medium",
+                    "action_label": "Confirm as travel fare",
+                    "reason": "Recent travel-like payment matches this route's fare band.",
+                }
+    return best
+
+
 def _clean_phone(value: Optional[str]) -> str:
     digits = re.sub(r"\D+", "", value or "")
     if len(digits) > 10 and digits.startswith("91"):
         digits = digits[-10:]
     return digits if len(digits) == 10 else ""
+
+
+def build_ride_pool_safety_context(
+    *,
+    profile: Optional[dict[str, Any]],
+    departure_time: datetime.datetime,
+    mode: str,
+    max_passengers: int,
+    host_phone: str,
+) -> dict[str, Any]:
+    """Create the accountability and safety policy for a travel pool."""
+    cleaned_phone = _clean_phone(host_phone)
+    mode_l = (mode or "").lower()
+    is_late_night = departure_time.hour >= 21 or departure_time.hour < 6
+    is_shared_or_bike = any(token in mode_l for token in ("shared", "tempo", "bus", "bike"))
+    notes = [
+        "Same-campus ride pool.",
+        "Host identity is visible to joined students.",
+    ]
+
+    if profile and profile.get("wing_label"):
+        notes.append(f"Host wing: {profile.get('wing_label')}.")
+    if is_late_night:
+        notes.append("Late-night ride: prefer direct, traceable rides and avoid isolated pickup points.")
+
+    if not cleaned_phone:
+        return {
+            "can_create": False,
+            "blocking_reason": "Add a valid phone number before hosting a travel pool so co-riders can identify the host.",
+            "notes": notes,
+            "scope": "same_campus",
+            "host_contact_verified": False,
+            "late_night": is_late_night,
+        }
+
+    if max_passengers < 2 or max_passengers > 6:
+        return {
+            "can_create": False,
+            "blocking_reason": "Ride pools must have 2 to 6 seats.",
+            "notes": notes,
+            "scope": "same_campus",
+            "host_contact_verified": True,
+            "late_night": is_late_night,
+        }
+
+    if is_late_night and is_shared_or_bike:
+        return {
+            "can_create": False,
+            "blocking_reason": "Late-night shared or bike ride pools are disabled. Use a direct auto or cab pool instead.",
+            "notes": notes,
+            "scope": "same_campus",
+            "host_contact_verified": True,
+            "late_night": is_late_night,
+        }
+
+    return {
+        "can_create": True,
+        "blocking_reason": None,
+        "notes": notes,
+        "scope": "same_campus",
+        "host_contact_verified": True,
+        "late_night": is_late_night,
+        "max_passengers": max_passengers,
+    }
 
 
 def _valid_upi(value: str) -> bool:
@@ -657,10 +978,10 @@ def _public_pool(pool_doc: dict[str, Any], current_user_id: str) -> dict[str, An
 @router.get("/routes")
 async def get_routes(college: Optional[str] = Query(None), user_id: str = Depends(get_current_user)):
     db = get_db()
+    profile = await db.profiles.find_one({"_id": user_id})
 
     if not college:
         # Get user profile to determine college
-        profile = await db.profiles.find_one({"_id": user_id})
         college = profile.get("college_name") if profile else None
 
     if _is_placeholder_campus(college):
@@ -743,6 +1064,7 @@ async def get_routes(college: Optional[str] = Query(None), user_id: str = Depend
         cursor = db.travel_routes.find({"college": college})
         routes = await cursor.to_list(length=100)
 
+    runway_context = await _build_user_runway_context(db, user_id, profile)
     mapped_routes = []
     for r in routes:
         route_dict = _to_dict(r)
@@ -809,10 +1131,19 @@ async def get_routes(college: Optional[str] = Query(None), user_id: str = Depend
         else:
             route_dict["confidence"] = "low"
 
-        route_dict["modes"] = [
+        modes_with_meta = [
             _ensure_fare_meta(m, route_dict.get("distance_km"))
             for m in route_dict.get("modes", [])
         ]
+        route_dict["modes"] = _attach_mode_decision_context(
+            modes_with_meta,
+            route_source=route_dict.get("routing_source") or route_dict.get("source"),
+            price_basis="Saved campus route plus campus-local fare rules. These are not live ride-app API prices.",
+            eta_basis=route_dict.get("eta_basis") or "Saved route ETA depends on the mapped route source.",
+            time_context="now",
+            routing_cache_hit=bool(route_dict.get("routing_cache_hit")),
+            runway_context=runway_context,
+        )
                 
         mapped_routes.append(route_dict)
 
@@ -867,6 +1198,109 @@ async def create_custom_route(req: CustomRouteCreateReq, user_id: str = Depends(
 
     await db.travel_routes.insert_one(r_doc)
     return _to_dict(r_doc)
+
+
+@router.get("/report-candidates")
+async def get_report_candidates(
+    route_id: Optional[str] = Query(None),
+    user_id: str = Depends(get_current_user),
+):
+    db = get_db()
+    profile = await db.profiles.find_one({"_id": user_id})
+    college = profile.get("college_name") if profile else None
+    if _is_placeholder_campus(college):
+        return []
+
+    route_query: dict[str, Any] = {"college": college}
+    if route_id:
+        route_query["_id"] = route_id
+    routes = await db.travel_routes.find(route_query).to_list(length=100)
+    if not routes:
+        return []
+
+    since = datetime.datetime.utcnow() - datetime.timedelta(days=3)
+    txns = await db.transactions.find({
+        "user_id": user_id,
+        "created_at": {"$gte": since},
+    }).sort("created_at", -1).to_list(length=50)
+
+    candidates = []
+    seen_txns = set()
+    for txn in txns:
+        txn_id = str(txn.get("_id") or "")
+        if not txn_id or txn_id in seen_txns:
+            continue
+        existing = await db.travel_reports.find_one({"source_transaction_id": txn_id})
+        if existing:
+            continue
+        candidate = build_travel_report_candidate(txn, routes)
+        if candidate and (not route_id or candidate.get("route_id") == route_id):
+            candidates.append(_to_dict(candidate))
+            seen_txns.add(txn_id)
+        if len(candidates) >= 5:
+            break
+    return candidates
+
+
+@router.post("/report-candidates/{transaction_id}/confirm")
+async def confirm_report_candidate(
+    transaction_id: str,
+    req: TravelReportCandidateConfirmReq,
+    user_id: str = Depends(get_current_user),
+):
+    db = get_db()
+    txn = await db.transactions.find_one({"_id": transaction_id, "user_id": user_id})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Travel payment candidate not found")
+    existing = await db.travel_reports.find_one({"source_transaction_id": transaction_id})
+    if existing:
+        raise HTTPException(status_code=409, detail="This payment has already been used as a travel fare report")
+
+    route_doc = await db.travel_routes.find_one({"_id": req.route_id})
+    if not route_doc:
+        raise HTTPException(status_code=404, detail="Route not found")
+    profile = await db.profiles.find_one({"_id": user_id})
+    user_college = profile.get("college_name") if profile else None
+    if route_doc.get("college") != user_college:
+        raise HTTPException(status_code=403, detail="This route belongs to a different campus")
+
+    candidate = build_travel_report_candidate(txn, [route_doc])
+    if not candidate:
+        raise HTTPException(status_code=400, detail="This payment does not match a travel fare band strongly enough")
+    mode_doc = _find_mode(route_doc, req.mode)
+    if not mode_doc:
+        raise HTTPException(status_code=400, detail="Select a valid travel mode for this route")
+
+    amount_paid = float(candidate["amount_paid"])
+    driver_quote = float(req.driver_quote or candidate.get("driver_quote") or amount_paid)
+    if driver_quote < amount_paid:
+        driver_quote = amount_paid
+    baseline = float(mode_doc.get("median_fare", amount_paid) or amount_paid)
+    if amount_paid > baseline * 3:
+        raise HTTPException(status_code=400, detail="Payment amount is too high for this route")
+
+    report_id = str(uuid.uuid4())
+    now = datetime.datetime.utcnow()
+    await db.travel_reports.insert_one({
+        "_id": report_id,
+        "user_id": user_id,
+        "route_id": req.route_id,
+        "mode": str(mode_doc.get("mode") or req.mode),
+        "amount_paid": amount_paid,
+        "time_of_day": _normalize_travel_time_context(None),
+        "luggage": False,
+        "driver_quote": driver_quote,
+        "final_amount": amount_paid,
+        "anonymous": bool(req.anonymous),
+        "upvotes": [],
+        "downvotes": [],
+        "source": "payment_sync_candidate",
+        "source_transaction_id": transaction_id,
+        "created_at": now,
+    })
+    await _refresh_route_mode_fares(db, req.route_id, str(mode_doc.get("mode") or req.mode))
+    return {"status": "ok", "id": report_id, "candidate": candidate}
+
 
 @router.get("/reports")
 async def get_reports(route_id: str = Query(...), user_id: str = Depends(get_current_user)):
@@ -1080,6 +1514,7 @@ class AiCoachReq(BaseModel):
     user_situation: Optional[str] = ""
     college: Optional[str] = None
     app_quote: Optional[float] = None  # Optional quote the student saw in a ride app
+    travel_time_context: Optional[str] = None
 
 
 def _coerce_ai_text(value: Any, fallback: str) -> str:
@@ -1247,6 +1682,7 @@ def build_travel_ai_prompt(
     surge_context: str,
     user_situation: Optional[str],
     dialect: str,
+    travel_time_context: str = "now",
 ) -> str:
     return f"""
 You are PocketBuddy Travel Guard, a student transport fare assistant.
@@ -1256,6 +1692,7 @@ Target fair range: Rs. {min_fare} to Rs. {max_fare} (median: Rs. {median_fare}).
 Fare anchor: Rs. {fare_anchor} ({fare_anchor_label}; distinct trusted reports counted: {report_count}).
 {surge_context}
 Student's current situation/problems: {user_situation or 'None'}
+Selected travel timing: {travel_time_context}.
 
 Hard rules:
 - Use only the fare numbers, route, distance, quote context, and report count provided above.
@@ -1277,6 +1714,7 @@ Output ONLY valid JSON matching this schema, without markdown formatting or trai
 @router.post("/ai-coach")
 async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_current_user)):
     db = get_db()
+    normalized_time_context = _normalize_travel_time_context(req.travel_time_context)
 
     # Fetch route info
     route = await db.travel_routes.find_one({"_id": req.route_id})
@@ -1332,6 +1770,14 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
                 community_median = fare_anchor
                 fare_anchor_source = "student_reports"
                 fare_anchor_label = f"{robust_range['sample_size']} distinct student reports"
+
+    time_factor = _travel_time_fare_factor(normalized_time_context)
+    if time_factor != 1.0:
+        min_fare = round(float(min_fare) * time_factor)
+        max_fare = round(float(max_fare) * time_factor)
+        median_fare = round(float(median_fare) * time_factor)
+        fare_anchor = round(float(fare_anchor) * time_factor, 2)
+        fare_anchor_label = f"{fare_anchor_label}, adjusted for {_travel_time_label(normalized_time_context)}"
 
     if req.app_quote and req.app_quote > 0 and fare_anchor > 0:
         surge_factor = round(req.app_quote / fare_anchor, 2)
@@ -1407,6 +1853,7 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
             surge_context=surge_context,
             user_situation=req.user_situation,
             dialect=dialect,
+            travel_time_context=normalized_time_context,
         )
 
         result = generate_json(prompt, max_tokens=500, temperature=0.25)
@@ -1550,13 +1997,58 @@ _COLLEGE_NAME_CITY_HINTS: list[tuple[str, str, str, float, float]] = [
     ("pune",       "Pune",       "Maharashtra",    18.5204, 73.8567),
 ]
 
-_NOMINATIM_HEADERS = {
-    "User-Agent": "PocketBuddy-StudentAffordabilityApp/1.0 (contact: kanik.dev@gmail.com)"
-}
-_PHOTON_HEADERS = {
-    "User-Agent": "PocketBuddy-StudentAffordabilityApp/1.0 (contact: kanik.dev@gmail.com)",
-    "Accept-Language": "en-IN,en;q=0.9",
-}
+_NOMINATIM_HEADERS = build_geo_headers(settings.travel_geo_user_agent)
+_PHOTON_HEADERS = build_geo_headers(settings.travel_geo_user_agent)
+
+
+def _nominatim_base_url() -> str:
+    return (settings.nominatim_geocoder_url or "https://nominatim.openstreetmap.org").rstrip("/")
+
+
+def _osrm_base_url() -> str:
+    return (settings.osrm_route_url or "https://router.project-osrm.org").rstrip("/")
+
+
+def _geo_cache_collection(db: Any) -> Optional[Any]:
+    if db is None or not settings.travel_geo_cache_enabled:
+        return None
+    return db.travel_geo_cache
+
+
+async def _read_geo_cache(db: Any, cache_key: str) -> Optional[dict[str, Any]]:
+    collection = _geo_cache_collection(db)
+    if collection is None:
+        return None
+    try:
+        return await get_geo_cache(collection, cache_key)
+    except Exception as exc:
+        logger.info("Travel geo cache read skipped for %s: %s", cache_key, exc)
+        return None
+
+
+async def _write_geo_cache(
+    db: Any,
+    cache_key: str,
+    *,
+    kind: str,
+    provider: str,
+    payload: dict[str, Any],
+    ttl_days: int,
+) -> None:
+    collection = _geo_cache_collection(db)
+    if collection is None:
+        return
+    try:
+        await set_geo_cache(
+            collection,
+            cache_key,
+            kind=kind,
+            provider=provider,
+            payload=payload,
+            ttl_days=ttl_days,
+        )
+    except Exception as exc:
+        logger.info("Travel geo cache write skipped for %s: %s", cache_key, exc)
 
 
 def _valid_lat_lon(lat: Optional[float], lon: Optional[float]) -> bool:
@@ -1862,6 +2354,7 @@ async def _nominatim_place_suggestions(
     campus_lat: float,
     campus_lon: float,
     limit: int,
+    db: Any = None,
 ) -> list[dict[str, Any]]:
     cleaned = query.strip()
     if len(cleaned) < 4:
@@ -1880,26 +2373,46 @@ async def _nominatim_place_suggestions(
         f"{campus_lon + bbox_margin},{campus_lat - bbox_margin}"
     )
 
-    try:
-        async with httpx.AsyncClient(headers=_NOMINATIM_HEADERS, timeout=6.0) as client:
-            response = await client.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={
-                    "q": search_q,
-                    "format": "json",
-                    "addressdetails": 1,
-                    "limit": min(max(limit * 3, 6), 12),
-                    "viewbox": viewbox,
-                    "bounded": 0,
-                    "countrycodes": "in",
-                    "accept-language": "en",
-                },
+    base_url = _nominatim_base_url()
+    cache_key = build_geo_cache_key(
+        "nominatim_suggestions",
+        base_url,
+        search_q,
+        viewbox,
+        limit,
+    )
+    cached = await _read_geo_cache(db, cache_key)
+    if cached and isinstance(cached.get("hits"), list):
+        hits = cached["hits"]
+    else:
+        try:
+            async with httpx.AsyncClient(headers=_NOMINATIM_HEADERS, timeout=6.0) as client:
+                response = await client.get(
+                    f"{base_url}/search",
+                    params={
+                        "q": search_q,
+                        "format": "json",
+                        "addressdetails": 1,
+                        "limit": min(max(limit * 3, 6), 12),
+                        "viewbox": viewbox,
+                        "bounded": 0,
+                        "countrycodes": "in",
+                        "accept-language": "en",
+                    },
+                )
+            response.raise_for_status()
+            hits = response.json()
+            await _write_geo_cache(
+                db,
+                cache_key,
+                kind="nominatim_suggestions",
+                provider=base_url,
+                payload={"hits": hits},
+                ttl_days=settings.travel_geocode_cache_ttl_days,
             )
-        response.raise_for_status()
-        hits = response.json()
-    except Exception as exc:
-        logger.warning("Nominatim suggestion fallback failed for '%s': %s", query, exc)
-        return []
+        except Exception as exc:
+            logger.warning("Nominatim suggestion fallback failed for '%s': %s", query, exc)
+            return []
 
     suggestions: list[dict[str, Any]] = []
     for idx, hit in enumerate(hits):
@@ -1993,10 +2506,11 @@ async def get_campus_metadata(db, college_name: str) -> dict:
 
     # 3. Dynamic Nominatim geocode
     lat, lon, city, state = None, None, None, None
+    base_url = _nominatim_base_url()
     async with httpx.AsyncClient(headers=_NOMINATIM_HEADERS, timeout=8.0) as client:
         try:
             r = await client.get(
-                "https://nominatim.openstreetmap.org/search",
+                f"{base_url}/search",
                 params={"q": college_name, "format": "json", "limit": 1},
             )
             if r.status_code == 200 and r.json():
@@ -2004,7 +2518,7 @@ async def get_campus_metadata(db, college_name: str) -> dict:
                 lat, lon = float(hit["lat"]), float(hit["lon"])
                 # Reverse geocode for authoritative city
                 rev = await client.get(
-                    "https://nominatim.openstreetmap.org/reverse",
+                    f"{base_url}/reverse",
                     params={"lat": lat, "lon": lon, "format": "json"},
                 )
                 if rev.status_code == 200:
@@ -2132,6 +2646,7 @@ async def place_suggestions(
             campus_lat=float(campus_meta["lat"]),
             campus_lon=float(campus_meta["lon"]),
             limit=remaining,
+            db=db,
         )
         suggestions = _dedupe_place_suggestions(suggestions + nominatim, limit)
 
@@ -2149,6 +2664,7 @@ async def _resolve_typed_place(
     query: str,
     college: str,
     campus_meta: dict[str, Any],
+    db: Any = None,
 ) -> tuple[Optional[tuple[float, float]], str, Optional[str]]:
     """
     Resolve a user-typed place with explicit confidence gates.
@@ -2192,6 +2708,7 @@ async def _resolve_typed_place(
         campus_lat=float(campus_meta["lat"]),
         campus_lon=float(campus_meta["lon"]),
         limit=4,
+        db=db,
     )
     for item in nominatim:
         if not _valid_lat_lon(item.get("lat"), item.get("lon")):
@@ -2205,6 +2722,7 @@ async def _resolve_typed_place(
         float(campus_meta["lat"]),
         float(campus_meta["lon"]),
         str(campus_meta.get("city") or ""),
+        db=db,
     )
     if coords:
         return coords, "deliberate_geocode", None
@@ -2236,6 +2754,7 @@ async def geocode_query(
     campus_lat: float,
     campus_lon: float,
     campus_city: str,
+    db: Any = None,
 ) -> Optional[tuple[float, float]]:
     """
     Resolves an arbitrary location query to (lat, lon).
@@ -2295,6 +2814,29 @@ async def geocode_query(
 
     # Larger viewbox: ±0.5° ≈ 55 km around campus — covers entire city/district
     vb = f"{campus_lon - 0.5},{campus_lat + 0.5},{campus_lon + 0.5},{campus_lat - 0.5}"
+    base_url = _nominatim_base_url()
+    cache_key = build_geo_cache_key(
+        "nominatim_geocode",
+        base_url,
+        query,
+        campus_city,
+        campus_lat,
+        campus_lon,
+    )
+    cached = await _read_geo_cache(db, cache_key)
+    if cached and _valid_lat_lon(cached.get("lat"), cached.get("lon")):
+        return float(cached["lat"]), float(cached["lon"])
+
+    async def _cache_coords(lat: float, lon: float, source: str) -> tuple[float, float]:
+        await _write_geo_cache(
+            db,
+            cache_key,
+            kind="nominatim_geocode",
+            provider=base_url,
+            payload={"lat": lat, "lon": lon, "source": source},
+            ttl_days=settings.travel_geocode_cache_ttl_days,
+        )
+        return lat, lon
 
     async with httpx.AsyncClient(headers=_NOMINATIM_HEADERS, timeout=8.0) as client:
 
@@ -2302,14 +2844,14 @@ async def geocode_query(
             # Global search for institutions (no viewbox — institution names are globally unique)
             try:
                 r = await client.get(
-                    "https://nominatim.openstreetmap.org/search",
+                    f"{base_url}/search",
                     params={"q": query, "format": "json", "limit": 1},
                 )
                 if r.status_code == 200 and r.json():
                     hit = r.json()[0]
                     lat, lon = float(hit["lat"]), float(hit["lon"])
                     logger.info("Nominatim global (institution): '%s' -> (%.4f, %.4f)", query, lat, lon)
-                    return lat, lon
+                    return await _cache_coords(lat, lon, "institution")
             except Exception as exc:
                 logger.warning("Nominatim institution search error for '%s': %s", query, exc)
         else:
@@ -2317,7 +2859,7 @@ async def geocode_query(
             # This is the critical fix — prevents "City Centre" from resolving to Dublin/London.
             try:
                 r = await client.get(
-                    "https://nominatim.openstreetmap.org/search",
+                    f"{base_url}/search",
                     params={
                         "q": search_q,
                         "format": "json",
@@ -2336,7 +2878,7 @@ async def geocode_query(
                     )
                     lat, lon = float(best["lat"]), float(best["lon"])
                     logger.info("Nominatim bounded: '%s' -> (%.4f, %.4f)", search_q, lat, lon)
-                    return lat, lon
+                    return await _cache_coords(lat, lon, "bounded")
             except Exception as exc:
                 logger.warning("Nominatim bounded search error for '%s': %s", search_q, exc)
 
@@ -2345,7 +2887,7 @@ async def geocode_query(
             # NEVER do a global search without city context for non-institution queries.
             try:
                 r = await client.get(
-                    "https://nominatim.openstreetmap.org/search",
+                    f"{base_url}/search",
                     params={
                         "q": search_q,
                         "format": "json",
@@ -2364,7 +2906,7 @@ async def geocode_query(
                         best = min(nearby, key=lambda h: _dist_km(h))
                         lat, lon = float(best["lat"]), float(best["lon"])
                         logger.info("Nominatim soft-bounded (80km check): '%s' -> (%.4f, %.4f)", search_q, lat, lon)
-                        return lat, lon
+                        return await _cache_coords(lat, lon, "soft_bounded")
             except Exception as exc:
                 logger.warning("Nominatim soft-bounded search error for '%s': %s", search_q, exc)
 
@@ -2418,11 +2960,12 @@ def _fallback_drive_minutes(road_km: float, straight_km: float) -> int:
 async def compute_route(
     lat1: float, lon1: float,
     lat2: float, lon2: float,
-) -> tuple[float, int, list[list[float]], str, bool, int, str]:
+    db: Any = None,
+) -> tuple[float, int, list[list[float]], str, bool, int, str, bool]:
     """
     Computes driving route between two points.
 
-    Returns: (distance_km, duration_mins, leaflet_geometry_list, source_label, traffic_used, traffic_delay_mins, provider_label)
+    Returns: (distance_km, duration_mins, leaflet_geometry_list, source_label, traffic_used, traffic_delay_mins, provider_label, cache_hit)
 
     Uses TomTom first when configured for traffic-aware ETA.
     Uses OSRM public API for real driving routes with turn-by-turn geometry.
@@ -2465,21 +3008,44 @@ async def compute_route(
                         geom = [[lat1, lon1], [lat2, lon2]]
                     if dist_km > 0 and dur_mins > 0:
                         logger.info("TomTom traffic route: %.1f km, %d min, %d min delay", dist_km, dur_mins, delay_mins)
-                        return dist_km, dur_mins, geom, "tomtom_traffic_route", True, delay_mins, "TomTom Traffic"
+                        return dist_km, dur_mins, geom, "tomtom_traffic_route", True, delay_mins, "TomTom Traffic", False
             else:
                 logger.warning("TomTom routing failed with status %s: %s", r.status_code, r.text[:200])
         except Exception as exc:
             logger.warning("TomTom routing failed: %s. Falling back to OSRM.", exc)
 
     # OSRM public routing engine
+    base_url = _osrm_base_url()
+    route_cache_key = build_geo_cache_key("osrm_route", base_url, lat1, lon1, lat2, lon2)
+    cached_route = await _read_geo_cache(db, route_cache_key)
+    if cached_route:
+        try:
+            geometry = cached_route.get("geometry") or []
+            if (
+                cached_route.get("distance_km")
+                and cached_route.get("duration_mins")
+                and isinstance(geometry, list)
+            ):
+                return (
+                    float(cached_route["distance_km"]),
+                    int(cached_route["duration_mins"]),
+                    geometry,
+                    "osrm_route",
+                    False,
+                    0,
+                    "OSRM cached",
+                    True,
+                )
+        except Exception:
+            logger.info("Ignoring malformed OSRM cache entry for %.5f,%.5f -> %.5f,%.5f", lat1, lon1, lat2, lon2)
+
     try:
-        base_url = (settings.osrm_route_url or "https://router.project-osrm.org").rstrip("/")
         url = (
             f"{base_url}/route/v1/driving/"
             f"{lon1},{lat1};{lon2},{lat2}"
             f"?overview=full&geometries=geojson&steps=false"
         )
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(headers=_NOMINATIM_HEADERS, timeout=8.0) as client:
             r = await client.get(url)
         if r.status_code == 200:
             data = r.json()
@@ -2491,7 +3057,19 @@ async def compute_route(
                 # GeoJSON is [lon, lat]; Leaflet needs [lat, lon]
                 geom = [[c[1], c[0]] for c in coords]
                 logger.info("OSRM: %.1f km, %d min, %d pts", dist_km, dur_mins, len(geom))
-                return dist_km, dur_mins, geom, "osrm_route", False, 0, "OSRM"
+                await _write_geo_cache(
+                    db,
+                    route_cache_key,
+                    kind="osrm_route",
+                    provider=base_url,
+                    payload={
+                        "distance_km": dist_km,
+                        "duration_mins": dur_mins,
+                        "geometry": geom,
+                    },
+                    ttl_days=settings.travel_route_cache_ttl_days,
+                )
+                return dist_km, dur_mins, geom, "osrm_route", False, 0, "OSRM", False
     except Exception as exc:
         logger.warning("OSRM routing failed: %s. Falling back to Haversine.", exc)
 
@@ -2506,7 +3084,7 @@ async def compute_route(
     dur_mins    = _fallback_drive_minutes(road_km, straight_km)
     geom        = [[lat1, lon1], [lat2, lon2]]
     logger.info("Haversine fallback: %.1f km (road est.), %d min", road_km, dur_mins)
-    return road_km, dur_mins, geom, "haversine_estimate", False, 0, "Fallback estimate"
+    return road_km, dur_mins, geom, "haversine_estimate", False, 0, "Fallback estimate", False
 
 
 def _mode_fare(modes: list[dict[str, Any]], *needles: str, fallback: int = 0) -> int:
@@ -2547,6 +3125,83 @@ def _route_midpoint(geometry: list[list[float]], lat1: float, lon1: float, lat2:
     return segments[-1][2]
 
 
+TRAVEL_TIME_CONTEXTS = {"now", "morning", "afternoon", "evening", "late_night"}
+
+
+def _normalize_travel_time_context(value: Optional[str]) -> str:
+    raw = (value or "now").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "current": "now",
+        "right_now": "now",
+        "morning_rush": "morning",
+        "early_morning": "morning",
+        "day": "afternoon",
+        "daytime": "afternoon",
+        "off_peak": "afternoon",
+        "evening_rush": "evening",
+        "night": "late_night",
+        "late": "late_night",
+    }
+    normalized = aliases.get(raw, raw)
+    return normalized if normalized in TRAVEL_TIME_CONTEXTS else "now"
+
+
+def _travel_time_fare_factor(value: Optional[str]) -> float:
+    context = _normalize_travel_time_context(value)
+    return {
+        "morning": 1.20,
+        "afternoon": 1.0,
+        "evening": 1.35,
+        "late_night": 1.15,
+        "now": 1.0,
+    }.get(context, 1.0)
+
+
+def _travel_time_label(value: Optional[str]) -> str:
+    context = _normalize_travel_time_context(value)
+    return {
+        "morning": "morning rush",
+        "afternoon": "off-peak",
+        "evening": "evening rush",
+        "late_night": "late night",
+        "now": "current timing",
+    }.get(context, "current timing")
+
+
+def _strategy_legs_for_split(origin: str, destination: str, transfer_label: Optional[str], direct_fare: int, split_fare: int) -> dict[str, Any]:
+    transfer = transfer_label or "known public junction"
+    split_first = max(10, round(split_fare * 0.48))
+    split_second = max(10, split_fare - split_first)
+    direct_first = max(40, round(direct_fare * 0.45))
+    direct_second = max(40, direct_fare - direct_first)
+    return {
+        "direct_strategy": {
+            "total_fare": int(direct_fare),
+            "legs": [
+                {"label": "Start", "text": origin or "Pickup point", "fare": 0},
+                {"label": "Ride", "text": f"Direct ride to {destination or 'destination'}", "fare": int(direct_fare)},
+                {"label": "End", "text": destination or "Destination", "fare": 0},
+            ],
+        },
+        "split_strategy": {
+            "total_fare": int(split_fare),
+            "legs": [
+                {"label": "Hop 1", "text": f"{origin or 'Pickup point'} to {transfer}", "fare": int(split_first)},
+                {"label": "Transfer", "text": f"Switch at {transfer}", "fare": 0},
+                {"label": "Hop 2", "text": f"{transfer} to {destination or 'destination'}", "fare": int(split_second)},
+            ],
+        },
+        "private_hop_strategy": {
+            "total_fare": int(direct_first + direct_second),
+            "legs": [
+                {"label": "Hop 1", "text": f"{origin or 'Pickup point'} to {transfer}", "fare": int(direct_first)},
+                {"label": "Transfer", "text": f"Switch at {transfer}", "fare": 0},
+                {"label": "Hop 2", "text": f"{transfer} to {destination or 'destination'}", "fare": int(direct_second)},
+            ],
+        },
+    }
+
+
 def _public_split_suggestion(
     *,
     origin: str,
@@ -2559,17 +3214,24 @@ def _public_split_suggestion(
     lon1: float,
     lat2: float,
     lon2: float,
+    time_context: Optional[str] = None,
+    has_luggage: bool = False,
 ) -> dict[str, Any]:
+    normalized_time = _normalize_travel_time_context(time_context)
     direct_auto = _mode_fare(modes, "auto", fallback=max(80, int(distance_km * 13)))
     shared = _mode_fare(modes, "shared", "tempo", "bus", fallback=max(20, int(distance_km * 4)))
     if distance_km < 5.0:
+        strategies = _strategy_legs_for_split(origin, destination, None, direct_auto, shared)
         return {
             "available": False,
             "recommended": False,
             "title": "Direct ride is better",
             "reason": "The route is short, so changing vehicles will usually waste time.",
+            "source": "distance_rule",
+            "time_context": normalized_time,
             "direct_fare": direct_auto,
             "split_fare": shared,
+            **strategies,
         }
 
     city_norm = (campus_city or "").lower()
@@ -2600,13 +3262,17 @@ def _public_split_suggestion(
         })
 
     if not candidates:
+        strategies = _strategy_legs_for_split(origin, destination, None, direct_auto, shared)
         return {
             "available": False,
             "recommended": False,
             "title": "No verified split point yet",
             "reason": "PocketBuddy did not find a known busy public transfer point on this route. Use direct ride unless a local student confirms a safe interchange.",
+            "source": "no_verified_transfer_point",
+            "time_context": normalized_time,
             "direct_fare": direct_auto,
             "split_fare": shared,
+            **strategies,
         }
 
     best = min(candidates, key=lambda item: (item["dist_mid"], item["corridor_ratio"]))
@@ -2614,23 +3280,37 @@ def _public_split_suggestion(
     savings = max(0, direct_auto - shared)
     public_terms = ("stand", "station", "junction", "gate", "market", "circle", "crossing", "metro", "bus", "chowk")
     confidence = "high" if any(term in best["label"].lower() for term in public_terms) else "medium"
-    recommended = savings >= 30 and not ("airport" in f"{origin} {destination}".lower())
+    airport_route = "airport" in f"{origin} {destination}".lower()
+    unsafe_context = normalized_time == "late_night" or has_luggage
+    recommended = savings >= 30 and not airport_route and not unsafe_context
+    caution_parts = []
+    if normalized_time == "late_night":
+        caution_parts.append("late night")
+    if has_luggage:
+        caution_parts.append("luggage")
+    if airport_route:
+        caution_parts.append("airport route")
+    strategies = _strategy_legs_for_split(origin, destination, best["label"], direct_auto, shared)
 
     return {
         "available": True,
         "recommended": recommended,
-        "title": "Split at a public transfer point" if recommended else "Direct ride may be safer",
+        "title": "Curated public split option" if recommended else "Direct ride may be safer",
         "transfer_label": best["label"],
         "transfer_coords": [round(best["lat"], 6), round(best["lon"], 6)],
         "confidence": confidence,
+        "source": "curated_public_landmark",
+        "time_context": normalized_time,
         "reason": (
-            f"Split near {best['label']} only if it is busy and you can board the next vehicle quickly."
+            f"Curated public transfer via {best['label']}. Use it only when the area is busy and boarding the next vehicle is easy."
             if recommended
-            else f"{best['label']} is a possible transfer area, but direct travel is usually safer for airport, luggage, late-night, or unfamiliar routes."
+            else f"{best['label']} is a curated public transfer point, but direct travel is safer for this context"
+                 f"{' (' + ', '.join(caution_parts) + ')' if caution_parts else ''}."
         ),
         "direct_fare": direct_auto,
         "split_fare": shared,
         "estimated_savings": savings,
+        **strategies,
         "first_leg": f"{origin} to {best['label']}",
         "second_leg": f"{best['label']} to {destination}",
         "avoid_when": ["late night", "heavy luggage", "rain", "empty roads", "unfamiliar area"],
@@ -2643,6 +3323,8 @@ async def calculate_route(
     origin: str = Query(..., description="Origin location"),
     destination: str = Query(..., description="Destination location"),
     college: Optional[str] = Query(None, description="Campus context selected in the UI"),
+    time_context: Optional[str] = Query(None, description="User-selected fare timing context"),
+    luggage: bool = Query(False, description="Whether the student is carrying luggage"),
     origin_lat: Optional[float] = Query(None),
     origin_lon: Optional[float] = Query(None),
     destination_lat: Optional[float] = Query(None),
@@ -2658,6 +3340,7 @@ async def calculate_route(
     Scales to hundreds of campuses via MongoDB caching + Nominatim geocoding.
     """
     db = get_db()
+    normalized_time_context = _normalize_travel_time_context(time_context)
 
     # Resolve college and campus location
     profile = await db.profiles.find_one({"_id": user_id})
@@ -2732,12 +3415,14 @@ async def calculate_route(
             query=search_origin,
             college=college,
             campus_meta=campus_meta,
+            db=db,
         )
     if not coords_dest:
         coords_dest, destination_resolution, destination_resolved_label = await _resolve_typed_place(
             query=search_dest,
             college=college,
             campus_meta=campus_meta,
+            db=db,
         )
 
     # ── Sanity check: reject coords that are too far from campus ──────────────
@@ -2798,7 +3483,16 @@ async def calculate_route(
     lat2, lon2 = coords_dest
 
     # Compute driving route
-    distance_km, duration_mins, geometry, source, traffic_used, traffic_delay_mins, routing_provider = await compute_route(lat1, lon1, lat2, lon2)
+    (
+        distance_km,
+        duration_mins,
+        geometry,
+        source,
+        traffic_used,
+        traffic_delay_mins,
+        routing_provider,
+        routing_cache_hit,
+    ) = await compute_route(lat1, lon1, lat2, lon2, db=db)
 
     # Estimate fares using city-specific tariff rules
     modes = estimate_fares_by_city(distance_km, college)
@@ -2844,6 +3538,13 @@ async def calculate_route(
         if source == "osrm_route"
         else "Rough ETA from fallback road-distance estimate."
     )
+    routing_source_note = (
+        travel_geo_source_note(settings.TOMTOM_ROUTE_URL)
+        if source == "tomtom_traffic_route"
+        else travel_geo_source_note(_osrm_base_url())
+        if source == "osrm_route"
+        else "Fallback estimate used because no routing provider responded."
+    )
     split_suggestion = _public_split_suggestion(
         origin=origin,
         destination=destination,
@@ -2855,6 +3556,18 @@ async def calculate_route(
         lon1=lon1,
         lat2=lat2,
         lon2=lon2,
+        time_context=normalized_time_context,
+        has_luggage=luggage,
+    )
+    runway_context = await _build_user_runway_context(db, user_id, profile)
+    modes = _attach_mode_decision_context(
+        modes,
+        route_source=source,
+        price_basis=price_basis,
+        eta_basis=eta_basis,
+        time_context=normalized_time_context,
+        routing_cache_hit=routing_cache_hit,
+        runway_context=runway_context,
     )
 
     return {
@@ -2865,6 +3578,8 @@ async def calculate_route(
         "eta_confidence": eta_confidence,
         "eta_basis": eta_basis,
         "routing_provider": routing_provider,
+        "routing_cache_hit": routing_cache_hit,
+        "routing_source_note": routing_source_note,
         "source":         source,
         "campus":         college,
         "campus_city":    campus_city,
@@ -2878,6 +3593,9 @@ async def calculate_route(
         "destination_resolution": destination_resolution,
         "origin_resolved_label": origin_resolved_label,
         "destination_resolved_label": destination_resolved_label,
+        "time_context": normalized_time_context,
+        "luggage": luggage,
+        "runway_context": runway_context,
         "origin_coords":  [lat1, lon1],
         "dest_coords":    [lat2, lon2],
         "modes":          modes,
@@ -2898,8 +3616,12 @@ async def create_ride_pool(req: RidePoolCreateReq, user_id: str = Depends(get_cu
     db = get_db()
     user_doc = await db.users.find_one({"_id": user_id})
     user_name = user_doc.get("full_name", "Anonymous Student") if user_doc else "Anonymous Student"
-    user_phone = _clean_phone(user_doc.get("phone_number", "") if user_doc else "")
     profile = await db.profiles.find_one({"_id": user_id})
+    user_phone = _clean_phone(
+        (user_doc.get("phone_number") if user_doc else "")
+        or (profile.get("phone_number") if profile else "")
+        or (profile.get("phone") if profile else "")
+    )
     college = (profile.get("college_name") if profile else None) or "ABV-IIITM Gwalior"
     route_doc = await db.travel_routes.find_one({"_id": req.route_id})
     if not route_doc:
@@ -2915,6 +3637,16 @@ async def create_ride_pool(req: RidePoolCreateReq, user_id: str = Depends(get_cu
         raise HTTPException(status_code=400, detail="Departure time cannot be in the past")
     if req.max_passengers < 2 or req.max_passengers > 6:
         raise HTTPException(status_code=400, detail="Ride pool must have 2 to 6 seats")
+    canonical_mode = str(_find_mode(route_doc, req.mode).get("mode") or req.mode)
+    safety_context = build_ride_pool_safety_context(
+        profile=profile,
+        departure_time=departure_time,
+        mode=canonical_mode,
+        max_passengers=req.max_passengers,
+        host_phone=user_phone,
+    )
+    if not safety_context.get("can_create"):
+        raise HTTPException(status_code=400, detail=safety_context.get("blocking_reason") or "This ride pool is not safe to host.")
 
     pool_id = str(uuid.uuid4())
     pool_doc = {
@@ -2922,17 +3654,20 @@ async def create_ride_pool(req: RidePoolCreateReq, user_id: str = Depends(get_cu
         "route_id": req.route_id,
         "college": college,
         "departure_time": departure_time.isoformat(),
-        "mode": str(_find_mode(route_doc, req.mode).get("mode") or req.mode),
+        "mode": canonical_mode,
         "max_passengers": req.max_passengers,
         "description": _clean_text(req.description, 140),
         "host_id": user_id,
         "host_name": user_name,
         "host_phone": user_phone,
+        "host_wing": profile.get("wing_label") if profile else None,
+        "safety_context": safety_context,
         "status": "active",
         "co_passengers": [
             {
                 "user_id": user_id,
                 "full_name": user_name,
+                "wing_label": profile.get("wing_label") if profile else None,
             }
         ],
         "created_at": datetime.datetime.utcnow()
@@ -2957,6 +3692,11 @@ async def join_ride_pool(pool_id: str, user_id: str = Depends(get_current_user))
         raise HTTPException(status_code=400, detail="Finalized ride pools cannot be changed")
     if pool_doc.get("status") == "completed":
         raise HTTPException(status_code=400, detail="This ride pool has already been finalized")
+    if pool_doc.get("status") != "active":
+        raise HTTPException(status_code=400, detail="This ride pool is not accepting riders")
+    departure_time = _parse_user_datetime(str(pool_doc.get("departure_time") or ""))
+    if departure_time and departure_time < datetime.datetime.utcnow() - datetime.timedelta(minutes=10):
+        raise HTTPException(status_code=400, detail="This ride pool has already departed")
     profile = await db.profiles.find_one({"_id": user_id})
     user_college = (profile.get("college_name") if profile else None) or "ABV-IIITM Gwalior"
     if pool_doc.get("college") != user_college:
@@ -2974,7 +3714,7 @@ async def join_ride_pool(pool_id: str, user_id: str = Depends(get_current_user))
 
     await db.travel_pools.update_one(
         {"_id": pool_id},
-        {"$push": {"co_passengers": {"user_id": user_id, "full_name": user_name}}}
+        {"$push": {"co_passengers": {"user_id": user_id, "full_name": user_name, "wing_label": profile.get("wing_label") if profile else None}}}
     )
     new_pool = await db.travel_pools.find_one({"_id": pool_id})
     return _public_pool(new_pool, user_id)

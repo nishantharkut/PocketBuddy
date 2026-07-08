@@ -49,6 +49,8 @@ import {
   getTravelRoutes,
   submitTravelReport,
   getTravelReports,
+  getTravelReportCandidates,
+  confirmTravelReportCandidate,
   getTravelSavings,
   logTravelSavings,
   createTravelRoute,
@@ -91,7 +93,19 @@ interface IntermediateStop {
   available?: boolean;
 }
 
+interface TravelStrategyLeg {
+  label: string;
+  text: string;
+  fare?: number;
+}
+
+interface TravelStrategy {
+  total_fare: number;
+  legs: TravelStrategyLeg[];
+}
+
 type TravelIntent = "hurry" | "save" | "safe";
+type TravelTimeSelection = "now" | "morning" | "afternoon" | "evening" | "late_night";
 
 interface SplitSuggestion {
   available?: boolean;
@@ -99,6 +113,8 @@ interface SplitSuggestion {
   title?: string;
   transfer_label?: string;
   confidence?: "high" | "medium" | "low";
+  source?: string;
+  time_context?: string;
   reason?: string;
   direct_fare?: number;
   split_fare?: number;
@@ -106,12 +122,57 @@ interface SplitSuggestion {
   first_leg?: string;
   second_leg?: string;
   avoid_when?: string[];
+  direct_strategy?: TravelStrategy;
+  split_strategy?: TravelStrategy;
+  private_hop_strategy?: TravelStrategy;
 }
 
 const TRAVEL_INTENTS: Array<{ id: TravelIntent; label: string }> = [
   { id: "hurry", label: "Hurry" },
   { id: "save", label: "Save" },
   { id: "safe", label: "Safer" },
+];
+
+const TRAVEL_TIME_CHOICES: Array<{
+  id: Exclude<TravelTimeSelection, "now">;
+  label: string;
+  window: string;
+  factor: number;
+  color: string;
+  hint: string;
+}> = [
+  {
+    id: "morning",
+    label: "Morning Rush",
+    window: "08:00 - 11:00",
+    factor: 1.2,
+    color: "text-amber-600 dark:text-amber-400",
+    hint: "Auto prices tend to be 15-25% higher. Compare before accepting a flat quote.",
+  },
+  {
+    id: "afternoon",
+    label: "Off-Peak",
+    window: "11:00 - 17:00",
+    factor: 1.0,
+    color: "text-emerald-600 dark:text-emerald-400",
+    hint: "Best time to travel. Normal fares apply.",
+  },
+  {
+    id: "evening",
+    label: "Evening Rush",
+    window: "17:00 - 21:00",
+    factor: 1.35,
+    color: "text-rose-600 dark:text-red-400",
+    hint: "Peak hour. Quotes may be higher. Consider waiting 20 min.",
+  },
+  {
+    id: "late_night",
+    label: "Night Hours",
+    window: "21:00 - 08:00",
+    factor: 1.15,
+    color: "text-indigo-600 dark:text-indigo-400",
+    hint: "Late night. Use pre-booked rides only. Avoid unknown shared autos.",
+  },
 ];
 
 interface TravelPlaceSuggestion {
@@ -127,81 +188,53 @@ interface TravelPlaceSuggestion {
 }
 
 const getIntermediateData = (
-  routeName: string,
-  college: string,
   fallbackDirect: number,
   fallbackShared: number,
   splitSuggestion?: SplitSuggestion | null,
 ): IntermediateStop => {
-  if (splitSuggestion?.available && splitSuggestion.transfer_label) {
-    const splitFare = splitSuggestion.split_fare || fallbackShared || Math.round((fallbackDirect || 160) * 0.45);
+  const directStrategy = splitSuggestion?.direct_strategy;
+  const splitStrategy = splitSuggestion?.split_strategy;
+  const privateHopStrategy = splitSuggestion?.private_hop_strategy;
+  const publicHopLegs = splitStrategy?.legs || [];
+  const privateHopLegs = privateHopStrategy?.legs || [];
+
+  if (splitSuggestion?.available && splitSuggestion.transfer_label && splitStrategy) {
+    const splitFare = Math.round(Number(splitStrategy.total_fare || splitSuggestion.split_fare || fallbackShared || 0));
+    const privateHopFare = Math.round(Number(privateHopStrategy?.total_fare || splitSuggestion.direct_fare || fallbackDirect || 0));
+    const directFare = Math.round(Number(directStrategy?.total_fare || splitSuggestion.direct_fare || fallbackDirect || privateHopFare || splitFare));
+    const shared1 = Math.max(0, Math.round(Number(publicHopLegs[0]?.fare || splitFare * 0.48)));
+    const shared2 = Math.max(0, Math.round(Number(publicHopLegs[2]?.fare || splitFare - shared1)));
+    const direct1 = Math.max(0, Math.round(Number(privateHopLegs[0]?.fare || privateHopFare * 0.48)));
+    const direct2 = Math.max(0, Math.round(Number(privateHopLegs[2]?.fare || privateHopFare - direct1)));
     return {
       stopName: splitSuggestion.transfer_label,
-      leg1: splitSuggestion.first_leg || `Start to ${splitSuggestion.transfer_label}`,
-      leg2: splitSuggestion.second_leg || `${splitSuggestion.transfer_label} to destination`,
-      shared1: Math.max(10, Math.round(splitFare * 0.48)),
-      shared2: Math.max(10, Math.round(splitFare * 0.52)),
-      direct1: Math.max(40, Math.round((splitSuggestion.direct_fare || fallbackDirect || 160) * 0.45)),
-      direct2: Math.max(40, Math.round((splitSuggestion.direct_fare || fallbackDirect || 160) * 0.55)),
-      directTotal: splitSuggestion.direct_fare || fallbackDirect || 160,
-      tip: splitSuggestion.reason || `Split near ${splitSuggestion.transfer_label} only if it is busy and easy to board from.`,
+      leg1: publicHopLegs[0]?.text || splitSuggestion.first_leg || `Start to ${splitSuggestion.transfer_label}`,
+      leg2: publicHopLegs[2]?.text || splitSuggestion.second_leg || `${splitSuggestion.transfer_label} to destination`,
+      shared1,
+      shared2,
+      direct1,
+      direct2,
+      directTotal: directFare,
+      tip: splitSuggestion.reason || `Use the backend-verified transfer point at ${splitSuggestion.transfer_label} only when the area is active.`,
       confidence: splitSuggestion.confidence || "medium",
       avoidWhen: splitSuggestion.avoid_when || ["late night", "heavy luggage", "rain"],
       available: true,
     };
   }
 
-  const name = routeName.toLowerCase();
-  const coll = college.toLowerCase();
-
-  if (name.includes("station") && (coll.includes("iiitm") || coll.includes("gwalior"))) {
-    return {
-      stopName: "Hazira Crossing",
-      leg1: "ABV-IIITM Gate 1 to Hazira Crossing",
-      leg2: "Hazira Crossing to Gwalior Station",
-      shared1: 15,
-      shared2: 15,
-      direct1: 60,
-      direct2: 50,
-      directTotal: fallbackDirect || 160,
-      tip: "Direct autos charge a heavy premium. Shared autos run along Morena Link road to Hazira every 3 minutes for ₹15.",
-      confidence: "high",
-      avoidWhen: ["late night", "heavy luggage", "rain"],
-      available: true,
-    };
-  }
-
-  if (name.includes("airport") && (coll.includes("iiitm") || coll.includes("gwalior"))) {
-    return {
-      stopName: "Gola Ka Mandir",
-      leg1: "ABV-IIITM Gate 1 to Gola Ka Mandir",
-      leg2: "Gola Ka Mandir to Gwalior Airport",
-      shared1: 15,
-      shared2: 25,
-      direct1: 75,
-      direct2: 120,
-      directTotal: fallbackDirect || 250,
-      tip: "Split the journey at Gola Ka Mandir circle only in daylight and without heavy luggage. Use direct cab/auto for late arrivals.",
-      confidence: "medium",
-      avoidWhen: ["late night", "heavy luggage", "rain", "first-time arrival"],
-      available: true,
-    };
-  }
-
-  // Generic fallback split stop
   const direct = fallbackDirect || 150;
   const shared = fallbackShared || 40;
 
   return {
-    stopName: "a known public junction",
-    leg1: "Start to a safe public junction",
-    leg2: "Public junction to destination",
+    stopName: "No verified transfer point",
+    leg1: "Start to destination",
+    leg2: "No second hop available",
     shared1: Math.round(shared * 0.45),
     shared2: Math.round(shared * 0.45),
     direct1: Math.round(direct * 0.45),
     direct2: Math.round(direct * 0.45),
     directTotal: direct,
-    tip: "No verified public transfer point is available for this route yet. Use direct ride unless a local student confirms a safe interchange.",
+    tip: splitSuggestion?.reason || "No backend-verified public transfer point is available for this route yet. Use direct ride unless a local student confirms a safe interchange.",
     confidence: "low",
     avoidWhen: ["late night", "heavy luggage", "rain", "unfamiliar area"],
     available: false,
@@ -210,10 +243,68 @@ const getIntermediateData = (
 
 function getTimeOfDaySurge() {
   const h = new Date().getHours();
-  if (h >= 7 && h < 10) return { label: "Morning Rush", factor: 1.2, color: "text-amber-600 dark:text-amber-400", hint: "Auto prices tend to be 15-25% higher. Compare before accepting a flat quote." };
-  if (h >= 17 && h < 21) return { label: "Evening Rush", factor: 1.35, color: "text-rose-600 dark:text-red-400", hint: "Peak hour. Quotes may be higher. Consider waiting 20 min." };
-  if (h >= 21 || h < 6) return { label: "Night Hours", factor: 1.15, color: "text-indigo-600 dark:text-indigo-400", hint: "Late night. Use pre-booked rides only. Avoid unknown shared autos." };
-  return { label: "Off-Peak", factor: 1.0, color: "text-emerald-600 dark:text-emerald-400", hint: "Best time to travel. Normal fares apply." };
+  if (h >= 7 && h < 10) return { ...TRAVEL_TIME_CHOICES[0], apiValue: "morning" as const, selectorLabel: "Now" };
+  if (h >= 17 && h < 21) return { ...TRAVEL_TIME_CHOICES[2], apiValue: "evening" as const, selectorLabel: "Now" };
+  if (h >= 21 || h < 6) return { ...TRAVEL_TIME_CHOICES[3], apiValue: "late_night" as const, selectorLabel: "Now" };
+  return { ...TRAVEL_TIME_CHOICES[1], apiValue: "afternoon" as const, selectorLabel: "Now" };
+}
+
+function getSelectedTimeContext(selection: TravelTimeSelection, currentContext: ReturnType<typeof getTimeOfDaySurge>) {
+  if (selection === "now") return currentContext;
+  const choice = TRAVEL_TIME_CHOICES.find((item) => item.id === selection) || TRAVEL_TIME_CHOICES[1];
+  return { ...choice, apiValue: choice.id, selectorLabel: choice.label };
+}
+
+function routeSourceDisplay(result: any) {
+  const source = String(result?.source || "").toLowerCase();
+  if (source === "osrm_route" || source === "tomtom_traffic_route") {
+    return result?.routing_cache_hit ? "Mapped road route, cached" : "Mapped road route";
+  }
+  if (source === "haversine_estimate") return "Fallback distance estimate";
+  return result?.routing_provider || "Route estimate";
+}
+
+function FareEvidencePanel({ mode, routeResult, compact = false }: { mode?: any; routeResult?: any; compact?: boolean }) {
+  const explanation = mode?.fare_explanation;
+  const runway = mode?.runway_impact;
+  if (!explanation && !runway) return null;
+
+  const facts = [
+    explanation?.route_source_label || (routeResult ? routeSourceDisplay(routeResult) : null),
+    explanation?.fare_source_label,
+    explanation?.reports_label,
+    explanation?.timing_label,
+  ].filter(Boolean);
+
+  return (
+    <div className={`rounded-xl border border-border bg-background/50 ${compact ? "px-3 py-2" : "px-3.5 py-3"}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Why this fare?</p>
+          {facts.length ? (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {facts.slice(0, 4).map((fact) => (
+                <span key={fact} className="rounded-full border border-border bg-surface px-2 py-1 text-[10px] font-medium text-muted-foreground">
+                  {fact}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {runway?.remaining_after_fare_rs !== undefined ? (
+          <div className="shrink-0 rounded-lg bg-primary/5 px-3 py-2 text-left sm:text-right">
+            <p className="text-[10px] text-muted-foreground">After this ride</p>
+            <p className="text-sm font-semibold text-foreground">₹{runway.remaining_after_fare_rs}</p>
+          </div>
+        ) : null}
+      </div>
+      {runway?.summary ? (
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{runway.summary}</p>
+      ) : explanation?.pricing_disclaimer ? (
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{explanation.pricing_disclaimer}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function SourceBadge({ label }: { label?: string }) {
@@ -362,7 +453,7 @@ function buildDecision({
       fare: useSplit ? splitSuggestion?.split_fare || median : median,
       eta,
       action: useSplit
-        ? `Split near ${splitSuggestion?.transfer_label}. Avoid this if roads are empty or you have luggage.`
+        ? splitSuggestion?.reason || `Use the curated transfer option via ${splitSuggestion?.transfer_label}. Avoid it if the area is empty, it is late, or you have luggage.`
         : "Use the lowest reliable mode. Do not force a two-hop route without a known busy transfer point.",
       acceptUpTo,
       tone: "emerald",
@@ -567,11 +658,16 @@ function TravelPage() {
   const [showCoachInfo, setShowCoachInfo] = useState<boolean>(false);
   const [savedRoutesOpen, setSavedRoutesOpen] = useState<boolean>(false);
   const [travelIntent, setTravelIntent] = useState<TravelIntent>("hurry");
+  const [fareTimeSelection, setFareTimeSelection] = useState<TravelTimeSelection>("now");
 
   const [splitTravelType, setSplitTravelType] = useState<"direct" | "split">("direct");
   const [splitHopMode, setSplitHopMode] = useState<"shared" | "direct_auto">("shared");
 
-  const timeContext = useMemo(() => getTimeOfDaySurge(), []);
+  const currentTimeContext = useMemo(() => getTimeOfDaySurge(), []);
+  const timeContext = useMemo(
+    () => getSelectedTimeContext(fareTimeSelection, currentTimeContext),
+    [fareTimeSelection, currentTimeContext],
+  );
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -734,6 +830,12 @@ function TravelPage() {
     queryFn: () => getTravelReports(selectedRouteId),
   });
 
+  const { data: reportCandidates, isLoading: reportCandidatesLoading } = useQuery({
+    queryKey: ["travel-report-candidates", selectedRouteId],
+    enabled: !!user && !!selectedRouteId,
+    queryFn: () => getTravelReportCandidates(selectedRouteId),
+  });
+
   const { data: savings } = useQuery({
     queryKey: ["travel-savings", user?.id],
     enabled: !!user,
@@ -773,16 +875,16 @@ function TravelPage() {
       selectedRoute.modes[0];
     const quote = parseFloat(driverQuote);
     if (isNaN(quote) || quote <= 0) return null;
-    const normalMedian = modeDetails.median_fare;
-    const normalMax = modeDetails.max_fare;
-    const normalMin = modeDetails.min_fare;
+    const normalMedian = Math.round(modeDetails.median_fare * timeContext.factor);
+    const normalMax = Math.round(modeDetails.max_fare * timeContext.factor);
+    const normalMin = Math.round(modeDetails.min_fare * timeContext.factor);
     const overchargeAmt = Math.max(0, quote - normalMax);
     const isOvercharged = quote > normalMax;
     const isFair = quote <= normalMax && quote >= normalMin;
     const isUndercut = quote < normalMin;
     const pctAboveMedian = Math.round(((quote - normalMedian) / normalMedian) * 100);
     return { isOvercharged, isFair, isUndercut, normalMedian, normalMax, normalMin, overchargeAmt, pctAboveMedian };
-  }, [selectedRoute, selectedMode, driverQuote]);
+  }, [selectedRoute, selectedMode, driverQuote, timeContext.factor]);
 
   const splitFareData = useMemo(() => {
     if (!selectedRoute) return null;
@@ -848,6 +950,18 @@ function TravelPage() {
     onError: (error) => toast.error(routeEstimateErrorMessage(error)),
   });
 
+  const confirmReportCandidateMutation = useMutation({
+    mutationFn: ({ transactionId, data }: { transactionId: string; data: { route_id: string; mode: string; driver_quote?: number; anonymous?: boolean } }) =>
+      confirmTravelReportCandidate(transactionId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["travel-report-candidates", selectedRouteId] });
+      qc.invalidateQueries({ queryKey: ["travel-reports", selectedRouteId] });
+      qc.invalidateQueries({ queryKey: ["travel-routes", activeCollege] });
+      toast.success("Synced payment confirmed as a fare report.");
+    },
+    onError: (error) => toast.error(routeEstimateErrorMessage(error)),
+  });
+
   const handleLogSavings = () => {
     if (!selectedRoute) return;
     const quoteVal = parseFloat(driverQuote);
@@ -904,6 +1018,7 @@ function TravelPage() {
         user_situation: userSituation.trim(),
         college: activeCollege,
         app_quote: isNaN(parsedQuote) ? undefined : parsedQuote,
+        travel_time_context: timeContext.apiValue,
       },
     });
   };
@@ -945,6 +1060,7 @@ function TravelPage() {
         destination_lat: selectedDestinationPlace?.lat,
         destination_lon: selectedDestinationPlace?.lon,
         destination_place_id: selectedDestinationPlace?.place_id,
+        time_context: timeContext.apiValue,
       });
       setEstimatedResult(result);
     } catch (error) {
@@ -1161,7 +1277,23 @@ function TravelPage() {
 
               </div>
 
-              <div className="mt-1.5 border-t border-border/70 px-1.5 pt-2">
+              <div className="mt-1.5 grid gap-2 border-t border-border/70 px-1.5 pt-2 sm:grid-cols-[190px_minmax(0,1fr)] sm:items-center">
+                <Select value={fareTimeSelection} onValueChange={(value) => setFareTimeSelection(value as TravelTimeSelection)}>
+                  <SelectTrigger className="h-10 rounded-md border-border bg-surface text-xs">
+                    <span className="min-w-0 text-left">
+                      <span className="block text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Travel time</span>
+                      <SelectValue />
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border border-border text-foreground">
+                    <SelectItem value="now" className="text-xs">Now ({currentTimeContext.label})</SelectItem>
+                    {TRAVEL_TIME_CHOICES.map((choice) => (
+                      <SelectItem key={choice.id} value={choice.id} className="text-xs">
+                        {choice.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button id="btn-estimate-route" onClick={handleEstimateRoute} disabled={isEstimating || isFallbackCampus}
                   className="h-10 w-full rounded-md bg-primary px-5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-70">
                   <span className="flex items-center justify-center gap-2">
@@ -1255,6 +1387,31 @@ function TravelPage() {
               {estimatedResult.resolution_warning ? (
                 <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] font-medium leading-relaxed text-amber-700 dark:text-amber-300">
                   {estimatedResult.resolution_warning}
+                </div>
+              ) : null}
+
+              {estimatedResult.routing_provider ? (
+                <div className="mt-3 rounded-lg border border-border bg-background/50 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-foreground">Route source: {routeSourceDisplay(estimatedResult)}</span>
+                    {estimatedResult.routing_cache_hit ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary">Cached</span>
+                    ) : null}
+                    {estimatedResult.eta_confidence ? (
+                      <span>{String(estimatedResult.eta_confidence).toUpperCase()} ETA confidence</span>
+                    ) : null}
+                  </div>
+                  {estimatedResult.routing_source_note ? (
+                    <p className="mt-1">{estimatedResult.routing_source_note}</p>
+                  ) : estimatedResult.eta_basis ? (
+                    <p className="mt-1">{estimatedResult.eta_basis}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {estimatedResult.modes?.length ? (
+                <div className="mt-3">
+                  <FareEvidencePanel mode={estimatedResult.modes[0]} routeResult={estimatedResult} />
                 </div>
               ) : null}
 
@@ -1486,31 +1643,29 @@ function TravelPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
-                {([
-                  { label: "Morning Rush", time: "08:00 - 11:00", factor: 1.20, active: timeContext.label === "Morning Rush", badgeLabel: "1.2x Risk" },
-                  { label: "Off-Peak", time: "11:00 - 17:00", factor: 1.0, active: timeContext.label === "Off-Peak", badgeLabel: "Baseline" },
-                  { label: "Evening Rush", time: "17:00 - 21:00", factor: 1.35, active: timeContext.label === "Evening Rush", badgeLabel: "1.35x Peak" },
-                  { label: "Night Hours", time: "21:00 - 08:00", factor: 1.15, active: timeContext.label === "Night Hours", badgeLabel: "1.15x Night" }
-                ]).map((h) => {
+                {TRAVEL_TIME_CHOICES.map((h) => {
                   const modeDetails = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
                   const currentFare = Math.round(modeDetails.median_fare * h.factor);
+                  const isActive = timeContext.apiValue === h.id;
                   return (
-                    <div
+                    <button
                       key={h.label}
+                      type="button"
+                      onClick={() => setFareTimeSelection(h.id)}
                       className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between space-y-2 relative overflow-hidden ${
-                        h.active
+                        isActive
                           ? "bg-surface-raised border-primary text-foreground ring-1 ring-primary/20 shadow-sm"
                           : "bg-surface border-border/60 opacity-80 hover:opacity-100 hover:bg-surface-raised/40"
                       }`}
                     >
-                      {h.active && (
+                      {isActive && (
                           <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[8px] font-medium px-2 py-0.5 rounded-bl-lg">
-                          Active
+                          Selected
                         </div>
                       )}
                       <div>
                         <p className="text-[10px] md:text-xs font-semibold text-foreground/90">{h.label}</p>
-                        <p className="text-[9px] text-zinc-500 font-medium">{h.time}</p>
+                        <p className="text-[9px] text-zinc-500 font-medium">{h.window}</p>
                       </div>
 
                       <div className="flex justify-between items-end pt-1">
@@ -1519,10 +1674,10 @@ function TravelPage() {
                           <p className="text-[9px] text-muted-foreground font-medium">Est. fare</p>
                         </div>
                         <span className="text-[9px] font-medium px-1.5 py-0.5 rounded border border-border bg-surface-raised text-muted-foreground">
-                          {h.badgeLabel.split(" ")[0]}
+                          {h.factor === 1 ? "Base" : `${h.factor}x`}
                         </span>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -1539,7 +1694,7 @@ function TravelPage() {
                     <div className="w-1.5 h-3.5 bg-primary rounded-full shrink-0 mt-1" />
                     <div className="space-y-1">
                       <p className="text-xs font-semibold tracking-tight text-foreground">
-                        Current estimate: ₹{peakEstimate} ({selectedMode.split(" ")[0]})
+                        Selected timing estimate: ₹{peakEstimate} ({selectedMode.split(" ")[0]} · {timeContext.label})
                       </p>
                       <p className="text-xs text-muted-foreground/90 leading-relaxed">
                         {isHighPeak
@@ -1589,7 +1744,9 @@ function TravelPage() {
                         <Info className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">Enter the price you were quoted and compare it with the current campus fare window.</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Checking {selectedRouteParts?.from || "selected pickup"} to {selectedRouteParts?.to || "destination"} · {selectedMode.split(" ")[0]} · {timeContext.label}.
+                    </p>
                   </div>
                 </div>
 
@@ -1604,6 +1761,11 @@ function TravelPage() {
                   </div>
                 )}
 
+                {(() => {
+                  const activeMode = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
+                  return <FareEvidencePanel mode={activeMode} routeResult={selectedRoute} compact />;
+                })()}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] md:text-xs font-medium text-muted-foreground">Driver quote (₹)</label>
@@ -1611,11 +1773,11 @@ function TravelPage() {
                       onChange={(e) => setDriverQuote(e.target.value)} className="bg-surface-raised border-border text-sm font-bold h-11" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] md:text-xs font-medium text-muted-foreground">Normal range for {selectedMode.split(" ")[0]}</label>
+                    <label className="text-[10px] md:text-xs font-medium text-muted-foreground">{timeContext.label} range for {selectedMode.split(" ")[0]}</label>
                     <div className="h-11 bg-surface-raised border border-border rounded-lg flex items-center px-3">
                       {(() => {
                         const md = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
-                        return <span className="text-sm font-black text-primary font-mono">₹{md.min_fare} – ₹{md.max_fare}</span>;
+                        return <span className="text-sm font-black text-primary font-mono">₹{Math.round(md.min_fare * timeContext.factor)} – ₹{Math.round(md.max_fare * timeContext.factor)}</span>;
                       })()}
                     </div>
                   </div>
@@ -1812,7 +1974,7 @@ function TravelPage() {
                 {(() => {
                   const directAutoFare = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes("auto"))?.median_fare || 150;
                   const sharedAutoFare = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes("shared"))?.median_fare || 40;
-                  const splitInfo = getIntermediateData(selectedRoute.name, activeCollege, directAutoFare, sharedAutoFare, selectedRoute.split_suggestion);
+                  const splitInfo = getIntermediateData(directAutoFare, sharedAutoFare, selectedRoute.split_suggestion);
                   const directFare = splitInfo.directTotal;
                   const splitFare = splitHopMode === "shared"
                     ? (splitInfo.shared1 + splitInfo.shared2)
@@ -2012,7 +2174,8 @@ function TravelPage() {
                 {(() => {
                   const activeMode = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
                   const quoteValue = parseFloat(appQuote);
-                  const quoteRatio = appQuote && !isNaN(quoteValue) && activeMode?.median_fare ? quoteValue / activeMode.median_fare : null;
+                  const selectedTimeAnchor = activeMode?.median_fare ? Math.round(activeMode.median_fare * timeContext.factor) : null;
+                  const quoteRatio = appQuote && !isNaN(quoteValue) && selectedTimeAnchor ? quoteValue / selectedTimeAnchor : null;
                   const quoteState = quoteRatio && quoteRatio > 1.5 ? "high" : quoteRatio && quoteRatio > 1.15 ? "mild" : quoteRatio ? "normal" : "none";
 
                   return (
@@ -2034,7 +2197,7 @@ function TravelPage() {
                           <p className="mt-0.5 text-xs text-muted-foreground">Turn the fare anchor into a polite counter-offer you can actually say.</p>
                         </div>
                         <Badge className="w-fit border border-border bg-background text-[10px] font-medium text-muted-foreground">
-                          Anchor ₹{activeMode?.median_fare || "—"} from {fareSourceLabel(activeMode)}
+                          {timeContext.label} anchor ₹{selectedTimeAnchor || "—"} from {fareSourceLabel(activeMode)}
                         </Badge>
                       </div>
 
@@ -2076,7 +2239,7 @@ function TravelPage() {
                               {quoteState === "high" ? "High quote" : quoteState === "mild" ? "Slightly high quote" : "Quote looks normal"}
                             </p>
                             <p className="mt-0.5 text-[11px] text-muted-foreground">
-                              {quoteRatio ? `${Math.round((quoteRatio - 1) * 100)}% compared with the ₹${activeMode?.median_fare} anchor.` : null}
+                              {quoteRatio ? `${Math.round((quoteRatio - 1) * 100)}% compared with the ₹${selectedTimeAnchor} ${timeContext.label.toLowerCase()} anchor.` : null}
                             </p>
                           </div>
                         </div>
@@ -2159,6 +2322,7 @@ function TravelPage() {
               <Card className="border-border bg-surface p-4 sm:p-5 space-y-4 animate-[fadeIn_0.2s_ease-out]">
                 {(() => {
                   const reportList = (reports || []) as any[];
+                  const candidateList = (reportCandidates || []) as any[];
                   const averagePaid = reportList.length
                     ? Math.round(reportList.reduce((sum, item) => sum + Number(item.amount_paid || 0), 0) / reportList.length)
                     : null;
@@ -2200,6 +2364,54 @@ function TravelPage() {
                       <p className="border-l-2 border-primary/40 pl-3 text-[11px] leading-relaxed text-muted-foreground">
                         One report is treated as signal, not truth. Aggregation protects the fare window from noisy or fake entries.
                       </p>
+
+                      {reportCandidatesLoading ? (
+                        <div className="rounded-2xl border border-border bg-background/45 p-3">
+                          <Skeleton className="h-16" />
+                        </div>
+                      ) : candidateList.length ? (
+                        <div className="space-y-2 rounded-2xl border border-primary/20 bg-primary/5 p-3.5">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Synced ride payments</p>
+                              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                                PocketBuddy found recent travel-like payments from your companion sync. Confirm only the ones that match this route.
+                              </p>
+                            </div>
+                            <Badge className="w-fit border border-primary/20 bg-background text-[9px] text-primary">Auto-suggested</Badge>
+                          </div>
+                          <div className="space-y-2">
+                            {candidateList.map((candidate) => (
+                              <div key={candidate.transaction_id} className="flex flex-col gap-3 rounded-xl border border-border bg-background/70 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <p className="text-xs font-semibold text-foreground">
+                                    ₹{candidate.amount_paid} · {candidate.merchant || candidate.mode || "Travel payment"}
+                                  </p>
+                                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                    {candidate.reason || "Amount matches this route's trusted fare band."}
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  disabled={confirmReportCandidateMutation.isPending}
+                                  onClick={() => confirmReportCandidateMutation.mutate({
+                                    transactionId: candidate.transaction_id,
+                                    data: {
+                                      route_id: candidate.route_id || selectedRoute.id,
+                                      mode: candidate.mode || selectedMode,
+                                      driver_quote: Number(candidate.driver_quote || candidate.amount_paid || 0),
+                                      anonymous: true,
+                                    },
+                                  })}
+                                  className="h-8 shrink-0 bg-primary text-primary-foreground text-[10px] font-semibold"
+                                >
+                                  Confirm fare
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
 
                       <div className="max-h-80 overflow-y-auto rounded-2xl bg-background/35">
                         {reportsLoading ? (

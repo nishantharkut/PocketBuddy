@@ -283,6 +283,23 @@ export async function getTravelReports(routeId: string) {
   return apiRequest(`/api/travel/reports?route_id=${encodeURIComponent(routeId)}`);
 }
 
+export async function getTravelReportCandidates(routeId?: string) {
+  const params = new URLSearchParams();
+  if (routeId) params.set("route_id", routeId);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return apiRequest(`/api/travel/report-candidates${suffix}`);
+}
+
+export async function confirmTravelReportCandidate(
+  transactionId: string,
+  data: { route_id: string; mode: string; driver_quote?: number; anonymous?: boolean },
+) {
+  return apiRequest(`/api/travel/report-candidates/${encodeURIComponent(transactionId)}/confirm`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function voteTravelReport(reportId: string, voteType: "up" | "down") {
   return apiRequest(`/api/travel/reports/${encodeURIComponent(reportId)}/vote`, {
     method: "POST",
@@ -311,6 +328,8 @@ export async function getTravelRouteEstimate(
     destination_lon?: number;
     origin_place_id?: string;
     destination_place_id?: string;
+    time_context?: string;
+    luggage?: boolean;
   },
 ) {
   const params = new URLSearchParams({
@@ -339,7 +358,7 @@ export async function createTravelRoute({ data }: { data: { name: string; descri
   });
 }
 
-export async function getAiTravelCoach({ data }: { data: { route_id: string; mode: string; user_situation?: string; college?: string; app_quote?: number } }) {
+export async function getAiTravelCoach({ data }: { data: { route_id: string; mode: string; user_situation?: string; college?: string; app_quote?: number; travel_time_context?: string } }) {
   return apiRequest("/api/travel/ai-coach", {
     method: "POST",
     body: JSON.stringify(data),

@@ -11,9 +11,29 @@ class Settings(BaseSettings):
         default="https://photon.komoot.io",
         validation_alias=AliasChoices("photon_geocoder_url", "PHOTON_GEOCODER_URL"),
     )
+    nominatim_geocoder_url: str = Field(
+        default="https://nominatim.openstreetmap.org",
+        validation_alias=AliasChoices("nominatim_geocoder_url", "NOMINATIM_GEOCODER_URL"),
+    )
     osrm_route_url: str = Field(
         default="https://router.project-osrm.org",
         validation_alias=AliasChoices("osrm_route_url", "OSRM_ROUTE_URL"),
+    )
+    travel_geo_user_agent: str = Field(
+        default="PocketBuddy-TravelGuard/1.0 (https://github.com/nishantharkut/PocketBuddy)",
+        validation_alias=AliasChoices("travel_geo_user_agent", "TRAVEL_GEO_USER_AGENT"),
+    )
+    travel_geo_cache_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("travel_geo_cache_enabled", "TRAVEL_GEO_CACHE_ENABLED"),
+    )
+    travel_geocode_cache_ttl_days: int = Field(
+        default=30,
+        validation_alias=AliasChoices("travel_geocode_cache_ttl_days", "TRAVEL_GEOCODE_CACHE_TTL_DAYS"),
+    )
+    travel_route_cache_ttl_days: int = Field(
+        default=7,
+        validation_alias=AliasChoices("travel_route_cache_ttl_days", "TRAVEL_ROUTE_CACHE_TTL_DAYS"),
     )
     TOMTOM_API_KEY: str = ""
     TOMTOM_ROUTE_URL: str = "https://api.tomtom.com"

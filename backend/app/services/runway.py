@@ -613,7 +613,7 @@ def build_runway_forecast(
     active_subscriptions = [
         sub for sub in subscriptions 
         if sub.get("is_active", True) 
-        and sub.get("status", "confirmed") in ("confirmed", "active") 
+        and sub.get("status", "confirmed") in ("confirmed", "active", "missed") 
         and _valid_amount(sub)
     ]
     commitments: list[dict] = []

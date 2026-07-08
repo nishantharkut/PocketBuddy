@@ -748,6 +748,7 @@ function Dashboard() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const isMobile = useIsMobile();
+  const [snoozedSubs, setSnoozedSubs] = useState<string[]>([]);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -875,10 +876,12 @@ function Dashboard() {
       status: runwayForecast?.status ?? "healthy",
       foodRoutine,
       decision,
-      possibleCommitments: runwayForecast?.possible_commitments ?? [],
-      possibleCommitmentsTotal: runwayForecast?.possible_commitments_total ?? 0,
+      possibleCommitments: (runwayForecast?.possible_commitments ?? []).filter((sub: any) => !snoozedSubs.includes(sub.id)),
+      possibleCommitmentsTotal: (runwayForecast?.possible_commitments ?? [])
+        .filter((sub: any) => !snoozedSubs.includes(sub.id))
+        .reduce((sum: number, sub: any) => sum + sub.amount, 0),
     };
-  }, [runwayForecast, calc]);
+  }, [runwayForecast, calc, snoozedSubs]);
 
   // ── Survive-Until runway timestamp ─────────────────────────────────────
   const surviveUntilMs = useMemo(() => {
@@ -1912,57 +1915,115 @@ function Dashboard() {
                       <strong className="text-foreground">{rupees(runwayView.possibleCommitmentsTotal)}</strong> in possible recurring debits may hit before your allowance reset. These are currently excluded from your runway.
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
-                      {runwayView.possibleCommitments.map((sub: any) => (
-                        <div
-                          key={sub.id}
-                          className="bg-surface-raised border border-border/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <PlatformIcon platform={sub.label} className="h-9 w-9 rounded-xl" />
-                            <div>
-                              <p className="text-xs font-semibold text-foreground">{sub.label}</p>
-                              <p style={{ fontSize: "11px", color: "var(--muted-foreground)", marginTop: "2px" }}>
-                                {rupees(sub.amount)} · expected {shortDate(new Date(sub.due_at))} ({Math.round(sub.confidence)}% confidence)
+                      {runwayView.possibleCommitments.map((sub: any) => {
+                        const dailyImpact = calc && calc.daysLeft > 0 ? Math.round(sub.amount / 100 / calc.daysLeft) : 0;
+                        const newLimit = calc && calc.daysLeft > 0 ? Math.max(0, Math.round((calc.remaining - sub.amount / 100) / calc.daysLeft)) : 0;
+                        return (
+                          <div
+                            key={sub.id}
+                            className="bg-surface-raised border border-border/80 rounded-xl p-4 flex flex-col gap-3"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                <PlatformIcon platform={sub.label} className="h-9 w-9 rounded-xl" />
+                                <div>
+                                  <p className="text-xs font-semibold text-foreground">{sub.label}</p>
+                                  <p style={{ fontSize: "11px", color: "var(--muted-foreground)", marginTop: "2px" }}>
+                                    {rupees(sub.amount)} · expected {shortDate(new Date(sub.due_at))} · {sub.cadence || "monthly"} cycle
+                                  </p>
+                                </div>
+                              </div>
+                              <span style={{ alignSelf: "flex-start", fontSize: "9px", fontWeight: 700, padding: "2px 6px", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "4px", color: "#f59e0b", letterSpacing: "0.05em" }}>
+                                {Math.round(sub.confidence)}% CONFIDENCE
+                              </span>
+                            </div>
+
+                            {/* Evidence list */}
+                            {sub.evidence && sub.evidence.length > 0 && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px", background: "rgba(255,255,255,0.015)", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.05em", color: "var(--muted-foreground)", textTransform: "uppercase", marginBottom: "2px" }}>Why Detected</p>
+                                {sub.evidence.map((ev: string, idx: number) => (
+                                  <span key={idx} style={{ fontSize: "10px", color: "var(--muted-foreground)" }}>
+                                    • {ev}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Runway Impact */}
+                            {dailyImpact > 0 && (
+                              <p style={{ fontSize: "11px", color: "#f59e0b", fontWeight: 500, background: "rgba(245,158,11,0.05)", padding: "6px 10px", borderRadius: "6px", border: "1px dashed rgba(245,158,11,0.2)" }}>
+                                ⚠️ <strong>Runway Impact:</strong> Will reduce safe daily spend by <strong>{rupees(dailyImpact * 100)}/day</strong> (safe budget adjusts to {rupees(newLimit * 100)}/day).
                               </p>
+                            )}
+
+                            {/* Actions buttons */}
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              <Button
+                                size="sm"
+                                className="bg-amber-500 text-black hover:bg-amber-600 h-8 text-[11px] font-bold uppercase tracking-wider"
+                                onClick={async () => {
+                                  try {
+                                    await confirmSubscription({ data: { id: sub.id } });
+                                    qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                    qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                    toast.success(`Tracked ${sub.label}!`);
+                                  } catch (err: any) {
+                                    toast.error(err.message || "Failed to confirm");
+                                  }
+                                }}
+                              >
+                                Track this
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-border text-muted-foreground hover:text-foreground h-8 text-[11px] font-bold uppercase tracking-wider"
+                                onClick={async () => {
+                                  try {
+                                    await ignoreSubscription({ data: { id: sub.id } });
+                                    qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                    qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                    toast(`Ignored ${sub.label}.`);
+                                  } catch (err: any) {
+                                    toast.error(err.message || "Failed to ignore");
+                                  }
+                                }}
+                              >
+                                Not recurring
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-border text-muted-foreground hover:text-foreground h-8 text-[11px] font-bold uppercase tracking-wider"
+                                onClick={() => {
+                                  setSnoozedSubs(prev => [...prev, sub.id]);
+                                  toast.success(`Alert snoozed. We'll remind you next cycle.`);
+                                }}
+                              >
+                                Remind me once
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-border text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 text-[11px] font-bold uppercase tracking-wider"
+                                onClick={async () => {
+                                  try {
+                                    await ignoreSubscription({ data: { id: sub.id } });
+                                    qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                    qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                    toast.success(`Ignored ${sub.label} merchant.`);
+                                  } catch (err: any) {
+                                    toast.error(err.message || "Failed to ignore merchant");
+                                  }
+                                }}
+                              >
+                                Ignore merchant
+                              </Button>
                             </div>
                           </div>
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            <Button
-                              size="sm"
-                              className="bg-amber-500 text-black hover:bg-amber-600 h-8 text-[11px] font-bold uppercase tracking-wider"
-                              onClick={async () => {
-                                try {
-                                  await confirmSubscription({ data: { id: sub.id } });
-                                  qc.invalidateQueries({ queryKey: ["runway-forecast"] });
-                                  qc.invalidateQueries({ queryKey: ["all-subs"] });
-                                  toast.success(`Tracked ${sub.label}!`);
-                                } catch (err: any) {
-                                  toast.error(err.message || "Failed to confirm");
-                                }
-                              }}
-                            >
-                              Track commitment
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-border text-muted-foreground hover:text-foreground h-8 text-[11px] font-bold uppercase tracking-wider"
-                              onClick={async () => {
-                                try {
-                                  await ignoreSubscription({ data: { id: sub.id } });
-                                  qc.invalidateQueries({ queryKey: ["runway-forecast"] });
-                                  qc.invalidateQueries({ queryKey: ["all-subs"] });
-                                  toast(`Ignored ${sub.label}.`);
-                                } catch (err: any) {
-                                  toast.error(err.message || "Failed to ignore");
-                                }
-                              }}
-                            >
-                              Not recurring
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

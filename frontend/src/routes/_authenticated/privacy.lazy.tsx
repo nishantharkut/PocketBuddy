@@ -44,6 +44,54 @@ export const Route = createLazyFileRoute("/_authenticated/privacy")({
   component: PrivacyPage,
 });
 
+function BankLogoIcon({ bankCode, bankName, size = "md" }: { bankCode?: string; bankName?: string; size?: "sm" | "md" | "lg" }) {
+  const BANKS_WITH_LOGOS = new Set([
+    "sbi", "hdfc", "icici", "axis", "kotak", "pnb", "bob", "canara", "indian-bank", "yes-bank", "federal", "rbl"
+  ]);
+
+  const sizeClasses = {
+    sm: "h-4 w-4 rounded-md",
+    md: "h-5 w-5 rounded-md p-0.5",
+    lg: "h-10 w-10 rounded-xl p-0.5"
+  };
+
+  const borderClass = size === "lg" ? "border-primary/20" : "border-border/30";
+
+  if (bankCode && BANKS_WITH_LOGOS.has(bankCode)) {
+    return (
+      <div className={`flex shrink-0 items-center justify-center overflow-hidden border bg-white shadow-sm ${sizeClasses[size]} ${borderClass}`}>
+        <img
+          src={`/logos/banks/${bankCode}.svg`}
+          alt={bankName || bankCode}
+          className="h-full w-full object-contain"
+        />
+      </div>
+    );
+  }
+
+  const iconClasses = {
+    sm: "h-4 w-4",
+    md: "h-[18px] w-[18px] text-primary shrink-0 mt-0.5",
+    lg: "h-5 w-5"
+  };
+
+  const containerClasses = {
+    sm: "",
+    md: "",
+    lg: "grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary"
+  };
+
+  if (size === "lg") {
+    return (
+      <div className={containerClasses.lg}>
+        <Landmark className={iconClasses.lg} />
+      </div>
+    );
+  }
+
+  return <Landmark className={iconClasses[size]} />;
+}
+
 const CATEGORIES = [
   "food",
   "transport",
@@ -566,7 +614,7 @@ function PrivacyPage() {
 
           <div className="grid gap-3 lg:grid-cols-2">
             <DataSourceStatusCard
-              icon={<Landmark className="h-4 w-4" />}
+              icon={<BankLogoIcon bankCode={currentAAConsent?.financial_institution_code} bankName={currentAAConsent?.financial_institution_name} size="md" />}
               title="Consent sandbox"
               status={currentAAConsent ? humanConsentStatus(currentAAConsent.status) : bankConsentCanStart ? "Ready" : "Off"}
               tone={
@@ -629,7 +677,7 @@ function PrivacyPage() {
           <Card className="bg-surface-raised p-4 sm:p-5">
             <div className="grid gap-3 md:grid-cols-2">
               <ReceiptBlock
-                icon={<Landmark className="h-4 w-4" />}
+                icon={<BankLogoIcon bankCode={currentAAConsent?.financial_institution_code} bankName={currentAAConsent?.financial_institution_name} size="md" />}
                 title="Consent sandbox"
                 status={currentAAConsent ? humanConsentStatus(currentAAConsent.status) : "Not connected"}
                 rows={[
@@ -680,7 +728,7 @@ function PrivacyPage() {
             {/* Bank Consent Controls */}
             <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
-                <Landmark className="mt-0.5 h-4.5 w-4.5 shrink-0 text-primary" />
+                <BankLogoIcon bankCode={currentAAConsent?.financial_institution_code} bankName={currentAAConsent?.financial_institution_name} size="md" />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-[13px] font-semibold text-foreground">Consent sandbox</p>
@@ -1152,9 +1200,7 @@ function AccountAggregatorSandboxCard({
       <div className="border-b border-border p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-              <Landmark className="h-5 w-5" />
-            </div>
+            <BankLogoIcon bankCode={consent?.financial_institution_code} bankName={consent?.financial_institution_name} size="lg" />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[14px] font-semibold text-foreground">Consent sandbox</p>

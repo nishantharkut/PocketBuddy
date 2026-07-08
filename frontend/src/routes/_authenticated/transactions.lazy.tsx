@@ -130,9 +130,9 @@ function transactionTrustBadges(txn: any): TrustBadge[] {
 
   if (bankVerified) {
     badges.push({
-      label: "Bank verified",
+      label: "Sandbox source",
       tone: "success",
-      title: "Matched through an Account Aggregator data source.",
+      title: "Matched through the consent sandbox data path.",
     });
   } else if (needsReview) {
     badges.push({
@@ -251,7 +251,7 @@ function transactionTrustPathSteps(txn: any): TrustPathStep[] {
       : manual
         ? {
             label: "Manual entry",
-            detail: "Added by you inside PocketBuddy. No notification or bank-source record is attached.",
+            detail: "Added by you inside PocketBuddy. No notification or sandbox record is attached.",
             state: "neutral",
             icon: "phone",
           }
@@ -280,21 +280,21 @@ function transactionTrustPathSteps(txn: any): TrustPathStep[] {
 
   const bankStep: TrustPathStep = bankVerified
     ? {
-        label: "Bank verified",
-        detail: "Matched with consented bank-source data through the Account Aggregator path.",
+        label: "Sandbox source",
+        detail: "Matched with consent sandbox data.",
         state: "complete",
         icon: "bank",
       }
     : onDevice || isCompanion || legacyMasked
       ? {
           label: "Bank check optional",
-          detail: "Connect bank consent from Privacy Center to verify transactions without sharing banking passwords.",
+          detail: "Use the consent sandbox from Privacy Center to review the read-only control flow without sharing banking passwords.",
           state: "pending",
           icon: "bank",
         }
       : {
           label: "No bank check",
-          detail: "This entry is not linked to Account Aggregator verification.",
+          detail: "This entry is not linked to a consent sandbox record.",
           state: "neutral",
           icon: "bank",
         };

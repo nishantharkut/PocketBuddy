@@ -17,9 +17,9 @@ This document tracks the features, requirements, and mentor feedback items for t
 
 ---
 
-## 2. Amazon Pay V2 Integration (Novelty & Flow)
+## 2. Amazon Pay Sandbox Contract Flow
 
-Rather than manual copying of UPI addresses and copy-pasting receipt UTR verification numbers, PocketBuddy integrates a pre-authorized **Amazon Pay V2 sandbox simulation**:
+Rather than claiming live payment rails in the prototype, PocketBuddy models an **Amazon Pay V2-style sandbox contract** for checkout and split-settlement demos:
 
 ```mermaid
 sequenceDiagram
@@ -28,22 +28,22 @@ sequenceDiagram
     actor Roommate
     participant App as PocketBuddy Client
     participant API as PocketBuddy Backend
-    participant APay as Amazon Pay Gateway
+    participant APay as Amazon Pay Sandbox
 
     Host->>App: Clicks "Checkout"
     App->>API: POST /amazon-checkout-session
-    API->>APay: Init V2 Session (S01-...)
-    API-->>App: Redirect URL + Session ID
+    API->>API: Create local sandbox session (S01-...)
+    API-->>App: Sandbox session ID
     Host->>App: Approves payment in sandbox dialog
     App->>API: POST /complete
     API->>API: Finalize splits (Status: "Order Splits Finalized")
     
     Note over Roommate, App: Roommate settlement
-    Roommate->>App: Clicks "Pay Instantly (Later)"
+    Roommate->>App: Clicks "Simulate Settlement"
     App->>API: POST /roommate-reimburse
-    API->>APay: Create pre-authorized Charge V2 (B01-...)
-    API-->>App: Return "Chargeable" status
-    API->>API: Auto-verify split ledger (Instant settlement)
+    API->>API: Create local sandbox settlement (B01-...)
+    API-->>App: Return sandbox settlement status
+    API->>API: Mark split verified for demo ledger
 ```
 
 ---
@@ -53,7 +53,7 @@ sequenceDiagram
 ### A. "What if the Host forgets their UPI address?"
 *   **The Problem:** Roommates cannot make manual UPI payments if `pool.upi_id` is empty.
 *   **The Solution:** 
-    1.  The roommate can always bypass UPI and settle instantly using **Amazon Pay Later** (pre-authorized).
+    1.  The roommate can use the **Amazon Pay sandbox settlement** in the demo, while real settlement remains UPI/UTR or passive host-credit verification.
     2.  For manual payments, a **WhatsApp Contact** button is displayed inside the warnings card, opening a direct message pre-filled with a VPA reminder linked to the host's phone number.
 
 ### B. "Can roommates pay when logged in as themselves?"

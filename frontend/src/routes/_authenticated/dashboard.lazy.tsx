@@ -127,7 +127,7 @@ type Pool = any;
 type PoolItem = any;
 
 function transactionTrustLabel(txn: any) {
-  if (txn.verification_status === "aa_verified" || txn.data_origin === "account_aggregator") return "Bank verified";
+  if (txn.verification_status === "aa_verified" || txn.data_origin === "account_aggregator") return "Sandbox source";
   if (txn.needs_verification || txn.verification_status === "needs_review") return "Needs review";
   if (txn.user_confirmed_at || txn.user_corrected || txn.verification_status === "user_reviewed") return "Reviewed";
   if (
@@ -144,7 +144,7 @@ function transactionTrustLabel(txn: any) {
 
 function transactionTrustClass(label: string | null) {
   if (label === "Needs review") return "text-warning bg-warning/10 border-warning/20";
-  if (label === "Reviewed" || label === "Bank verified") return "text-success bg-success/10 border-success/20";
+  if (label === "Reviewed" || label === "Sandbox source") return "text-success bg-success/10 border-success/20";
   if (label === "On-device") return "text-primary bg-primary/10 border-primary/20";
   return "text-zinc-500 bg-white/5 border-border";
 }

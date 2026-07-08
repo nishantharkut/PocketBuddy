@@ -278,12 +278,20 @@ def pairing_rotated_after_revocation(profile: dict, consent: Optional[dict]) -> 
     return bool(pairing_updated_at and revoked_at and pairing_updated_at > revoked_at)
 
 
-def connector_ingest_block_reason(profile: dict, consent: Optional[dict]) -> Optional[str]:
+def connector_ingest_block_reason(
+    profile: dict,
+    consent: Optional[dict],
+    device_id: Optional[str] = None,
+) -> Optional[str]:
     if not connector_pairing_present(profile):
         return "connector_not_paired"
 
     if profile.get("companion_sync_enabled") is False:
         return "sync_disabled_by_user"
+
+    device_block_reason = connector_device_binding_block_reason(profile, device_id)
+    if device_block_reason:
+        return device_block_reason
 
     consent_status = consent.get("status") if consent else None
     if consent_status == "paused":
@@ -293,6 +301,23 @@ def connector_ingest_block_reason(profile: dict, consent: Optional[dict]) -> Opt
         return "consent_revoked_repair_required"
 
     return None
+
+
+def connector_device_binding_block_reason(profile: dict, device_id: Optional[str]) -> Optional[str]:
+    existing_fingerprint = profile.get("companion_device_fingerprint")
+    if not existing_fingerprint or not device_id:
+        return None
+
+    incoming_fingerprint = device_fingerprint(device_id)
+    if incoming_fingerprint and hmac.compare_digest(str(existing_fingerprint), str(incoming_fingerprint)):
+        return None
+
+    pairing_updated_at = _coerce_datetime(profile.get("pairing_code_updated_at"))
+    last_sync_at = _coerce_datetime(profile.get("companion_last_sync"))
+    if pairing_updated_at and (last_sync_at is None or pairing_updated_at > last_sync_at):
+        return None
+
+    return "device_repair_required"
 
 
 async def find_android_consent(db, user_id: str, device_id: Optional[str]) -> Optional[dict]:
@@ -757,7 +782,7 @@ async def ingest_notification(
             }
 
     existing_consent = await find_android_consent(db, user_id, device_id)
-    block_reason = connector_ingest_block_reason(profile, existing_consent)
+    block_reason = connector_ingest_block_reason(profile, existing_consent, device_id=device_id)
     if block_reason:
         consent_status = "paused" if block_reason in {"sync_disabled_by_user", "sync_paused_by_user"} else "revoked"
         await record_blocked_connector_event(

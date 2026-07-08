@@ -15,7 +15,7 @@ router = APIRouter()
 
 AA_SOURCE = "account_aggregator"
 LOCAL_SANDBOX_PROVIDER = "local"
-DEFAULT_AA_PURPOSE = "Verify bank transactions for PocketBuddy insights"
+DEFAULT_AA_PURPOSE = "Preview bank-consent controls for PocketBuddy insights"
 AA_DATA_CATEGORIES = [
     "deposit_account_transactions",
     "transaction_amount",
@@ -225,56 +225,42 @@ def aa_institution_registry() -> tuple[list[dict], str, str]:
     if external:
         institutions, registry_url = external
         return institutions, "Configured AA institution registry", registry_url
-    return [normalize_institution(row) for row in DEFAULT_AA_INSTITUTIONS], "Sahamati AA ecosystem reference", AA_REGISTRY_REFERENCE_URL
+    reference_rows = []
+    for row in DEFAULT_AA_INSTITUTIONS:
+        normalized = normalize_institution(row)
+        normalized["status"] = "Reference"
+        reference_rows.append(normalized)
+    return reference_rows, "AA reference institution list", AA_REGISTRY_REFERENCE_URL
 
 
 def aa_runtime_state() -> dict:
     provider = aa_provider()
-    if not settings.AA_SANDBOX_ENABLED:
+    if provider != LOCAL_SANDBOX_PROVIDER:
         return {
-            "status": "not_configured",
-            "provider": provider,
-            "mode": "disabled",
+            "status": "misconfigured",
+            "provider": LOCAL_SANDBOX_PROVIDER,
+            "mode": "local_aa_sandbox",
             "uses_sandbox_data": False,
             "can_start_sandbox": False,
             "can_receive_callbacks": False,
-            "message": "AA sandbox is disabled. Set AA_SANDBOX_ENABLED=true to test consent flows.",
-            "required_env": ["AA_SANDBOX_ENABLED"],
+            "message": "Only the local AA sandbox is available in this build. Set AA_SANDBOX_PROVIDER=local before demoing consent flows.",
+            "required_env": ["AA_SANDBOX_PROVIDER=local"],
         }
 
-    if provider == LOCAL_SANDBOX_PROVIDER:
-        return {
-            "status": "sandbox_ready",
-            "provider": "local",
-            "mode": "local_aa_sandbox",
-            "uses_sandbox_data": True,
-            "can_start_sandbox": True,
-            "can_receive_callbacks": bool(settings.AA_CALLBACK_SECRET),
-            "message": "Local AA sandbox is enabled for consent-flow testing. Sandbox records stay separate from live transactions.",
-            "required_env": [],
-        }
-
-    missing = provider_missing_env()
     return {
-        "status": "provider_configured" if not missing else "misconfigured",
-        "provider": provider,
-        "mode": "provider_sandbox",
+        "status": "sandbox_ready",
+        "provider": "local",
+        "mode": "local_aa_sandbox",
         "uses_sandbox_data": True,
-        "can_start_sandbox": False,
+        "can_start_sandbox": True,
         "can_receive_callbacks": bool(settings.AA_CALLBACK_SECRET),
-        "message": (
-            "Provider sandbox credentials are present. Outbound provider adapter still needs provider-specific certification wiring."
-            if not missing
-            else "AA provider sandbox is enabled but required credentials are missing."
-        ),
-        "required_env": missing,
+        "message": "Local AA sandbox is enabled for consent-flow testing. Sandbox records stay separate from live transactions.",
+        "required_env": [],
     }
 
 
 def ensure_local_sandbox_enabled() -> None:
     state = aa_runtime_state()
-    if state["status"] == "not_configured":
-        raise HTTPException(status_code=409, detail=state["message"])
     if aa_provider() != LOCAL_SANDBOX_PROVIDER:
         raise HTTPException(
             status_code=501,
@@ -464,7 +450,7 @@ async def get_aa_institutions(q: str = Query(default="", max_length=80), user_id
     return {
         "source": source_label,
         "source_url": source_url,
-        "updated_hint": "Use AA_INSTITUTION_REGISTRY_URL to connect a provider-backed registry.",
+        "updated_hint": "This build uses a local AA-style sandbox registry for demos. No live Account Aggregator provider is connected.",
         "total_count": len(institutions_list),
         "institutions": institutions_list[:150],
     }
@@ -523,7 +509,7 @@ async def start_sandbox_consent(req: AASandboxConsentReq, user_id: str = Depends
         "user_id": user_id,
         "source": AA_SOURCE,
         "provider": "local_sandbox",
-        "provider_label": req.bank_name or "Bank consent",
+        "provider_label": req.bank_name or "Consent sandbox",
         "financial_institution_code": req.bank_code,
         "financial_institution_name": req.bank_name,
         "financial_institution_short_name": req.bank_short_name,

@@ -74,9 +74,9 @@ class Settings(BaseSettings):
     CONNECTOR_SIGNATURE_REQUIRED: bool = False
     CONNECTOR_SIGNATURE_TOLERANCE_SECONDS: int = 300
 
-    # Account Aggregator sandbox integration. Disabled by default so the app
-    # never pretends to verify live bank data without explicit configuration.
-    AA_SANDBOX_ENABLED: bool = False
+    # Account Aggregator style consent sandbox. This is local demo data only,
+    # so it is enabled by default and never connects to live bank accounts.
+    AA_SANDBOX_ENABLED: bool = True
     AA_SANDBOX_PROVIDER: str = "local"
     AA_SANDBOX_BASE_URL: str = ""
     AA_CLIENT_ID: str = ""

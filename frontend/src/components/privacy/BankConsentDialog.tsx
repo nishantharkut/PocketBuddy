@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -87,10 +87,60 @@ type BankConsentDialogProps = {
 type ConsentStep = "bank" | "review" | "confirm";
 
 const CONSENT_STEPS: Array<{ key: ConsentStep; label: string }> = [
-  { key: "bank", label: "Institution" },
+  { key: "bank", label: "Identity" },
   { key: "review", label: "Accounts" },
   { key: "confirm", label: "Confirm" },
 ];
+
+const EMPTY_ACCOUNTS: BankConsentAccount[] = [];
+
+function fallbackSandboxSuffix(seed: string, index: number) {
+  let hash = 0;
+  const value = `${seed}:${index}`;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return String(1000 + (hash % 9000));
+}
+
+function buildFallbackSandboxAccounts(institution?: AAInstitution): BankConsentAccount[] {
+  if (!institution?.id && !institution?.name) return [];
+  const seed = (institution.id || institution.name || "bank").trim().toLowerCase() || "bank";
+  const prefix =
+    (institution.short_name || institution.id || institution.name || "BANK")
+      .replace(/[^a-z0-9]/gi, "")
+      .toUpperCase()
+      .slice(0, 10) || "BANK";
+  const templates = [
+    ["PRIMARY", "Primary savings", "Savings account"],
+    ["SPENDING", "Campus spending", "Savings account"],
+    ["DEPOSIT", "Term deposit", "Term deposit"],
+  ];
+
+  return templates.map(([kind, nickname, accountType], index) => {
+    const suffix = fallbackSandboxSuffix(seed, index + 1);
+    return {
+      account_ref: `AA-SBX-${prefix}-${kind}-${suffix}`,
+      masked_account_ref: `XXXX${suffix}`,
+      account_type: accountType,
+      fi_type: "DEPOSIT",
+      nickname,
+    };
+  });
+}
+
+function maskDiscoveryIdentifier(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "Not provided";
+  if (trimmed.includes("@")) {
+    const [name, domain] = trimmed.split("@");
+    const maskedName = name.length <= 2 ? `${name[0] || "*"}*` : `${name.slice(0, 2)}***`;
+    return `${maskedName}@${domain || "aa"}`;
+  }
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length >= 4) return `XXXXXX${digits.slice(-4)}`;
+  return `${trimmed.slice(0, 2)}***`;
+}
 
 export function BankConsentDialog({
   open,
@@ -103,6 +153,8 @@ export function BankConsentDialog({
   const [selectedBankId, setSelectedBankId] = useState("");
   const [requestedRangeDays, setRequestedRangeDays] = useState(30);
   const [aaHandle, setAaHandle] = useState("");
+  const [discoveryRequestedBankId, setDiscoveryRequestedBankId] = useState("");
+  const [discoveryIdentitySnapshot, setDiscoveryIdentitySnapshot] = useState("");
   const [search, setSearch] = useState("");
   const [step, setStep] = useState<ConsentStep>("bank");
   const [selectedAccountRefs, setSelectedAccountRefs] = useState<string[]>([]);
@@ -144,8 +196,13 @@ export function BankConsentDialog({
     isLoading: accountsLoading,
     isError: accountsError,
   } = useQuery<AAAccountDiscoveryResponse>({
-    queryKey: ["aa-sandbox-accounts", selectedBank?.id, selectedBank?.name],
-    enabled: open && !hasExistingConsent && Boolean(selectedBank?.id),
+    queryKey: ["aa-sandbox-accounts", selectedBank?.id, selectedBank?.name, discoveryIdentitySnapshot],
+    enabled:
+      open &&
+      !hasExistingConsent &&
+      Boolean(selectedBank?.id) &&
+      discoveryRequestedBankId === selectedBank?.id &&
+      Boolean(discoveryIdentitySnapshot),
     queryFn: () =>
       discoverAccountAggregatorSandboxAccounts({
         bankCode: selectedBank!.id,
@@ -154,7 +211,21 @@ export function BankConsentDialog({
     staleTime: 10 * 60 * 1000,
   });
 
-  const discoveredAccounts = accountData?.accounts ?? [];
+  const fallbackSandboxAccounts = useMemo(
+    () => buildFallbackSandboxAccounts(selectedBank),
+    [selectedBank?.id, selectedBank?.name, selectedBank?.short_name],
+  );
+  const remoteAccounts = accountData?.accounts ?? EMPTY_ACCOUNTS;
+  const discoveryAttempted = Boolean(
+    selectedBank?.id &&
+      discoveryRequestedBankId === selectedBank.id &&
+      discoveryIdentitySnapshot,
+  );
+  const usingFallbackAccounts =
+    discoveryAttempted &&
+    fallbackSandboxAccounts.length > 0 &&
+    (accountsError || remoteAccounts.length === 0);
+  const discoveredAccounts = usingFallbackAccounts ? fallbackSandboxAccounts : remoteAccounts;
   const selectedAccounts = discoveredAccounts.filter((account) =>
     selectedAccountRefs.includes(account.account_ref),
   );
@@ -163,22 +234,28 @@ export function BankConsentDialog({
     if (open) {
       setStep("bank");
       setSearch("");
+      setDiscoveryRequestedBankId("");
+      setDiscoveryIdentitySnapshot("");
     }
   }, [open]);
 
   useEffect(() => {
     setSelectedAccountRefs([]);
+    setDiscoveryRequestedBankId("");
+    setDiscoveryIdentitySnapshot("");
   }, [selectedBank?.id]);
 
   useEffect(() => {
-    if (!selectedBank?.id || accountData?.bank_code !== selectedBank.id) {
+    if (!selectedBank?.id) {
       return;
     }
-    const accounts = accountData?.accounts ?? [];
-    if (accounts.length) {
-      setSelectedAccountRefs([accounts[0].account_ref]);
+    if (!usingFallbackAccounts && accountData?.bank_code !== selectedBank.id) {
+      return;
     }
-  }, [accountData?.bank_code, accountData?.accounts, selectedBank?.id]);
+    if (discoveredAccounts.length) {
+      setSelectedAccountRefs([discoveredAccounts[0].account_ref]);
+    }
+  }, [accountData?.bank_code, discoveredAccounts, selectedBank?.id, usingFallbackAccounts]);
 
   function submitConsent() {
     if (!selectedBank) return;
@@ -187,15 +264,18 @@ export function BankConsentDialog({
       bankName: selectedBank.name,
       bankShortName: selectedBank.short_name,
       requestedRangeDays,
-      aaHandle: aaHandle.trim() || undefined,
+      aaHandle: discoveryIdentitySnapshot || aaHandle.trim() || undefined,
       selectedAccounts,
     });
   }
 
   function goNext() {
     if (step === "bank") {
-      if (!selectedBank) return;
+      const trimmedHandle = aaHandle.trim();
+      if (!selectedBank || trimmedHandle.length < 4) return;
       setSelectedBankId(selectedBank.id);
+      setDiscoveryRequestedBankId(selectedBank.id);
+      setDiscoveryIdentitySnapshot(trimmedHandle);
       setStep("review");
       return;
     }
@@ -214,7 +294,11 @@ export function BankConsentDialog({
 
   const selectedBankLabel = selectedBank?.name || "Select a bank";
   const registryCount = institutionData?.total_count || institutions.length || 0;
-  const canContinue = Boolean(selectedBank) && (step !== "review" || selectedAccounts.length > 0);
+  const hasDiscoveryIdentity = aaHandle.trim().length >= 4;
+  const canContinue =
+    Boolean(selectedBank) &&
+    (step !== "bank" || hasDiscoveryIdentity) &&
+    (step !== "review" || selectedAccounts.length > 0);
 
   function toggleAccount(accountRef: string) {
     setSelectedAccountRefs((current) => {
@@ -236,11 +320,11 @@ export function BankConsentDialog({
               </div>
               <div className="min-w-0">
                 <DialogTitle className="text-base font-semibold leading-tight tracking-tight text-foreground sm:text-lg">
-                  Connect your bank
+                  Start consent sandbox
                 </DialogTitle>
                 <DialogDescription className="mt-1 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
-                  Read-only Account Aggregator consent for transaction verification. No bank
-                  password, OTP, MPIN, or payment permission is requested.
+                  Local consent sandbox for testing the bank-data control flow. No live bank
+                  data, password, OTP, MPIN, or payment permission is requested.
                 </DialogDescription>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <Badge variant="outline" className="border-success/30 bg-success/10 text-[10px] font-semibold text-success">
@@ -262,21 +346,40 @@ export function BankConsentDialog({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
           {hasExistingConsent ? (
             <ExistingConsentState
-              bankName={existingBankName || "Connected bank"}
+              bankName={existingBankName || "Connected institution"}
               status={existingConsentStatus || "active"}
             />
           ) : (
             <>
               {step === "bank" ? (
                 <section className="space-y-4">
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                    <h3 className="text-sm font-semibold leading-snug text-foreground">
+                      Enter sandbox AA identity
+                    </h3>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      In a real AA journey, account discovery uses a bank-linked identifier such
+                      as registered mobile, PAN, customer ID, or an AA handle, followed by FIP OTP
+                      verification. This demo uses the value below only to start a local sandbox
+                      discovery.
+                    </p>
+                    <Input
+                      value={aaHandle}
+                      onChange={(event) => setAaHandle(event.target.value)}
+                      placeholder="9876543210 or student@aa"
+                      className="mt-3 h-10 rounded-xl text-sm"
+                    />
+                  </div>
+
                   <div className="rounded-2xl border border-border bg-surface p-3.5">
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <h3 className="text-sm font-semibold leading-snug text-foreground">
-                          Choose financial institution
+                          Choose sandbox institution
                         </h3>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                          Select the bank that holds the account you want PocketBuddy to verify.
+                          Select the institution where this identifier should be discovered in the
+                          sandbox.
                         </p>
                       </div>
                       <span className="w-fit shrink-0 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
@@ -304,7 +407,7 @@ export function BankConsentDialog({
                         <RegistryState
                           icon={<Clock3 className="h-4 w-4" />}
                           title="Loading institutions"
-                          body="Fetching the Account Aggregator institution registry."
+                          body="Loading the sandbox institution list."
                         />
                       ) : isError ? (
                         <RegistryState
@@ -340,7 +443,7 @@ export function BankConsentDialog({
                   </div>
 
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Registry source: {institutionData?.source || "Account Aggregator institution registry"}.
+                    Registry source: {institutionData?.source || "local sandbox registry"}.
                   </p>
                 </section>
               ) : null}
@@ -352,8 +455,11 @@ export function BankConsentDialog({
                   <AccountSelectionCard
                     accounts={discoveredAccounts}
                     selectedAccountRefs={selectedAccountRefs}
-                    loading={accountsLoading}
-                    error={accountsError}
+                    loading={accountsLoading && !usingFallbackAccounts}
+                    error={accountsError && !usingFallbackAccounts}
+                    usingFallback={usingFallbackAccounts}
+                    discoveryAttempted={discoveryAttempted}
+                    discoveryIdentifier={maskDiscoveryIdentifier(discoveryIdentitySnapshot)}
                     onToggle={toggleAccount}
                   />
 
@@ -368,9 +474,14 @@ export function BankConsentDialog({
 
                     <div className="mt-4 divide-y divide-border rounded-xl border border-border bg-background">
                       <ConsentFact
+                        label="Discovery ID"
+                        value={maskDiscoveryIdentifier(discoveryIdentitySnapshot)}
+                        detail="Real AA discovery is based on a bank-linked identifier and FIP verification. This demo uses a masked sandbox identifier."
+                      />
+                      <ConsentFact
                         label="Requested by"
                         value="PocketBuddy"
-                        detail="Used for budgeting, runway and transaction verification."
+                        detail="Used to preview consent controls without touching live bank data."
                       />
                       <ConsentFact
                         label="Data type"
@@ -385,7 +496,7 @@ export function BankConsentDialog({
                       <ConsentFact
                         label="Control"
                         value="Approve, reject or revoke"
-                        detail="No bank data is fetched until consent is approved."
+                        detail="No sandbox records are generated until consent is approved."
                       />
                     </div>
                   </div>
@@ -429,7 +540,12 @@ export function BankConsentDialog({
                       <ConsentFact
                         label="Institution"
                         value={selectedBankLabel}
-                        detail="The bank selected for this consent request."
+                        detail="The sandbox institution selected for this consent request."
+                      />
+                      <ConsentFact
+                        label="Discovery ID"
+                        value={maskDiscoveryIdentifier(discoveryIdentitySnapshot)}
+                        detail="Only the masked sandbox identifier is shown here."
                       />
                       <ConsentFact
                         label="Accounts"
@@ -453,28 +569,21 @@ export function BankConsentDialog({
                     </div>
                   </div>
 
-                  <details className="rounded-2xl border border-border bg-surface p-4">
-                    <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                      Already use an AA handle?
-                    </summary>
-                    <div className="mt-3 flex items-start gap-3">
+                  <div className="rounded-2xl border border-border bg-surface p-4">
+                    <div className="flex items-start gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
                         <Building2 className="h-4 w-4" />
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs leading-relaxed text-muted-foreground">
-                          Optional. Add your AA handle or registered mobile only if you already use
-                          an Account Aggregator app.
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-foreground">Why accounts appeared</h3>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          Real AA account discovery is run by a licensed Account Aggregator against
+                          the selected FIP using a verified identifier. This prototype mirrors that
+                          control flow with masked local sandbox accounts only.
                         </p>
-                        <Input
-                          value={aaHandle}
-                          onChange={(event) => setAaHandle(event.target.value)}
-                          placeholder="name@aa or registered mobile"
-                          className="mt-3 h-10 rounded-xl text-sm"
-                        />
                       </div>
                     </div>
-                  </details>
+                  </div>
 
                   <div className="rounded-xl border border-success/25 bg-success/10 p-3">
                     <div className="flex items-start gap-2">
@@ -537,7 +646,7 @@ function ExistingConsentState({ bankName, status }: { bankName: string; status: 
         <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
         <div>
           <h3 className="text-sm font-semibold text-foreground">
-            {status === "active" ? "Bank already connected" : "Consent is waiting for approval"}
+            {status === "active" ? "Consent sandbox active" : "Consent is waiting for approval"}
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             {bankName}. You can review, refresh, or revoke this consent from Privacy Center.
@@ -586,6 +695,8 @@ function InstitutionRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const statusLabel = "Sandbox";
+
   return (
     <button
       type="button"
@@ -606,7 +717,7 @@ function InstitutionRow({
           <span aria-hidden="true">•</span>
           <span>{institution.regulator || "RBI"}</span>
           <span aria-hidden="true">•</span>
-          <span>{institution.status || "Available"}</span>
+          <span>{statusLabel}</span>
         </span>
       </span>
       <span
@@ -630,6 +741,8 @@ function SelectedInstitutionCard({ institution }: { institution?: AAInstitution 
     );
   }
 
+  const statusLabel = "Sandbox";
+
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
       <div className="flex items-start gap-3">
@@ -640,7 +753,7 @@ function SelectedInstitutionCard({ institution }: { institution?: AAInstitution 
           </p>
           <p className="mt-1 text-xs leading-snug text-muted-foreground">
             {institution.type || "Bank"} • {institution.regulator || "RBI"} •{" "}
-            {institution.status || "Available"}
+            {statusLabel}
           </p>
         </div>
       </div>
@@ -653,12 +766,18 @@ function AccountSelectionCard({
   selectedAccountRefs,
   loading,
   error,
+  usingFallback,
+  discoveryAttempted,
+  discoveryIdentifier,
   onToggle,
 }: {
   accounts: BankConsentAccount[];
   selectedAccountRefs: string[];
   loading: boolean;
   error: boolean;
+  usingFallback: boolean;
+  discoveryAttempted: boolean;
+  discoveryIdentifier: string;
   onToggle: (accountRef: string) => void;
 }) {
   return (
@@ -666,11 +785,11 @@ function AccountSelectionCard({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold leading-snug text-foreground">
-            Select account(s)
+            Select discovered sandbox account(s)
           </h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            If your bank returns multiple accounts, select only the masked accounts PocketBuddy
-            should verify.
+            Select only the masked sandbox accounts PocketBuddy should include. Discovery ID:{" "}
+            <span className="font-semibold text-foreground">{discoveryIdentifier}</span>.
           </p>
         </div>
         <Badge
@@ -682,25 +801,37 @@ function AccountSelectionCard({
       </div>
 
       <div className="mt-3 space-y-2">
-        {loading ? (
+        {!discoveryAttempted ? (
+          <RegistryState
+            icon={<Search className="h-4 w-4" />}
+            title="Discovery not started"
+            body="Go back, enter a sandbox AA handle or registered mobile, choose an institution, and start discovery."
+          />
+        ) : usingFallback ? (
+          <div className="rounded-xl border border-warning/25 bg-warning/10 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+            Local sandbox accounts: PocketBuddy generated masked demo accounts for this identifier
+            so the consent flow can be reviewed instantly. No live bank account is connected.
+          </div>
+        ) : null}
+        {discoveryAttempted && loading ? (
           <RegistryState
             icon={<Clock3 className="h-4 w-4" />}
             title="Discovering accounts"
-            body="Fetching masked accounts for the selected institution."
+            body="Discovering masked sandbox accounts for the selected institution and identifier."
           />
-        ) : error ? (
+        ) : discoveryAttempted && error ? (
           <RegistryState
             icon={<AlertCircle className="h-4 w-4" />}
             title="Account discovery unavailable"
             body="Try again or choose another institution."
           />
-        ) : accounts.length === 0 ? (
+        ) : discoveryAttempted && accounts.length === 0 ? (
           <RegistryState
             icon={<AlertCircle className="h-4 w-4" />}
             title="No accounts discovered"
             body="No consent will be created until at least one account is selected."
           />
-        ) : (
+        ) : discoveryAttempted ? (
           accounts.map((account) => (
             <DiscoveredAccountRow
               key={account.account_ref}
@@ -709,7 +840,7 @@ function AccountSelectionCard({
               onToggle={() => onToggle(account.account_ref)}
             />
           ))
-        )}
+        ) : null}
       </div>
     </div>
   );

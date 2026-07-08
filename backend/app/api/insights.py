@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.services.runway import build_runway_forecast, derive_pool_obligations
-from app.services.subscriptions import detect_recurring_subscriptions
+from app.services.subscriptions import amount_paise_from_doc, detect_recurring_subscriptions
 import datetime
 import calendar
 import re
@@ -153,9 +153,17 @@ async def get_insights(user_id: str = Depends(get_current_user)):
                     unpaid_pool_debt_paise += (p_items_total + overhead_share)
 
     # ── Subscription bleed ─────────────────────────────────────────────────
-    subs_cursor = db.subscriptions.find({"user_id": user_id, "is_active": {"$ne": False}})
+    subs_cursor = db.subscriptions.find({
+        "user_id": user_id,
+        "is_active": {"$ne": False},
+        "$or": [
+            {"status": {"$in": ["confirmed", "active", "missed"]}},
+            {"status": {"$exists": False}},
+            {"status": None},
+        ],
+    })
     subs = await subs_cursor.to_list(length=100)
-    monthly_sub_bleed = sum(s.get("amount", 0) for s in subs)
+    monthly_sub_bleed = sum(amount_paise_from_doc(s) for s in subs)
 
     return {
         "category_breakdown": category_breakdown,

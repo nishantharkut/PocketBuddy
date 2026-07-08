@@ -3,6 +3,7 @@ package com.pocketbuddy.connector.parser
 import com.pocketbuddy.connector.BuildConfig
 import com.pocketbuddy.connector.model.NotificationCaptureSource
 import com.pocketbuddy.connector.model.ParsedUpiNotification
+import com.pocketbuddy.connector.model.ParserConfidence
 import com.pocketbuddy.connector.model.TransactionDirection
 import java.util.Locale
 
@@ -12,8 +13,11 @@ class UpiNotificationParser {
         if (normalizedText.isBlank()) return null
         val captureSource = classifyCaptureSource(packageName, normalizedText) ?: return null
 
-        val amount = extractAmount(normalizedText) ?: return null
-        val direction = detectDirection(normalizedText) ?: return null
+        val amount = extractAmount(normalizedText)
+        val direction = detectDirection(normalizedText)
+        val merchant = direction?.let { extractMerchant(normalizedText, it) }
+            ?: extractAnyMerchant(normalizedText)
+        val transactionId = extractTransactionId(normalizedText)
 
         return ParsedUpiNotification(
             sourceApp = sourceAppName(packageName),
@@ -21,8 +25,10 @@ class UpiNotificationParser {
             amount = amount,
             currency = "INR",
             direction = direction,
-            merchant = extractMerchant(normalizedText, direction),
-            transactionId = extractTransactionId(normalizedText),
+            merchant = merchant,
+            transactionId = transactionId,
+            confidence = confidenceFor(amount, direction, merchant, transactionId),
+            recurringKeywords = extractRecurringKeywords(normalizedText),
         )
     }
 
@@ -48,18 +54,22 @@ class UpiNotificationParser {
         val hasSmsBankSignal = smsBankKeywords.any(lowerText::contains)
         val isOtpOnly = otpKeywords.any(lowerText::contains) && !hasDirectionSignal
 
-        if (isDebugTestNotification(lowerPackage, lowerText) && hasMoneySignal && hasDirectionSignal) {
+        val hasReviewablePaymentShape =
+            hasMoneySignal &&
+                (hasPaymentSignal || hasStrongUpiSignal || hasSmsBankSignal) &&
+                !isOtpOnly
+
+        if (isDebugTestNotification(lowerPackage, lowerText) && hasReviewablePaymentShape) {
             return NotificationCaptureSource.DEBUG
         }
 
-        if (isKnownPaymentApp && hasMoneySignal && hasDirectionSignal && hasPaymentSignal) {
+        if (isKnownPaymentApp && hasReviewablePaymentShape) {
             return NotificationCaptureSource.PAYMENT_APP
         }
 
         if (
             isKnownSmsApp &&
             hasMoneySignal &&
-            hasDirectionSignal &&
             hasSmsBankSignal &&
             hasStrongUpiSignal &&
             !isOtpOnly
@@ -103,16 +113,23 @@ class UpiNotificationParser {
             TransactionDirection.CREDIT -> creditMerchantPatterns
         }
 
-        return patterns
+        return extractMerchantFromPatterns(text, patterns)
+    }
+
+    private fun extractAnyMerchant(text: String): String? =
+        extractMerchantFromPatterns(text, debitMerchantPatterns + creditMerchantPatterns)
+
+    private fun extractMerchantFromPatterns(text: String, patterns: List<Regex>): String? =
+        patterns
             .asSequence()
             .mapNotNull { it.find(text)?.groupValues?.getOrNull(1) }
             .map(::cleanMerchant)
             .firstOrNull { it.isNotBlank() }
-    }
 
     private fun cleanMerchant(candidate: String): String =
         candidate
             .replace(Regex("\\s+"), " ")
+            .replace(Regex("(?i)[.]\\s*(?:auto\\s*-?\\s*pay|auto\\s*-?\\s*debit|mandate|renewal|subscription|recurring)\\b.*$"), "")
             .trim(' ', '.', ',', '-', ':')
             .take(MAX_MERCHANT_LENGTH)
 
@@ -122,6 +139,29 @@ class UpiNotificationParser {
             .mapNotNull { it.find(text)?.groupValues?.getOrNull(1) }
             .map { it.trim(' ', '.', ',', '-', ':') }
             .firstOrNull { it.isNotBlank() }
+
+    private fun confidenceFor(
+        amount: Double?,
+        direction: TransactionDirection?,
+        merchant: String?,
+        transactionId: String?,
+    ): ParserConfidence =
+        when {
+            amount == null || direction == null -> ParserConfidence.LOW
+            merchant.isNullOrBlank() -> ParserConfidence.LOW
+            transactionId.isNullOrBlank() -> ParserConfidence.MEDIUM
+            else -> ParserConfidence.HIGH
+        }
+
+    private fun extractRecurringKeywords(text: String): List<String> {
+        val lowerText = text.lowercase(Locale.US)
+        return recurringKeywordPatterns
+            .asSequence()
+            .filter { (_, pattern) -> pattern.containsMatchIn(lowerText) }
+            .map { (keyword) -> keyword }
+            .distinct()
+            .toList()
+    }
 
     private fun sourceAppName(packageName: String): String =
         sourceAppsByExactPackage[packageName.lowercase(Locale.US)]
@@ -302,6 +342,18 @@ class UpiNotificationParser {
 
         private val transactionIdPatterns = listOf(
             Regex("(?i)(?:upi\\s*(?:ref(?:erence)?\\s*(?:no|number)?|transaction\\s*id)|txn\\s*id|transaction\\s*id|ref\\s*no|utr)[:\\s.-]+([a-z0-9-]+)"),
+        )
+
+        private val recurringKeywordPatterns = linkedMapOf(
+            "autopay" to Regex("\\bauto\\s*-?\\s*pay\\b"),
+            "auto_debit" to Regex("\\bauto\\s*-?\\s*debit\\b"),
+            "mandate" to Regex("\\b(?:e-?mandate|mandate)\\b"),
+            "renewal" to Regex("\\brenew(?:al|ed)?\\b"),
+            "subscription" to Regex("\\bsubscription\\b"),
+            "recurring" to Regex("\\brecurring\\b"),
+            "validity" to Regex("\\bvalidity\\b"),
+            "plan" to Regex("\\bplan\\b"),
+            "premium" to Regex("\\bpremium\\b"),
         )
     }
 }

@@ -118,6 +118,80 @@ class RunwayForecastTests(unittest.TestCase):
 
         self.assertEqual(forecast["commitments"]["by_kind"].get("subscription", 0), 0)
 
+    def test_possible_subscription_is_review_only_not_committed_spend(self):
+        forecast = build_runway_forecast(
+            profile={"monthly_allowance": 1_000_000, "cycle_start_day": 1},
+            transactions=[txn(10_000, days_ago=1)],
+            subscriptions=[
+                {
+                    "service_name": "Maybe Cloud Storage",
+                    "amount_paise": 299_00,
+                    "is_active": True,
+                    "status": "possible",
+                    "billing_cycle": "monthly",
+                    "next_debit_date": NOW + dt.timedelta(days=2),
+                }
+            ],
+            now=NOW,
+        )
+
+        self.assertEqual(forecast["commitments"]["by_kind"].get("subscription", 0), 0)
+        self.assertEqual(forecast["commitments"]["possible_commitments_total"], 299_00)
+        self.assertEqual(forecast["commitments"]["possible_commitments"][0]["status"], "possible")
+
+    def test_confirmed_subscription_accepts_amount_paise(self):
+        forecast = build_runway_forecast(
+            profile={"monthly_allowance": 1_000_000, "cycle_start_day": 1},
+            transactions=[txn(10_000, days_ago=1)],
+            subscriptions=[
+                {
+                    "service_name": "Confirmed Cloud Storage",
+                    "amount_paise": 199_00,
+                    "is_active": True,
+                    "status": "confirmed",
+                    "billing_cycle": "monthly",
+                    "next_debit_date": NOW + dt.timedelta(days=2),
+                }
+            ],
+            now=NOW,
+        )
+
+        self.assertEqual(forecast["commitments"]["by_kind"]["subscription"], 199_00)
+
+    def test_next_best_action_prefers_controllable_subscription_before_ask_home(self):
+        transactions = [txn(45_000, days_ago=day, category="food") for day in range(1, 12)]
+
+        forecast = build_runway_forecast(
+            profile={"monthly_allowance": 1_000_000, "cycle_start_day": 1},
+            transactions=transactions,
+            subscriptions=[
+                {
+                    "service_name": "Premium Storage",
+                    "amount": 350_000,
+                    "is_active": True,
+                    "status": "confirmed",
+                    "billing_cycle": "monthly",
+                    "next_debit_date": NOW + dt.timedelta(days=2),
+                }
+            ],
+            now=NOW,
+        )
+
+        self.assertEqual(forecast["action"]["type"], "ask_home")
+        self.assertEqual(forecast["decision_engine"]["next_best_action"]["type"], "review_subscription")
+
+    def test_long_horizon_outputs_are_marked_as_scenarios(self):
+        forecast = build_runway_forecast(
+            profile={"monthly_allowance": 1_000_000, "cycle_start_day": 1},
+            transactions=[txn(10_000, days_ago=day, category="food") for day in range(1, 8)],
+            subscriptions=[],
+            now=NOW,
+        )
+
+        self.assertTrue(forecast["horizons"])
+        self.assertTrue(all(item["mode"] == "scenario" for item in forecast["horizons"]))
+        self.assertTrue(all("recent pace" in item["basis"] for item in forecast["horizons"]))
+
     def test_exam_buffer_is_reserved_only_during_overlap(self):
         with_overlap = build_runway_forecast(
             profile={

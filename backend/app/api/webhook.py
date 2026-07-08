@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import datetime
 import hashlib
 import hmac
@@ -60,6 +60,7 @@ class WebhookReq(BaseModel):
     rawTextSuppressed: Optional[bool] = None
     schemaVersion: Optional[int] = None
     clientEventId: Optional[str] = None
+    recurringKeywords: Optional[List[str]] = None
 
 
 def parse_amount(text: str) -> Optional[int]:
@@ -212,6 +213,60 @@ def clean_confidence(value: Optional[str]) -> Optional[str]:
     return normalized if normalized in {"high", "medium", "low"} else None
 
 
+def clean_recurring_keywords(values: Optional[List[str]]) -> List[str]:
+    allowed = {
+        "autopay",
+        "auto_debit",
+        "mandate",
+        "renewal",
+        "subscription",
+        "recurring",
+        "validity",
+        "plan",
+        "premium",
+    }
+    if not values:
+        return []
+
+    cleaned = []
+    for value in values:
+        normalized = str(value).strip().lower().replace(" ", "_")
+        if normalized == "auto_pay":
+            normalized = "autopay"
+        if normalized in allowed and normalized not in cleaned:
+            cleaned.append(normalized)
+    return cleaned
+
+
+def extract_connector_event_context(
+    req: WebhookReq,
+    *,
+    raw_body: str,
+    direction: Optional[str],
+    strict_sanitized: bool,
+) -> tuple[Optional[int], Optional[str], Optional[str], bool]:
+    amount_paise = int(round(req.amount * 100)) if req.amount is not None else parse_amount(raw_body)
+    merchant_from_connector = normalize_merchant(req.merchant)
+    merchant = merchant_from_connector or parse_merchant(raw_body)
+    merchant_was_missing = not merchant
+
+    if not merchant and direction == "credit":
+        from_match = re.search(
+            r"from\s+(.+?)(?:\s+on\s+\d|\.|,|$)",
+            raw_body,
+            re.IGNORECASE,
+        )
+        if from_match:
+            merchant = normalize_merchant(from_match.group(1))
+        else:
+            merchant = "UPI Credit"
+    elif not merchant and strict_sanitized and amount_paise:
+        merchant = "Unknown merchant"
+
+    transaction_reference = req.transactionId or parse_transaction_id(raw_body)
+    return amount_paise, merchant, transaction_reference, merchant_was_missing
+
+
 def build_android_consent_id(user_id: str, device_id: Optional[str]) -> str:
     if not device_id:
         return f"android:{user_id}:unknown-device"
@@ -230,9 +285,11 @@ def verify_connector_request_signature(
     event_id_header: Optional[str],
     signature_header: Optional[str],
     now: datetime.datetime,
+    signature_required: Optional[bool] = None,
 ) -> bool:
+    required = settings.CONNECTOR_SIGNATURE_REQUIRED if signature_required is None else signature_required
     if not (timestamp_header and event_id_header and signature_header):
-        if settings.CONNECTOR_SIGNATURE_REQUIRED:
+        if required:
             raise HTTPException(status_code=401, detail="Missing connector request signature")
         return False
 
@@ -242,7 +299,10 @@ def verify_connector_request_signature(
         raise HTTPException(status_code=401, detail="Invalid connector signature timestamp")
 
     try:
-        event_time = datetime.datetime.utcfromtimestamp(timestamp_ms / 1000)
+        event_time = datetime.datetime.fromtimestamp(
+            timestamp_ms / 1000,
+            datetime.UTC,
+        ).replace(tzinfo=None)
     except (OverflowError, OSError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid connector signature timestamp")
     tolerance = max(60, int(settings.CONNECTOR_SIGNATURE_TOLERANCE_SECONDS))
@@ -430,6 +490,7 @@ async def record_blocked_connector_event(
             "raw_payload_received": bool(req.text or req.body),
             "schema_version": req.schemaVersion,
             "client_event_id": req.clientEventId,
+            "recurring_keywords": clean_recurring_keywords(req.recurringKeywords),
             "blocked_reason": reason,
             "created_at": now,
         }
@@ -710,6 +771,7 @@ async def ingest_notification(
     if not verify_connector_pairing_token(profile, client_pairing_code):
         raise HTTPException(status_code=403, detail="Invalid pairing code")
 
+    strict_sanitized = request.url.path.endswith("/notification-v2")
     signature_verified = verify_connector_request_signature(
         supplied_token=client_pairing_code,
         raw_body=request_body,
@@ -717,6 +779,7 @@ async def ingest_notification(
         event_id_header=x_pocketbuddy_event_id or req.clientEventId,
         signature_header=x_pocketbuddy_signature,
         now=now,
+        signature_required=strict_sanitized or settings.CONNECTOR_SIGNATURE_REQUIRED,
     )
 
     if req.type == "unpair" or req.source == "unpair":
@@ -742,7 +805,6 @@ async def ingest_notification(
         await upsert_android_consent(db, user_id=user_id, device_id=device_id, req=req, now=now, status="revoked")
         return {"status": "ok", "message": "unpaired_successfully"}
 
-    strict_sanitized = request.url.path.endswith("/notification-v2")
     if strict_sanitized and (req.text or req.body):
         raise HTTPException(status_code=400, detail="Raw notification text is not accepted on v2 ingest")
 
@@ -765,6 +827,7 @@ async def ingest_notification(
         privacy_mode = "legacy_server_parse"
     data_origin = "android_on_device" if privacy_mode == "on_device_only" else "legacy_android_raw_ingest"
     source_confidence = clean_confidence(req.confidence)
+    recurring_keywords = clean_recurring_keywords(req.recurringKeywords)
     log_id = str(uuid.uuid4())
 
     if req.clientEventId:
@@ -828,6 +891,7 @@ async def ingest_notification(
             "raw_payload_received": raw_payload_received,
             "schema_version": req.schemaVersion,
             "client_event_id": req.clientEventId,
+            "recurring_keywords": recurring_keywords,
             "signature_verified": signature_verified,
             "created_at": now,
         }
@@ -859,21 +923,21 @@ async def ingest_notification(
         await update_profile_sync_state(db, user_id, req, now, device_id)
         return {"status": "auto_verified", "reason": "verified_pool_payment"}
 
-    direction = (req.direction or "debit").lower()
-    amount_paise = int(round(req.amount * 100)) if req.amount is not None else parse_amount(raw_body)
-    merchant = normalize_merchant(req.merchant) or parse_merchant(raw_body)
-    if not merchant and direction == "credit":
-        from_match = re.search(
-            r"from\s+(.+?)(?:\s+on\s+\d|\.|,|$)",
-            raw_body,
-            re.IGNORECASE,
-        )
-        if from_match:
-            merchant = normalize_merchant(from_match.group(1))
-        else:
-            merchant = "UPI Credit"
+    direction = (req.direction or "").lower().strip()
+    amount_paise, merchant, transaction_reference, merchant_was_missing = extract_connector_event_context(
+        req,
+        raw_body=raw_body,
+        direction=direction if direction in {"debit", "credit"} else None,
+        strict_sanitized=strict_sanitized,
+    )
+    if direction not in {"debit", "credit"}:
+        if strict_sanitized:
+            await mark_sync_log(db, log_id, "incomplete", amount_paise, merchant, transaction_reference)
+            await update_profile_sync_state(db, user_id, req, now, device_id)
+            return {"status": "incomplete", "reason": "missing_or_invalid_direction"}
+        direction = "debit"
 
-    transaction_reference = req.transactionId or parse_transaction_id(raw_body)
+    merchant_from_connector = normalize_merchant(req.merchant)
 
     if not (raw_body or has_structured_event) or not amount_paise or not merchant:
         await mark_sync_log(db, log_id, "incomplete", amount_paise, merchant, transaction_reference)
@@ -915,13 +979,17 @@ async def ingest_notification(
     needs_verification = False
     if source_confidence:
         parsing_confidence = source_confidence
-    elif req.amount is not None and req.merchant:
+    elif req.amount is not None and merchant_from_connector:
         parsing_confidence = "high"  # Pre-parsed by Android app
     elif amount_paise and merchant:
         parsing_confidence = "medium"  # Regex-parsed successfully
     else:
         parsing_confidence = "low"
         needs_verification = True
+
+    if merchant_was_missing:
+        needs_verification = True
+        parsing_confidence = "low"
 
     # If merchant is unmapped and not a known subscription, flag for verification
     if not merchant_doc and not sub_name and direction == "debit":
@@ -958,6 +1026,7 @@ async def ingest_notification(
         "raw_payload_received": raw_payload_received,
         "schema_version": req.schemaVersion,
         "client_event_id": req.clientEventId,
+        "recurring_keywords": recurring_keywords,
         "signature_verified": signature_verified,
         "verification_status": "needs_review" if needs_verification else verification_status,
         "verified_by": None,

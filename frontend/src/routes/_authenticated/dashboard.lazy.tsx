@@ -62,6 +62,8 @@ import {
   submitFoodSignalResponse,
   submitParserCorrection,
   getWingNettedBalances,
+  confirmSubscription,
+  ignoreSubscription,
 } from "@/lib/api/db.functions";
 
 
@@ -711,6 +713,7 @@ function Dashboard() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const isMobile = useIsMobile();
+  const [snoozedSubs, setSnoozedSubs] = useState<string[]>([]);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -845,8 +848,12 @@ function Dashboard() {
       status: runwayForecast?.status ?? "healthy",
       foodRoutine,
       decision,
+      possibleCommitments: (runwayForecast?.possible_commitments ?? []).filter((sub: any) => !snoozedSubs.includes(sub.id)),
+      possibleCommitmentsTotal: (runwayForecast?.possible_commitments ?? [])
+        .filter((sub: any) => !snoozedSubs.includes(sub.id))
+        .reduce((sum: number, sub: any) => sum + sub.amount, 0),
     };
-  }, [runwayForecast, calc]);
+  }, [runwayForecast, calc, snoozedSubs]);
 
   // ── Survive-Until runway timestamp ─────────────────────────────────────
   const { data: subs } = useQuery({
@@ -962,14 +969,16 @@ function Dashboard() {
     week.setDate(week.getDate() + 7);
     return subs
       .filter((s) => s.is_active !== false)
+      .filter((s) => ["confirmed", "active", "missed"].includes(String(s.status ?? "confirmed")))
       .filter((s) => {
         const d = new Date(s.next_debit_date);
         return d >= today && d <= week;
       })
       .map((s) => {
+        const amount = Number(s.amount ?? s.amount_paise ?? 0);
         const newLimit =
-          calc.daysLeft > 0 ? Math.round((calc.remaining - s.amount / 100) / calc.daysLeft) : 0;
-        return { ...s, newLimit, critical: newLimit < 80 };
+          calc.daysLeft > 0 ? Math.round((calc.remaining - amount / 100) / calc.daysLeft) : 0;
+        return { ...s, amount, newLimit, critical: newLimit < 80 };
       });
   }, [subs, calc]);
 
@@ -1865,6 +1874,129 @@ function Dashboard() {
                 )}
               </div>
             </div>
+
+            {/* Possible commitments runway warn banner */}
+            {runwayView && runwayView.possibleCommitments && runwayView.possibleCommitments.length > 0 && (
+              <Card
+                id="card-possible-commitments-alert"
+                className="border-amber-500/20 bg-amber-500/5 p-5 rounded-2xl relative overflow-hidden mt-4"
+              >
+                <div style={{ display: "flex", alignItems: "start", gap: "14px" }}>
+                  <div
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      background: "#f59e0b",
+                      marginTop: "6px",
+                      boxShadow: "0 0 8px #f59e0b",
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: "11px", fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      Unconfirmed Commitments
+                    </p>
+                    <p className="text-[13px] text-zinc-400 mt-1.5 leading-relaxed">
+                      <strong className="text-foreground">{rupees(runwayView.possibleCommitmentsTotal)}</strong> in possible recurring debits may hit before your allowance reset. These are currently excluded from your runway.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
+                      {runwayView.possibleCommitments.map((sub: any) => {
+                        const dailyImpact = calc && calc.daysLeft > 0 ? Math.round(sub.amount / 100 / calc.daysLeft) : 0;
+                        const newLimit = calc && calc.daysLeft > 0 ? Math.max(0, Math.round((calc.remaining - sub.amount / 100) / calc.daysLeft)) : 0;
+                        return (
+                          <div
+                            key={sub.id}
+                            className="bg-surface-raised border border-border/80 rounded-xl p-4 flex flex-col gap-3"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                <PlatformIcon platform={sub.label} className="h-9 w-9 rounded-xl" />
+                                <div>
+                                  <p className="text-xs font-semibold text-foreground">{sub.label}</p>
+                                  <p style={{ fontSize: "11px", color: "var(--muted-foreground)", marginTop: "2px" }}>
+                                    {rupees(sub.amount)} - expected {shortDate(new Date(sub.due_at))} - {sub.cadence || "monthly"} cycle
+                                  </p>
+                                </div>
+                              </div>
+                              <span style={{ alignSelf: "flex-start", fontSize: "9px", fontWeight: 700, padding: "2px 6px", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "4px", color: "#f59e0b", letterSpacing: "0.05em" }}>
+                                {Math.round(sub.confidence)}% CONFIDENCE
+                              </span>
+                            </div>
+
+                            {/* Evidence list */}
+                            {sub.evidence && sub.evidence.length > 0 && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px", background: "rgba(255,255,255,0.015)", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.05em", color: "var(--muted-foreground)", textTransform: "uppercase", marginBottom: "2px" }}>Why Detected</p>
+                                {sub.evidence.map((ev: string, idx: number) => (
+                                  <span key={idx} style={{ fontSize: "10px", color: "var(--muted-foreground)" }}>
+                                    - {ev}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Runway Impact */}
+                            {dailyImpact > 0 && (
+                              <p style={{ fontSize: "11px", color: "#f59e0b", fontWeight: 500, background: "rgba(245,158,11,0.05)", padding: "6px 10px", borderRadius: "6px", border: "1px dashed rgba(245,158,11,0.2)" }}>
+                                <strong>Runway impact if confirmed:</strong> Safe daily spend would drop by <strong>{rupees(dailyImpact * 100)}/day</strong> (adjusting to {rupees(newLimit * 100)}/day).
+                              </p>
+                            )}
+
+                            {/* Actions buttons */}
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              <Button
+                                size="sm"
+                                className="bg-amber-500 text-black hover:bg-amber-600 h-8 text-[11px] font-bold uppercase tracking-wider"
+                                onClick={async () => {
+                                  try {
+                                    await confirmSubscription({ data: { id: sub.id } });
+                                    qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                    qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                    toast.success(`Tracked ${sub.label}!`);
+                                  } catch (err: any) {
+                                    toast.error(err.message || "Failed to confirm");
+                                  }
+                                }}
+                              >
+                                Track this
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-border text-muted-foreground hover:text-foreground h-8 text-[11px] font-bold uppercase tracking-wider"
+                                onClick={async () => {
+                                  try {
+                                    await ignoreSubscription({ data: { id: sub.id } });
+                                    qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                    qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                    toast(`Ignored ${sub.label}.`);
+                                  } catch (err: any) {
+                                    toast.error(err.message || "Failed to ignore");
+                                  }
+                                }}
+                              >
+                                Not recurring
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-border text-muted-foreground hover:text-foreground h-8 text-[11px] font-bold uppercase tracking-wider"
+                                onClick={() => {
+                                  setSnoozedSubs(prev => [...prev, sub.id]);
+                                  toast.success(`Hidden for now.`);
+                                }}
+                              >
+                                Hide for now
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {runwayView && !runwayView.setupRequired && <MealRunwayCheck calc={calc} runwayView={runwayView} />}
 

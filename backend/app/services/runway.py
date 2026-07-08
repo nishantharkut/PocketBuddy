@@ -134,8 +134,11 @@ def _label(txn: dict) -> str:
 
 
 def _valid_amount(item: dict) -> int:
-    amount = item.get("amount", 0)
-    return amount if isinstance(amount, int) and not isinstance(amount, bool) and amount > 0 else 0
+    for key in ("amount", "amount_paise"):
+        amount = item.get(key, 0)
+        if isinstance(amount, int) and not isinstance(amount, bool) and amount > 0:
+            return amount
+    return 0
 
 
 def _is_ignored(txn: dict) -> bool:
@@ -721,7 +724,13 @@ def build_runway_forecast(
     discretionary_spent = spent - committed_spent
     remaining = funding - spent
 
-    active_subscriptions = [sub for sub in subscriptions if sub.get("is_active", True) and _valid_amount(sub)]
+    active_subscriptions = [
+        sub
+        for sub in subscriptions
+        if sub.get("is_active", True)
+        and str(sub.get("status", "confirmed")).casefold() in {"confirmed", "active", "missed"}
+        and _valid_amount(sub)
+    ]
     commitments: list[dict] = []
     for sub in active_subscriptions:
         for due in _subscription_dates(sub, now, cycle_end):
@@ -731,6 +740,27 @@ def build_runway_forecast(
                 "amount": _valid_amount(sub),
                 "due_at": due,
                 "status": "scheduled",
+            })
+
+    possible_commitments: list[dict] = []
+    possible_subscriptions = [
+        sub
+        for sub in subscriptions
+        if sub.get("is_active", True)
+        and str(sub.get("status") or "").casefold() == "possible"
+        and _valid_amount(sub)
+    ]
+    for sub in possible_subscriptions:
+        for due in _subscription_dates(sub, now, cycle_end):
+            possible_commitments.append({
+                "id": sub.get("_id"),
+                "label": str(sub.get("service_name") or sub.get("name") or "Subscription"),
+                "amount": _valid_amount(sub),
+                "due_at": due,
+                "confidence": sub.get("confidence", 50.0),
+                "evidence": sub.get("evidence", []),
+                "cadence": sub.get("billing_cycle", "monthly"),
+                "status": "possible",
             })
 
     mess_model = str(profile.get("mess_billing_model") or ("included" if profile.get("mess_enrolled") else "none")).casefold()
@@ -928,6 +958,8 @@ def build_runway_forecast(
         horizons.append({
             "key": key,
             "label": label,
+            "mode": "scenario",
+            "basis": "recent pace repeated with known recurring costs; not a guaranteed prediction.",
             "months": months,
             "projected_spend": round(expected_spend),
             "projected_funding": round(expected_funding),
@@ -1085,11 +1117,7 @@ def build_runway_forecast(
     food_action = food_routine.get("action") or {}
     if setup_required:
         next_best_action = action
-    elif ask_home:
-        next_best_action = {**action, "impact": ask_home}
-    elif safe_daily <= 0:
-        next_best_action = {**action, "impact": 0}
-    elif subscription_total and (shortfall_probability >= 0.35 or safe_daily < projected_daily):
+    elif subscription_total and (shortfall_probability >= 0.35 or safe_daily <= 0 or safe_daily < projected_daily):
         next_best_action = {
             "type": "review_subscription",
             "title": "Review the next subscription debit",
@@ -1103,13 +1131,15 @@ def build_runway_forecast(
             "detail": food_action.get("detail") or "Food pace is the fastest lever to extend runway this cycle.",
             "impact": int(food_action.get("impact") or 0),
         }
-    elif pool_total and (shortfall_probability >= 0.20 or action["type"] == "on_track"):
+    elif pool_total and (shortfall_probability >= 0.20 or safe_daily <= 0 or action["type"] == "on_track"):
         next_best_action = {
             "type": "settle_pool",
             "title": "Confirm pending pool shares",
             "detail": "Settling shared-cart dues keeps the safe/day number accurate before the next reset.",
             "impact": pool_total,
         }
+    elif safe_daily <= 0:
+        next_best_action = {**action, "impact": 0}
     elif shortfall_probability >= 0.20 and safe_daily > 0:
         next_best_action = {
             "type": "travel_caution",
@@ -1117,6 +1147,8 @@ def build_runway_forecast(
             "detail": f"Keep any ride or outing inside the Rs {safe_daily // 100:,}/day safe limit unless it is essential.",
             "impact": max(0, projected_daily - safe_daily) * days_left,
         }
+    elif ask_home:
+        next_best_action = {**action, "impact": ask_home}
     else:
         next_best_action = {**action, "impact": ask_home or max(0, projected_daily - safe_daily) * days_left}
 
@@ -1153,6 +1185,11 @@ def build_runway_forecast(
             "total": commitment_total,
             "by_kind": dict(commitment_by_kind),
             "items": [{**item, "due_at": _utc_naive(item["due_at"]).isoformat() + "Z"} for item in sorted(commitments, key=lambda entry: entry["due_at"])],
+            "possible_commitments": [
+                {**item, "due_at": _utc_naive(item["due_at"]).isoformat() + "Z"}
+                for item in sorted(possible_commitments, key=lambda entry: entry["due_at"])
+            ],
+            "possible_commitments_total": sum(item["amount"] for item in possible_commitments),
         },
         "projection": {
             "days_until_broke": runway_days,
@@ -1175,6 +1212,8 @@ def build_runway_forecast(
             "flexible": discretionary_spent + round(projected_discretionary),
         },
         "food_routine": food_routine,
+        "possible_commitments": possible_commitments,
+        "possible_commitments_total": sum(item["amount"] for item in possible_commitments),
         "decision_engine": {
             "summary": decision_summary,
             "absorbed": absorbed,

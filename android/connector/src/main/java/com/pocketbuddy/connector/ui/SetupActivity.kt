@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
+import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -34,10 +35,13 @@ import com.pocketbuddy.connector.config.ConnectorConfigStore
 import com.pocketbuddy.connector.identity.DeviceIdentityStore
 import com.pocketbuddy.connector.network.WebhookClient
 import com.pocketbuddy.connector.retry.WebhookRetryQueue
+import com.pocketbuddy.connector.sync.SyncStatusFormatter
+import com.pocketbuddy.connector.sync.SyncStatusStore
 
 class SetupActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var statusDetailText: TextView
+    private lateinit var syncSummaryText: TextView
     private lateinit var diagnosticsText: TextView
     private lateinit var webhookUrlInput: EditText
     private lateinit var userIdInput: EditText
@@ -45,6 +49,7 @@ class SetupActivity : Activity() {
     private lateinit var configStore: ConnectorConfigStore
     private lateinit var identityStore: DeviceIdentityStore
     private lateinit var retryQueue: WebhookRetryQueue
+    private lateinit var syncStatusStore: SyncStatusStore
     private lateinit var accountEmailText: TextView
     private lateinit var connectionBannerText: TextView
     private lateinit var connectionBannerContainer: LinearLayout
@@ -55,6 +60,7 @@ class SetupActivity : Activity() {
         configStore = ConnectorConfigStore(applicationContext)
         identityStore = DeviceIdentityStore(applicationContext)
         retryQueue = WebhookRetryQueue(applicationContext)
+        syncStatusStore = SyncStatusStore(applicationContext)
         currentAccountEmail = configStore.accountEmail()
         applySystemBarTheme()
         setContentView(buildContentView())
@@ -103,17 +109,17 @@ class SetupActivity : Activity() {
             if (!isFinishing && !isDestroyed) {
                 try {
                     android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-                        .setTitle("Pairing Successful! 🎉")
-                        .setMessage("PocketBuddy Connector is now successfully linked to your account:\n\n$email\n\nIt will securely sync supported UPI notifications. Please ensure Notification Access is enabled.")
-                        .setPositiveButton("Awesome", null)
+                        .setTitle("Pairing successful")
+                        .setMessage("PocketBuddy Connector is now linked to your account:\n\n$email\n\nIt can sync supported UPI notifications after Notification Access is enabled.")
+                        .setPositiveButton("Done", null)
                         .setCancelable(false)
                         .show()
                 } catch (e: Exception) {
                     // Fallback to simpler platform dialog if style resource is missing
                     android.app.AlertDialog.Builder(this)
-                        .setTitle("Pairing Successful! 🎉")
+                        .setTitle("Pairing successful")
                         .setMessage("PocketBuddy Connector is now linked to:\n\n$email")
-                        .setPositiveButton("Awesome", null)
+                        .setPositiveButton("Done", null)
                         .show()
                 }
             }
@@ -142,7 +148,7 @@ class SetupActivity : Activity() {
             visibility = View.GONE
 
             val icon = TextView(context).apply {
-                text = "✓"
+                text = "OK"
                 textSize = 18f
                 setTextColor(Color.rgb(21, 128, 61))
                 typeface = Typeface.DEFAULT_BOLD
@@ -169,9 +175,10 @@ class SetupActivity : Activity() {
                 dp(28),
             )
             addView(headerView())
-            addView(bodyText("Securely link this phone to sync UPI payment alerts from SMS and payment apps."))
+            addView(bodyText("Link this phone to sync supported UPI payment alerts from SMS and payment apps."))
             addView(connectionBannerView())
             addView(statusCard())
+            addView(transparencyEntryCard())
             addView(configCard())
             addView(permissionCard())
             addView(diagnosticsCard())
@@ -229,14 +236,69 @@ class SetupActivity : Activity() {
             setPadding(0, dp(8), 0, 0)
             visibility = View.GONE
         }
+        syncSummaryText = TextView(this).apply {
+            textSize = 13f
+            setTextColor(Color.rgb(63, 63, 70))
+            setLineSpacing(dp(3).toFloat(), 1.05f)
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = rounded(Color.rgb(244, 244, 245), dp(10), Color.rgb(228, 228, 231))
+            setTextIsSelectable(true)
+        }
 
         return sectionCard().apply {
             addView(sectionKicker("Sync status"))
             addView(statusText)
             addView(statusDetailText)
             addView(accountEmailText)
+            addView(syncSummaryText)
         }
     }
+
+    private fun transparencyEntryCard(): LinearLayout =
+        sectionCard().apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                startActivity(Intent(this@SetupActivity, ConnectorTransparencyActivity::class.java))
+            }
+            addView(sectionKicker("Privacy"))
+            val row = LinearLayout(this@SetupActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    startActivity(Intent(this@SetupActivity, ConnectorTransparencyActivity::class.java))
+                }
+            }
+            row.addView(
+                iconBadge(android.R.drawable.ic_dialog_info),
+                LinearLayout.LayoutParams(dp(42), dp(42)),
+            )
+            row.addView(Space(this@SetupActivity), LinearLayout.LayoutParams(dp(12), dp(1)))
+            row.addView(
+                LinearLayout(this@SetupActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(sectionTitle("What this app reads").apply { setPadding(0, 0, 0, dp(2)) })
+                    addView(bodyText("Payment facts only. Raw notification text is not uploaded.").apply { setPadding(0, 0, 0, 0) })
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            )
+            row.addView(
+                TextView(this@SetupActivity).apply {
+                    text = ">"
+                    textSize = 24f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(Color.rgb(113, 113, 122))
+                    gravity = Gravity.CENTER
+                },
+                LinearLayout.LayoutParams(dp(28), dp(42)),
+            )
+            addView(row)
+            addView(secondaryButton("View flow and data use") {
+                startActivity(Intent(this@SetupActivity, ConnectorTransparencyActivity::class.java))
+            })
+        }
 
     private fun configCard(): LinearLayout =
         sectionCard().apply {
@@ -248,7 +310,7 @@ class SetupActivity : Activity() {
             addView(sectionLabel("Backend webhook URL"))
             webhookUrlInput = inputField(
                 value = configStore.webhookUrl(),
-                hint = "https://your-pocketbuddy-url/api/ingest/notification",
+                hint = "https://your-pocketbuddy-url/api/ingest/notification-v2",
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
                 minLines = 3,
                 maxLines = 4,
@@ -267,10 +329,13 @@ class SetupActivity : Activity() {
             webhookTokenInput = inputField(
                 value = configStore.webhookToken().orEmpty(),
                 hint = "Leave empty unless backend gives a token",
-                inputType = InputType.TYPE_CLASS_TEXT,
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
                 minLines = 1,
                 maxLines = 2,
-            )
+            ).apply {
+                transformationMethod = PasswordTransformationMethod.getInstance()
+                typeface = Typeface.DEFAULT
+            }
             addView(webhookTokenInput)
             addView(primaryButton("Save connector config") {
                 saveConnectorConfig()
@@ -354,6 +419,14 @@ class SetupActivity : Activity() {
             setOnClickListener { onClick() }
         }
 
+    private fun iconBadge(iconRes: Int): ImageView =
+        ImageView(this).apply {
+            setImageResource(iconRes)
+            setColorFilter(Color.rgb(255, 107, 0))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = rounded(Color.rgb(255, 247, 237), dp(12), Color.rgb(254, 215, 170))
+        }
+
     private fun sectionLabel(label: String): TextView =
         TextView(this).apply {
             text = label
@@ -416,6 +489,10 @@ class SetupActivity : Activity() {
             accountEmailText.visibility = View.GONE
             connectionBannerContainer.visibility = View.GONE
         }
+
+        syncSummaryText.text = SyncStatusFormatter
+            .statusLines(syncStatusStore.snapshot(retryQueue.size()))
+            .joinToString(separator = "\n")
 
         diagnosticsText.text = buildString {
             appendLine("Notification access: ${if (notificationAccessEnabled) "enabled" else "disabled"}")
@@ -517,6 +594,8 @@ class SetupActivity : Activity() {
         }
 
         configStore.clearRuntimeConfig()
+        retryQueue.clear()
+        syncStatusStore.clear()
         currentAccountEmail = null
         webhookUrlInput.setText(configStore.webhookUrl())
         userIdInput.setText(configStore.userId().orEmpty())

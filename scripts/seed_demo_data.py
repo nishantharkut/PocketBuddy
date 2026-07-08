@@ -40,7 +40,7 @@ def generate_monthly_transactions(year, month, user_id, max_day=31):
             "day": 1,
             "hour": 12
         },
-        # Subscriptions on the 2nd
+        # Subscriptions on the 2nd/10th
         {
             "amount": 19900,
             "merchant": "Netflix India",
@@ -58,11 +58,19 @@ def generate_monthly_transactions(year, month, user_id, max_day=31):
             "hour": 12
         },
         {
-            "amount": 12900,
-            "merchant": "YouTube Premium",
+            "amount": 199900,
+            "merchant": "ChatGPT Plus",
             "category": "subscription",
             "dir": "debit",
-            "day": 2,
+            "day": 10,
+            "hour": 12
+        },
+        {
+            "amount": 9900,
+            "merchant": "Design Tool Workspace",
+            "category": "other",
+            "dir": "debit",
+            "day": 12,
             "hour": 12
         }
     ]
@@ -193,24 +201,82 @@ def seed_data(email=TARGET_EMAIL, password=TARGET_PASSWORD, full_name=TARGET_NAM
 
     # 3. Create Subscriptions (set due in 4 days to trigger Collisions card)
     now = datetime.datetime.utcnow()
-    subs = [
-        {"service_name": "Netflix", "amount": 19900},
-        {"service_name": "Spotify Premium", "amount": 11900},
-        {"service_name": "YouTube Premium", "amount": 12900}
-    ]
-    for sub in subs:
-        db.subscriptions.insert_one({
-            "_id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "service_name": sub["service_name"],
-            "amount_paise": sub["amount"],
-            "billing_cycle": "monthly",
-            "next_debit_date": now + datetime.timedelta(days=4),
-            "detected_from": "manual_transaction",
-            "is_active": True,
-            "created_at": datetime.datetime(2026, 4, 30),
-            "updated_at": datetime.datetime(2026, 4, 30)
-        })
+    # Spotify: Active/Tracked
+    db.subscriptions.insert_one({
+        "_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "service_name": "Spotify",
+        "name": "Spotify",
+        "amount": 11900,
+        "billing_cycle": "monthly",
+        "next_debit_date": now + datetime.timedelta(days=4),
+        "detected_from": "manual_transaction",
+        "is_active": True,
+        "status": "confirmed",
+        "confidence": 100.0,
+        "evidence": ["Manually added by user during onboarding"],
+        "created_at": datetime.datetime(2026, 4, 30),
+        "updated_at": datetime.datetime(2026, 4, 30)
+    })
+    # ChatGPT Plus: Active/Tracked from repeated known-brand debit rhythm
+    db.subscriptions.insert_one({
+        "_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "service_name": "ChatGPT Plus",
+        "name": "ChatGPT Plus",
+        "amount": 199900,
+        "billing_cycle": "monthly",
+        "next_debit_date": now + datetime.timedelta(days=5),
+        "detected_from": "recurring_pattern",
+        "is_active": True,
+        "status": "confirmed",
+        "confidence": 95.0,
+        "evidence": [
+            "Recognized premium subscription brand",
+            "Stable monthly amount of Rs 1,999.00 observed"
+        ],
+        "created_at": datetime.datetime(2026, 4, 30),
+        "updated_at": datetime.datetime(2026, 4, 30)
+    })
+    # Netflix: Paused/Inactive
+    db.subscriptions.insert_one({
+        "_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "service_name": "Netflix",
+        "name": "Netflix",
+        "amount": 19900,
+        "billing_cycle": "monthly",
+        "next_debit_date": now + datetime.timedelta(days=4),
+        "detected_from": "manual_transaction",
+        "is_active": False,
+        "status": "confirmed",
+        "confidence": 100.0,
+        "evidence": ["Paused by user in settings"],
+        "created_at": datetime.datetime(2026, 4, 30),
+        "updated_at": datetime.datetime(2026, 4, 30)
+    })
+    # Design Tool Workspace: Possible/Candidate. This is intentionally not a
+    # known brand, so it remains in review until the student confirms it.
+    db.subscriptions.insert_one({
+        "_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "service_name": "Design Tool Workspace",
+        "name": "Design Tool Workspace",
+        "amount": 9900,
+        "billing_cycle": "monthly",
+        "next_debit_date": now + datetime.timedelta(days=6),
+        "detected_from": "recurring_pattern",
+        "is_active": True,
+        "status": "possible",
+        "confidence": 60.0,
+        "evidence": [
+            "Seen twice with a recurring monthly cadence",
+            "Stable amount of Rs 99.00 observed",
+            "Requires user confirmation to count as runway fixed cost"
+        ],
+        "created_at": datetime.datetime(2026, 4, 30),
+        "updated_at": datetime.datetime(2026, 4, 30)
+    })
 
     # 4. Create Historical Transactions
     # May 2026

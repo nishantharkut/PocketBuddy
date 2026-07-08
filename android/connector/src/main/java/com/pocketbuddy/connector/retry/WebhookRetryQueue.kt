@@ -76,6 +76,10 @@ class WebhookRetryQueue(context: Context) {
         writeStoredEntries(readStoredEntries().filterNot { it.id == id })
     }
 
+    fun clear() {
+        writeStoredEntries(emptyList())
+    }
+
     fun size(): Int = readStoredEntries().size
 
     private fun readStoredEntries(): List<StoredEntry> {

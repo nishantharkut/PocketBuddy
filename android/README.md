@@ -48,7 +48,8 @@ The Gradle module is named `:connector`.
 - Reads UPI/payment app notification text.
 - Reads bank SMS notifications surfaced by apps like Google Messages.
 - Parses amount, direction, merchant, transaction/reference ID, and capture source.
-- Sends JSON payloads to the configured webhook.
+- Sends structured JSON payloads plus a masked preview to the configured webhook.
+- Does not upload full notification or SMS text on the v2 ingest path.
 - Adds stable installation-level `deviceId`.
 - Supports optional `userId` and bearer token binding.
 - Stores failed webhook sends in an encrypted Android Keystore retry queue.
@@ -111,7 +112,7 @@ sdk.dir=C\:\\Users\\<YOUR_USER>\\AppData\\Local\\Android\\Sdk
 For USB testing with `adb reverse`, use:
 
 ```properties
-POCKETBUDDY_WEBHOOK_URL=http://127.0.0.1:8000/api/ingest/notification
+POCKETBUDDY_WEBHOOK_URL=http://127.0.0.1:8000/api/ingest/notification-v2
 POCKETBUDDY_WEBHOOK_TOKEN=
 POCKETBUDDY_USER_ID=
 ```
@@ -119,7 +120,7 @@ POCKETBUDDY_USER_ID=
 For a LAN/ngrok backend, replace the URL accordingly:
 
 ```properties
-POCKETBUDDY_WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app/api/ingest/notification
+POCKETBUDDY_WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app/api/ingest/notification-v2
 ```
 
 `android/local.properties` is ignored by git.
@@ -286,7 +287,7 @@ Expected architecture:
 
 ```text
 Phone Wi-Fi/mobile data
-  -> http://<EC2_PUBLIC_IP>/api/ingest/notification
+  -> http://<EC2_PUBLIC_IP>/api/ingest/notification-v2
   -> Nginx on EC2
   -> FastAPI backend
   -> MongoDB Atlas
@@ -308,7 +309,7 @@ http://<EC2_PUBLIC_IP>
 It should look like:
 
 ```text
-POCKETBUDDY_WEBHOOK_URL=http://<EC2_PUBLIC_IP>/api/ingest/notification
+POCKETBUDDY_WEBHOOK_URL=http://<EC2_PUBLIC_IP>/api/ingest/notification-v2
 POCKETBUDDY_WEBHOOK_TOKEN=
 POCKETBUDDY_USER_ID=<your_user_id>
 ```
@@ -355,7 +356,7 @@ UsbFfs tcp:8000 tcp:8000
 With `adb reverse`, Android can post to:
 
 ```text
-http://127.0.0.1:8000/api/ingest/notification
+http://127.0.0.1:8000/api/ingest/notification-v2
 ```
 
 ## Debug Broadcast Tests
@@ -408,7 +409,7 @@ $DEVICE = "10BF821N3M0055M"
 Invoke-RestMethod 'http://127.0.0.1:8000/api/ingest/transactions?limit=10' | ConvertTo-Json -Depth 10
 ```
 
-Expected payload fields:
+Expected v2 payload fields:
 
 ```json
 {
@@ -419,7 +420,12 @@ Expected payload fields:
   "currency": "INR",
   "direction": "credit",
   "merchant": "KANIKA SINGHAL",
-  "transactionId": "208403881695"
+  "transactionId": "208403881695",
+  "maskedPreview": "Received Rs.2.00 from KANIKA SINGHAL. UPI ref no. [ref]",
+  "parserVersion": "android-upi-v2",
+  "confidence": "high",
+  "rawTextSuppressed": true,
+  "schemaVersion": 2
 }
 ```
 
@@ -428,8 +434,8 @@ Expected payload fields:
 Payment-app notifications are parsed when they expose readable notification text containing:
 
 - INR amount, such as `Rs.50`, `INR 50`, or a rupee symbol amount
-- debit/credit direction, such as `paid`, `sent`, `debited`, `received`, or `credited`
 - UPI/payment signal, such as `UPI`, `VPA`, `UTR`, `txn id`, or `ref no`
+- debit/credit direction, such as `paid`, `sent`, `debited`, `received`, or `credited`, when available
 
 Known package coverage includes:
 
@@ -448,7 +454,7 @@ SMS notification coverage includes:
 - Samsung Messages
 - common `messaging`, `mms`, and `sms` package fragments
 
-OTP and promotional messages are intentionally rejected.
+If a supported payment-like alert has an amount and UPI/reference context but no clear debit/credit direction, the connector sends a low-confidence v2 event with the masked preview so the backend can show it as incomplete review activity instead of silently dropping it. OTP and promotional messages are intentionally rejected.
 
 ## Troubleshooting
 
@@ -498,7 +504,8 @@ If no real events appear, verify:
 - `adb reverse` is active for the selected device
 - notification listener access is enabled
 - the latest APK is installed
-- the source notification contains amount, direction, and UPI/payment signal
+- the source notification contains an amount plus UPI/payment signal
+- the connector diagnostics show `/api/ingest/notification-v2`
 
 ## Important Files
 

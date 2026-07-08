@@ -231,8 +231,8 @@ export function BankConsentDialog({
         <div className="shrink-0 border-b border-border bg-background px-5 py-5 sm:px-6">
           <DialogHeader className="space-y-3 text-left">
             <div className="flex items-start gap-3 pr-7 sm:pr-8">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface">
-                <span className="text-[11px] font-black tracking-wide text-foreground">RBI</span>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white p-0.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+                <img src="/logos/rbi.svg" alt="Reserve Bank of India" className="h-full w-full object-contain" />
               </div>
               <div className="min-w-0">
                 <DialogTitle className="text-base font-semibold leading-tight tracking-tight text-foreground sm:text-lg">
@@ -760,6 +760,10 @@ function DiscoveredAccountRow({
   );
 }
 
+const BANKS_WITH_LOGOS = new Set([
+  "sbi", "hdfc", "icici", "axis", "kotak", "pnb", "bob", "canara", "indian-bank", "yes-bank", "federal", "rbl"
+]);
+
 function InstitutionMark({
   institution,
   size = "md",
@@ -767,12 +771,24 @@ function InstitutionMark({
   institution: AAInstitution;
   size?: "md" | "lg";
 }) {
-  const sizeClass = size === "lg" ? "h-11 w-11 text-lg" : "h-9 w-9 text-base";
+  const sizeClass = size === "lg" ? "h-11 w-11" : "h-9 w-9";
+  const hasLogo = BANKS_WITH_LOGOS.has(institution.id);
+
   return (
     <span
-      className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-xl border border-border bg-background`}
+      className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white p-0.5 shadow-[0_2px_6px_rgba(0,0,0,0.04)]`}
     >
-      <span aria-hidden="true">{institutionEmoji(institution)}</span>
+      {hasLogo ? (
+        <img
+          src={`/logos/banks/${institution.id}.svg`}
+          alt={institution.name}
+          className="h-full w-full object-contain"
+        />
+      ) : (
+        <span aria-hidden="true" className={size === "lg" ? "text-lg" : "text-base"}>
+          {institutionEmoji(institution)}
+        </span>
+      )}
     </span>
   );
 }

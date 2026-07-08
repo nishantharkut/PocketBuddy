@@ -120,6 +120,22 @@ const getTrustBadgeClass = (label: string) => {
   }
 };
 
+const getPriceFreshnessClass = (state: string) => {
+  switch (state) {
+    case "fresh":
+      return "text-success";
+    case "recent":
+    case "baseline":
+      return "text-zinc-400";
+    case "needs_price_check":
+    case "under_review":
+    case "price_spike_review":
+      return "text-warning";
+    default:
+      return "text-zinc-400";
+  }
+};
+
 const getFoodReviewSourceLabel = (item: any) => {
   const source = String(item.source_type || item.source || "").toLowerCase();
   if (source === "manual_menu_add" || source === "student_menu_submission") return "Added manually";
@@ -891,10 +907,27 @@ function Dashboard() {
     },
   });
 
+  const menuFoodGapHours = useMemo(() => {
+    const lastFood = (txns ?? []).find((t) => t.category === "food");
+    return lastFood ? (Date.now() - new Date(lastFood.created_at).getTime()) / 3600000 : undefined;
+  }, [txns]);
+
   const { data: foods } = useQuery({
-    queryKey: ["foods"],
+    queryKey: [
+      "foods",
+      runwayView?.safeDailyPaise,
+      menuFoodGapHours ? Math.floor(menuFoodGapHours) : null,
+      runwayView?.foodRoutine?.routine_type,
+      profile?.mess_enrolled,
+    ],
     staleTime: 30_000,
-    queryFn: () => getCampusFood(),
+    queryFn: () =>
+      getCampusFood({
+        safeFoodBudgetPaise: runwayView?.safeDailyPaise,
+        mealGapHours: menuFoodGapHours,
+        foodRoutineType: runwayView?.foodRoutine?.routine_type,
+        messEnrolled: profile?.mess_enrolled,
+      }),
   });
 
   // Best food suggestion
@@ -919,7 +952,13 @@ function Dashboard() {
           : food.source_type === "price_change_review" || food.source_type === "menu_scan_pending"
             ? -60
             : 0;
-      return (available ? 40 : -20) + trustScore + budgetBonus + sourcePenalty - Math.min(price / 1000, 12);
+      const freshnessBonus =
+        food.price_freshness_state === "needs_price_check"
+          ? -22
+          : food.price_freshness_state === "fresh" || food.price_freshness_state === "recent"
+            ? 4
+            : 0;
+      return (available ? 40 : -20) + trustScore + budgetBonus + sourcePenalty + freshnessBonus - Math.min(price / 1000, 12);
     };
     return [...foods]
       .filter((food) => Number(food.price ?? 0) > 0 && !["pending_verification", "rejected", "merged_into_active", "needs_review", "disputed_hidden"].includes(String(food.status ?? "active")))
@@ -1239,10 +1278,7 @@ function Dashboard() {
   }, [search.log]);
 
 
-  const foodGapHours = useMemo(() => {
-    const lastFood = (txns ?? []).find((t) => t.category === "food");
-    return lastFood ? (Date.now() - new Date(lastFood.created_at).getTime()) / 3600000 : 0;
-  }, [txns]);
+  const foodGapHours = menuFoodGapHours ?? 0;
 
   // ── Smart nudges derived from insights ──────────────────────────────────
   const [dismissedNudges, setDismissedNudges] = useState<Set<string>>(new Set());
@@ -2647,6 +2683,25 @@ function Dashboard() {
                       {items.map((it) => {
                         const trustLabel = getTrustBadgeLabel(it);
                         const isSafeBudget = it.price <= (insights?.safe_daily_limit_paise || (runwayView?.safeDailyPaise ?? 23800));
+                        const freshnessState = String(it.price_freshness_state || "");
+                        const showFreshness =
+                          freshnessState === "needs_price_check" ||
+                          freshnessState === "under_review" ||
+                          freshnessState === "price_spike_review" ||
+                          freshnessState === "recent";
+                        const routineState = String(it.routine_fit?.state || "");
+                        const showRoutineFit = routineState && routineState !== "flexible";
+                        const mealGapCopy =
+                          it.meal_gap_context?.state === "meal_gap_checkin"
+                            ? "Meal gap: check in"
+                            : insights?.food?.gap_hours >= 12
+                              ? `Meal gap: ${Math.round(insights.food.gap_hours)}h`
+                              : `Last meal ${Math.round(insights?.food?.gap_hours ?? 0)}h ago`;
+                        const mealGapTitle =
+                          it.meal_gap_context?.message ||
+                          (insights?.food?.gap_hours >= 12
+                            ? "Check in the meal source before using today's food budget again."
+                            : "Recent food timing context");
                         return (
                           <div key={it.id} className="flex flex-col gap-2 rounded-xl bg-surface border border-border p-3">
                             <div className="flex items-start justify-between w-full">
@@ -2674,10 +2729,31 @@ function Dashboard() {
                                   Student confirmed
                                 </span>
                               )}
+                              {showFreshness && (
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded bg-surface-raised font-semibold flex items-center gap-1 ${getPriceFreshnessClass(freshnessState)}`}
+                                  title={it.price_freshness_reason || "Price freshness signal"}
+                                >
+                                  <span className={`h-1.5 w-1.5 rounded-full ${freshnessState === "needs_price_check" ? "bg-warning" : "bg-zinc-500"}`} />
+                                  {it.price_freshness_badge || "Price checked"}
+                                </span>
+                              )}
+                              {showRoutineFit && (
+                                <span
+                                  className="text-xs px-2 py-0.5 rounded bg-surface-raised text-zinc-400 font-semibold flex items-center gap-1"
+                                  title={it.routine_fit?.message}
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                  {routineState === "mess_first" ? "Mess-first routine" : "Routine fit"}
+                                </span>
+                              )}
                               {insights?.food?.gap_hours > 0 && (
-                                <span className="text-xs px-2 py-0.5 rounded bg-surface-raised text-zinc-400 font-semibold flex items-center gap-1">
+                                <span
+                                  className="text-xs px-2 py-0.5 rounded bg-surface-raised text-zinc-400 font-semibold flex items-center gap-1"
+                                  title={mealGapTitle}
+                                >
                                   <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-                                  {insights.food.gap_hours >= 12 ? `Good after ${Math.round(insights.food.gap_hours)}h meal gap` : `Last meal ${Math.round(insights.food.gap_hours)}h ago`}
+                                  {mealGapCopy}
                                 </span>
                               )}
                             </div>

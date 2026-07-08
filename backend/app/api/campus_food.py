@@ -185,6 +185,8 @@ async def get_campus_food(
     status: Optional[str] = Query(None),
     safe_food_budget_paise: Optional[int] = Query(None, ge=0),
     meal_gap_hours: Optional[float] = Query(None, ge=0),
+    food_routine_type: Optional[str] = Query(None),
+    mess_enrolled: Optional[bool] = Query(None),
 ):
     db = get_db()
     if status == "review_queue":
@@ -320,7 +322,15 @@ async def get_campus_food(
 
         item["price_spike_alert"] = not price_stable and price_change_pct >= 15
         item.update(build_food_trust_metadata(item, now))
-        apply_food_context_metadata(item, safe_food_budget_paise, meal_gap_hours)
+        apply_food_context_metadata(
+            item,
+            safe_food_budget_paise,
+            meal_gap_hours,
+            {
+                "routine_type": food_routine_type,
+                "mess_enrolled": mess_enrolled,
+            },
+        )
 
         mapped_items.append(item)
 
@@ -332,6 +342,8 @@ async def get_campus_food_recommendations(
     campus: Optional[str] = Query(None),
     safe_food_budget_paise: Optional[int] = Query(None, ge=0),
     meal_gap_hours: Optional[float] = Query(None, ge=0),
+    food_routine_type: Optional[str] = Query(None),
+    mess_enrolled: Optional[bool] = Query(None),
     limit: int = Query(3, ge=1, le=10),
 ):
     """
@@ -356,6 +368,10 @@ async def get_campus_food_recommendations(
         now=datetime.datetime.utcnow(),
         safe_food_budget_paise=safe_food_budget_paise,
         meal_gap_hours=meal_gap_hours,
+        food_routine={
+            "routine_type": food_routine_type,
+            "mess_enrolled": mess_enrolled,
+        },
         limit=limit,
     )
 

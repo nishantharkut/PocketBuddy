@@ -54,8 +54,22 @@ export async function deleteSubscription({ data }: { data: { id: string } }) {
   });
 }
 
-export async function getCampusFood(status?: string) {
-  const url = status ? `/api/campus-food?status=${status}` : "/api/campus-food";
+export async function getCampusFood(params?: string | {
+  status?: string;
+  safeFoodBudgetPaise?: number;
+  mealGapHours?: number;
+  foodRoutineType?: string;
+  messEnrolled?: boolean;
+}) {
+  const query = new URLSearchParams();
+  const options = typeof params === "string" ? { status: params } : params;
+  if (options?.status) query.set("status", options.status);
+  if (Number.isFinite(options?.safeFoodBudgetPaise)) query.set("safe_food_budget_paise", String(options?.safeFoodBudgetPaise));
+  if (Number.isFinite(options?.mealGapHours)) query.set("meal_gap_hours", String(options?.mealGapHours));
+  if (options?.foodRoutineType) query.set("food_routine_type", options.foodRoutineType);
+  if (typeof options?.messEnrolled === "boolean") query.set("mess_enrolled", String(options.messEnrolled));
+  const suffix = query.toString();
+  const url = suffix ? `/api/campus-food?${suffix}` : "/api/campus-food";
   return apiRequest(url);
 }
 

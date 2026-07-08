@@ -275,6 +275,69 @@ def _last_price_seen_at(item: dict[str, Any], now: datetime.datetime) -> tuple[d
         return None, "baseline"
 
 
+def _price_freshness_metadata(
+    item: dict[str, Any],
+    source_type: str,
+    seen_at: datetime.datetime | None,
+    seen_label: str,
+    now: datetime.datetime,
+) -> dict[str, Any]:
+    """Return user-facing price freshness without changing trust state."""
+    if source_type in {"menu_scan_pending", "student_menu_submission", "price_change_review"}:
+        return {
+            "price_freshness_state": "under_review",
+            "price_freshness_badge": "Under review",
+            "price_freshness_reason": "Price is waiting for independent campus confirmation",
+        }
+
+    if item.get("price_spike_alert"):
+        return {
+            "price_freshness_state": "price_spike_review",
+            "price_freshness_badge": "Price check",
+            "price_freshness_reason": "Recent price movement is being checked by students",
+        }
+
+    if source_type == "partner_verified":
+        return {
+            "price_freshness_state": "fresh",
+            "price_freshness_badge": "Fresh",
+            "price_freshness_reason": "Partner/API price source",
+        }
+
+    if not seen_at:
+        if source_type == "curated_baseline":
+            return {
+                "price_freshness_state": "baseline",
+                "price_freshness_badge": "Baseline",
+                "price_freshness_reason": "Baseline campus catalog price; students can report changes",
+            }
+        return {
+            "price_freshness_state": "needs_price_check",
+            "price_freshness_badge": "Needs price check",
+            "price_freshness_reason": "No recent campus confirmation for this price",
+        }
+
+    seen_at = seen_at.replace(tzinfo=None)
+    age_days = max(0, (now - seen_at).days)
+    if age_days <= 14:
+        return {
+            "price_freshness_state": "fresh",
+            "price_freshness_badge": "Fresh",
+            "price_freshness_reason": f"Price confirmed {seen_label}",
+        }
+    if age_days <= 45:
+        return {
+            "price_freshness_state": "recent",
+            "price_freshness_badge": "Recently confirmed",
+            "price_freshness_reason": f"Price confirmed {seen_label}",
+        }
+    return {
+        "price_freshness_state": "needs_price_check",
+        "price_freshness_badge": "Needs price check",
+        "price_freshness_reason": f"Last price confirmation was {age_days} days ago",
+    }
+
+
 def _food_source_type(item: dict[str, Any]) -> str:
     source = str(item.get("source") or "").lower()
     status = str(item.get("status") or "").lower()
@@ -302,6 +365,7 @@ def build_food_trust_metadata(item: dict[str, Any], now: datetime.datetime) -> d
     source_type = _food_source_type(item)
     confirmations = food_confirmation_count(item)
     seen_at, seen_label = _last_price_seen_at(item, now)
+    freshness = _price_freshness_metadata(item, source_type, seen_at, seen_label, now)
 
     trust_map = {
         "partner_verified": (95, "Partner verified", "Official partner/API source"),
@@ -326,15 +390,49 @@ def build_food_trust_metadata(item: dict[str, Any], now: datetime.datetime) -> d
         "trust_reason": reason,
         "last_seen_at": seen_at.isoformat() if seen_at else None,
         "last_seen_label": seen_label,
+        **freshness,
     }
+
+
+def _routine_type_from_context(food_routine: dict[str, Any] | str | None) -> str:
+    if isinstance(food_routine, str):
+        value = food_routine.strip().lower()
+    elif isinstance(food_routine, dict):
+        value = str(
+            food_routine.get("routine_type")
+            or food_routine.get("type")
+            or food_routine.get("key")
+            or ""
+        ).strip().lower()
+        if not value and food_routine.get("mess_enrolled"):
+            value = "hostel_mess"
+    else:
+        value = ""
+
+    aliases = {
+        "mess": "hostel_mess",
+        "hostel": "hostel_mess",
+        "hostel_mess": "hostel_mess",
+        "campus_meals": "hostel_mess",
+        "pg": "pg_cooking",
+        "pg_cooking": "pg_cooking",
+        "self_cooking": "pg_cooking",
+        "cooking": "pg_cooking",
+        "day_scholar": "day_scholar",
+        "commuter": "day_scholar",
+        "mixed": "mixed",
+    }
+    return aliases.get(value, "mixed")
 
 
 def apply_food_context_metadata(
     item: dict[str, Any],
     safe_food_budget_paise: int | None = None,
     meal_gap_hours: float | None = None,
+    food_routine: dict[str, Any] | str | None = None,
 ) -> None:
     price = int(item.get("price") or 0)
+    routine_type = _routine_type_from_context(food_routine)
 
     if safe_food_budget_paise is None:
         item["budget_fit"] = "unknown"
@@ -355,9 +453,17 @@ def apply_food_context_metadata(
             "message": "No meal-gap context supplied",
         }
     elif meal_gap_hours >= 16:
+        if routine_type == "hostel_mess":
+            message = f"No food spend seen for {meal_gap_hours:.0f}h. If this was a mess meal, check it in before placing another order."
+        elif routine_type == "pg_cooking":
+            message = f"No food spend seen for {meal_gap_hours:.0f}h. If you cooked or ate a prepared meal, check it in before ordering."
+        elif routine_type == "day_scholar":
+            message = f"No food spend seen for {meal_gap_hours:.0f}h. If you carried food from home, check it in so runway stays accurate."
+        else:
+            message = f"No food spend seen for {meal_gap_hours:.0f}h. Log mess, cooked, or outside food before placing another order."
         item["meal_gap_context"] = {
             "state": "meal_gap_checkin",
-            "message": f"No food spend seen for {meal_gap_hours:.0f}h. If you ate in mess, mark it instead of ordering blindly.",
+            "message": message,
         }
     elif meal_gap_hours >= 10:
         item["meal_gap_context"] = {
@@ -369,6 +475,31 @@ def apply_food_context_metadata(
             "state": "normal",
             "message": "Meal rhythm looks normal.",
         }
+
+    routine_messages = {
+        "hostel_mess": (
+            "mess_first",
+            "Mess/campus meals are the baseline; use outside food as the exception.",
+        ),
+        "pg_cooking": (
+            "cook_first",
+            "Cooked or prepped meals are the baseline; use campus food when time or runway allows.",
+        ),
+        "day_scholar": (
+            "packed_meal_first",
+            "Packed or predictable campus meals are the baseline; avoid impulse snacks during commute gaps.",
+        ),
+        "mixed": (
+            "flexible",
+            "Use the lowest reliable meal that fits today's safe food budget.",
+        ),
+    }
+    state, message = routine_messages[routine_type]
+    item["routine_fit"] = {
+        "state": state,
+        "routine_type": routine_type,
+        "message": message,
+    }
 
 
 def _parse_time(value: Any) -> datetime.time | None:
@@ -420,6 +551,12 @@ def _recommendation_score(item: dict[str, Any], available_now: bool | None) -> i
     if item.get("price_spike_alert"):
         score -= 35
 
+    freshness_state = item.get("price_freshness_state")
+    if freshness_state == "needs_price_check":
+        score -= 22
+    elif freshness_state in {"fresh", "recent"}:
+        score += 4
+
     density = str(item.get("crowd_density") or "").lower()
     if "high" in density:
         score -= 8
@@ -447,6 +584,9 @@ def _recommendation_why(item: dict[str, Any], available_now: bool | None) -> str
     if item.get("trust_badge"):
         parts.append(str(item["trust_badge"]).lower())
 
+    if item.get("price_freshness_state") == "needs_price_check":
+        parts.append("needs price check")
+
     return ", ".join(parts).capitalize() + "." if parts else "Ranked using trust, budget, and availability."
 
 
@@ -457,8 +597,15 @@ def _recommendation_evidence(item: dict[str, Any], available_now: bool | None) -
         evidence.append(str(trust_reason))
     if item.get("last_seen_label"):
         evidence.append(f"Last seen {item['last_seen_label']}")
+    if item.get("price_freshness_state") == "needs_price_check":
+        evidence.append("Needs community price check")
+    if item.get("price_freshness_reason"):
+        evidence.append(str(item["price_freshness_reason"]))
     if item.get("budget_fit_reason"):
         evidence.append(str(item["budget_fit_reason"]))
+    routine_fit = item.get("routine_fit") or {}
+    if routine_fit.get("message"):
+        evidence.append(str(routine_fit["message"]))
     if available_now is True:
         evidence.append("Available in the current meal window")
     elif available_now is False:
@@ -491,6 +638,7 @@ def build_food_recommendations(
     now: datetime.datetime,
     safe_food_budget_paise: int | None = None,
     meal_gap_hours: float | None = None,
+    food_routine: dict[str, Any] | str | None = None,
     limit: int = 3,
 ) -> list[dict[str, Any]]:
     ranked: list[dict[str, Any]] = []
@@ -501,7 +649,7 @@ def build_food_recommendations(
             continue
 
         item.update(build_food_trust_metadata(item, now))
-        apply_food_context_metadata(item, safe_food_budget_paise, meal_gap_hours)
+        apply_food_context_metadata(item, safe_food_budget_paise, meal_gap_hours, food_routine)
         available_now = _is_available_at(item, now)
         score = _recommendation_score(item, available_now)
 
@@ -519,9 +667,13 @@ def build_food_recommendations(
             "trust_score": item.get("trust_score"),
             "trust_badge": item.get("trust_badge"),
             "trust_reason": item.get("trust_reason"),
+            "price_freshness_state": item.get("price_freshness_state"),
+            "price_freshness_badge": item.get("price_freshness_badge"),
+            "price_freshness_reason": item.get("price_freshness_reason"),
             "budget_fit": item.get("budget_fit"),
             "budget_fit_reason": item.get("budget_fit_reason"),
             "meal_gap_context": item.get("meal_gap_context"),
+            "routine_fit": item.get("routine_fit"),
             "price_spike_alert": bool(item.get("price_spike_alert")),
         })
 

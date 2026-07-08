@@ -1,5 +1,5 @@
 import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
@@ -46,7 +46,11 @@ import {
   getTransactions,
   deleteRecentTransactions,
   insertSubscription,
+  confirmSubscription,
+  ignoreSubscription,
+  cancelSubscription,
 } from "@/lib/api/db.functions";
+import { PlatformIcon } from "@/components/PlatformIcon";
 
 export const Route = createLazyFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -72,6 +76,14 @@ function SettingsPage() {
     enabled: !!user,
     queryFn: () => getSubscriptions(),
   });
+
+  const { trackedSubs, possibleSubs, inactiveSubs } = useMemo(() => {
+    const list = subs ?? [];
+    const tracked = list.filter((s: any) => s.is_active !== false && (s.status === "confirmed" || s.status === "active" || s.status === "missed" || !s.status));
+    const possible = list.filter((s: any) => s.is_active !== false && s.status === "possible");
+    const inactive = list.filter((s: any) => s.is_active === false || s.status === "ignored" || s.status === "cancelled");
+    return { trackedSubs: tracked, possibleSubs: possible, inactiveSubs: inactive };
+  }, [subs]);
 
   const [allowance, setAllowance] = useState("");
   const [cycleDay, setCycleDay] = useState("1");
@@ -144,6 +156,7 @@ function SettingsPage() {
     try {
       await updateSubscriptionIsActive({ data: { id, is_active: val } });
       qc.invalidateQueries({ queryKey: ["all-subs"] });
+      qc.invalidateQueries({ queryKey: ["runway-forecast"] });
       toast(`${name} ${val ? "enabled" : "paused"}`);
     } catch (err: any) {
       toast.error(err.message || "Failed to update subscription");
@@ -155,9 +168,43 @@ function SettingsPage() {
     try {
       await deleteSubscription({ data: { id } });
       qc.invalidateQueries({ queryKey: ["all-subs"] });
+      qc.invalidateQueries({ queryKey: ["runway-forecast"] });
       toast.success("Removed.");
     } catch (err: any) {
       toast.error(err.message || "Failed to delete subscription");
+    }
+  }
+
+  async function confirmSub(id: string, name: string) {
+    try {
+      await confirmSubscription({ data: { id } });
+      qc.invalidateQueries({ queryKey: ["all-subs"] });
+      qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+      toast.success(`Tracked ${name} as recurring commitment.`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to confirm commitment");
+    }
+  }
+
+  async function ignoreSub(id: string, name: string) {
+    try {
+      await ignoreSubscription({ data: { id } });
+      qc.invalidateQueries({ queryKey: ["all-subs"] });
+      qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+      toast(`Ignored ${name}.`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to ignore commitment");
+    }
+  }
+
+  async function cancelSub(id: string, name: string) {
+    try {
+      await cancelSubscription({ data: { id } });
+      qc.invalidateQueries({ queryKey: ["all-subs"] });
+      qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+      toast(`Marked ${name} as cancelled.`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to cancel commitment");
     }
   }
 

@@ -610,7 +610,12 @@ def build_runway_forecast(
     discretionary_spent = spent - committed_spent
     remaining = funding - spent
 
-    active_subscriptions = [sub for sub in subscriptions if sub.get("is_active", True) and _valid_amount(sub)]
+    active_subscriptions = [
+        sub for sub in subscriptions 
+        if sub.get("is_active", True) 
+        and sub.get("status", "confirmed") in ("confirmed", "active") 
+        and _valid_amount(sub)
+    ]
     commitments: list[dict] = []
     for sub in active_subscriptions:
         for due in _subscription_dates(sub, now, cycle_end):
@@ -620,6 +625,26 @@ def build_runway_forecast(
                 "amount": _valid_amount(sub),
                 "due_at": due,
                 "status": "scheduled",
+            })
+
+    possible_commitments: list[dict] = []
+    possible_subscriptions = [
+        sub for sub in subscriptions 
+        if sub.get("is_active", True) 
+        and sub.get("status") == "possible" 
+        and _valid_amount(sub)
+    ]
+    for sub in possible_subscriptions:
+        for due in _subscription_dates(sub, now, cycle_end):
+            possible_commitments.append({
+                "id": sub.get("_id"),
+                "label": str(sub.get("service_name") or sub.get("name") or "Subscription"),
+                "amount": _valid_amount(sub),
+                "due_at": due,
+                "confidence": sub.get("confidence", 50.0),
+                "evidence": sub.get("evidence", []),
+                "cadence": sub.get("billing_cycle", "monthly"),
+                "status": "possible",
             })
 
     mess_model = str(profile.get("mess_billing_model") or ("included" if profile.get("mess_enrolled") else "none")).casefold()
@@ -854,6 +879,8 @@ def build_runway_forecast(
             "flexible": discretionary_spent + round(projected_discretionary),
         },
         "food_routine": food_routine,
+        "possible_commitments": possible_commitments,
+        "possible_commitments_total": sum(item["amount"] for item in possible_commitments),
         "decision_engine": {
             "summary": f"Runway leaves Rs {safe_daily // 100:,}/day after reserving {reserved_text} and tracking food at Rs {food_routine['food_daily_pace'] // 100:,}/day.",
             "absorbed": absorbed,

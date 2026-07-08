@@ -62,6 +62,8 @@ import {
   submitFoodSignalResponse,
   submitParserCorrection,
   getWingNettedBalances,
+  confirmSubscription,
+  ignoreSubscription,
 } from "@/lib/api/db.functions";
 
 
@@ -873,6 +875,8 @@ function Dashboard() {
       status: runwayForecast?.status ?? "healthy",
       foodRoutine,
       decision,
+      possibleCommitments: runwayForecast?.possible_commitments ?? [],
+      possibleCommitmentsTotal: runwayForecast?.possible_commitments_total ?? 0,
     };
   }, [runwayForecast, calc]);
 
@@ -1882,6 +1886,88 @@ function Dashboard() {
                 )}
               </div>
             </div>
+
+            {/* Possible commitments runway warn banner */}
+            {runwayView && runwayView.possibleCommitments && runwayView.possibleCommitments.length > 0 && (
+              <Card
+                id="card-possible-commitments-alert"
+                className="border-amber-500/20 bg-amber-500/5 p-5 rounded-2xl relative overflow-hidden mt-4"
+              >
+                <div style={{ display: "flex", alignItems: "start", gap: "14px" }}>
+                  <div
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      background: "#f59e0b",
+                      marginTop: "6px",
+                      boxShadow: "0 0 8px #f59e0b",
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: "11px", fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      Unconfirmed Commitments
+                    </p>
+                    <p className="text-[13px] text-zinc-400 mt-1.5 leading-relaxed">
+                      <strong className="text-foreground">{rupees(runwayView.possibleCommitmentsTotal)}</strong> in possible recurring debits may hit before your allowance reset. These are currently excluded from your runway.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
+                      {runwayView.possibleCommitments.map((sub: any) => (
+                        <div
+                          key={sub.id}
+                          className="bg-surface-raised border border-border/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            <PlatformIcon platform={sub.label} className="h-9 w-9 rounded-xl" />
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">{sub.label}</p>
+                              <p style={{ fontSize: "11px", color: "var(--muted-foreground)", marginTop: "2px" }}>
+                                {rupees(sub.amount)} · expected {shortDate(new Date(sub.due_at))} ({Math.round(sub.confidence)}% confidence)
+                              </p>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <Button
+                              size="sm"
+                              className="bg-amber-500 text-black hover:bg-amber-600 h-8 text-[11px] font-bold uppercase tracking-wider"
+                              onClick={async () => {
+                                try {
+                                  await confirmSubscription({ data: { id: sub.id } });
+                                  qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                  qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                  toast.success(`Tracked ${sub.label}!`);
+                                } catch (err: any) {
+                                  toast.error(err.message || "Failed to confirm");
+                                }
+                              }}
+                            >
+                              Track commitment
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-border text-muted-foreground hover:text-foreground h-8 text-[11px] font-bold uppercase tracking-wider"
+                              onClick={async () => {
+                                try {
+                                  await ignoreSubscription({ data: { id: sub.id } });
+                                  qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                  qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                  toast(`Ignored ${sub.label}.`);
+                                } catch (err: any) {
+                                  toast.error(err.message || "Failed to ignore");
+                                }
+                              }}
+                            >
+                              Not recurring
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {runwayView && <MealRunwayCheck calc={calc} runwayView={runwayView} />}
 

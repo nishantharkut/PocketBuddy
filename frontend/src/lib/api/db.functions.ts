@@ -47,6 +47,27 @@ export async function updateSubscriptionIsActive({ data }: { data: { id: string;
   });
 }
 
+export async function confirmSubscription({ data }: { data: { id: string } }) {
+  return apiRequest("/api/subscriptions/confirm", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function ignoreSubscription({ data }: { data: { id: string } }) {
+  return apiRequest("/api/subscriptions/ignore", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function cancelSubscription({ data }: { data: { id: string } }) {
+  return apiRequest("/api/subscriptions/cancel", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function deleteSubscription({ data }: { data: { id: string } }) {
   return apiRequest("/api/subscriptions/delete", {
     method: "POST",

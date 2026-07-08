@@ -1,5 +1,7 @@
 import { connectToDatabase } from "./mongodb";
 
+const DEMO_PHONE_AUTH_ENABLED = process.env.DEMO_PHONE_AUTH_ENABLED === "true";
+
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
@@ -25,9 +27,12 @@ export async function signUpUser({
   if (existing) {
     throw new Error("User already exists");
   }
+  if (!password) {
+    throw new Error("Password is required");
+  }
 
   const userId = globalThis.crypto.randomUUID();
-  const passwordHash = password ? await hashPassword(password) : "";
+  const passwordHash = await hashPassword(password);
 
   await db.collection("users").insertOne({
     _id: userId as any,
@@ -79,17 +84,23 @@ export async function signInWithPassword({
     throw new Error("User not found");
   }
 
-  if (password) {
-    const passwordHash = await hashPassword(password);
-    if (user.passwordHash !== passwordHash) {
-      throw new Error("Invalid password");
-    }
+  if (!password) {
+    throw new Error("Password is required");
+  }
+
+  const passwordHash = await hashPassword(password);
+  if (user.passwordHash !== passwordHash) {
+    throw new Error("Invalid password");
   }
 
   return createSession(user._id.toString());
 }
 
 export async function signInWithPhone({ phone, fullName }: { phone: string; fullName?: string }) {
+  if (!DEMO_PHONE_AUTH_ENABLED) {
+    throw new Error("Phone demo login is disabled. Use email/password login unless a real OTP provider is configured.");
+  }
+
   const { db } = await connectToDatabase();
 
   const cleaned = phone.replace(/\D/g, "").slice(-10);
@@ -98,7 +109,7 @@ export async function signInWithPhone({ phone, fullName }: { phone: string; full
   let user = await db.collection("users").findOne({ email: demoEmail });
 
   if (!user) {
-    // Demo auto-signup for phone login
+    // Demo-only auto-signup for phone login.
     const userId = globalThis.crypto.randomUUID();
     await db.collection("users").insertOne({
       _id: userId as any,

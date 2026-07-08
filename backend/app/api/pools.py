@@ -248,16 +248,16 @@ async def get_roommate_reliability(db, wing_label: str) -> dict:
         avg_score = int(sum(pool_scores) / len(pool_scores)) if pool_scores else 90
         
         if avg_score >= 95:
-            label = "Instant Pays"
+            label = "Instant payer"
             color = "green"
         elif avg_score >= 85:
             label = "Pays in hours"
             color = "blue"
         elif avg_score >= 70:
-            label = "Takes a day"
+            label = "Usually next day"
             color = "yellow"
         else:
-            label = "Slow payer"
+            label = "Needs reminder"
             color = "red"
             
         reliability[stats["name"]] = {
@@ -606,7 +606,13 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
         items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
         items = await items_cursor.to_list(length=1000)
 
-        participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
+        participants = list(
+            set(
+                str(it.get("added_by_user_id") or name_key(it.get("added_by_name")))
+                for it in items
+                if it.get("is_purchased", True)
+            )
+        )
         num_people = len(participants)
 
         if num_people == 0:
@@ -615,7 +621,10 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
         host_name = pool.get("created_by_name")
         host_items_total = 0
         for it in items:
-            if it.get("is_purchased", True) and name_key(it["added_by_name"]) == name_key(host_name):
+            if it.get("is_purchased", True) and (
+                str(it.get("added_by_user_id") or "") == user_id
+                or name_key(it["added_by_name"]) == name_key(host_name)
+            ):
                 host_items_total += it["estimated_price"]
 
         final_overhead = updates.get("final_overhead", pool.get("final_overhead", 0))
@@ -674,9 +683,19 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
         raise HTTPException(status_code=400, detail="Roommate is not part of this pool")
 
     # Resolve exact casing of the roommate's name from active pool items to avoid case mismatches in db query
-    exact_roommate_name = next(
-        (item["added_by_name"] for item in items if name_key(item.get("added_by_name")) == name_key(roommate_name)),
-        roommate_name
+    exact_roommate = next(
+        (item for item in items if name_key(item.get("added_by_name")) == name_key(roommate_name)),
+        None,
+    )
+    exact_roommate_name = (
+        exact_roommate.get("added_by_name")
+        if exact_roommate and exact_roommate.get("added_by_name")
+        else roommate_name
+    )
+    exact_roommate_user_id = (
+        str(exact_roommate.get("added_by_user_id"))
+        if exact_roommate and exact_roommate.get("added_by_user_id")
+        else None
     )
 
     payment_entry = {
@@ -685,6 +704,8 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
         "status": "pending",
         "submitted_at": utcnow().isoformat()
     }
+    if exact_roommate_user_id:
+        payment_entry["user_id"] = exact_roommate_user_id
 
     # Remove any existing payment record for this roommate
     await db.cart_pools.update_one(
@@ -730,6 +751,15 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
         (name for name in participants if name_key(name) == name_key(roommate_name)),
         roommate_name
     )
+    exact_roommate_item = next(
+        (item for item in items if name_key(item.get("added_by_name")) == name_key(exact_roommate_name)),
+        None,
+    )
+    exact_roommate_user_id = (
+        str(exact_roommate_item.get("added_by_user_id"))
+        if exact_roommate_item and exact_roommate_item.get("added_by_user_id")
+        else None
+    )
 
     if action in ("verify", "settle_in_kind"):
         status = "verified"
@@ -739,13 +769,16 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
         has_payment = any(name_key(p["name"]) == name_key(exact_roommate_name) for p in payments)
         
         if has_payment:
+            payment_updates = {
+                "payments.$.status": status,
+                "payments.$.verified_at": utcnow().isoformat(),
+                "payments.$.settlement_mode": settlement_mode,
+            }
+            if exact_roommate_user_id:
+                payment_updates["payments.$.user_id"] = exact_roommate_user_id
             result = await db.cart_pools.update_one(
                 {"_id": pool_id, "payments.name": exact_roommate_name},
-                {"$set": {
-                    "payments.$.status": status,
-                    "payments.$.verified_at": utcnow().isoformat(),
-                    "payments.$.settlement_mode": settlement_mode
-                }}
+                {"$set": payment_updates}
             )
             if result.matched_count == 0:
                 raise HTTPException(status_code=404, detail="Payment confirmation not found")
@@ -758,6 +791,8 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
                 "verified_at": utcnow().isoformat(),
                 "settlement_mode": settlement_mode
             }
+            if exact_roommate_user_id:
+                payment_entry["user_id"] = exact_roommate_user_id
             await db.cart_pools.update_one(
                 {"_id": pool_id},
                 {"$push": {"payments": payment_entry}}
@@ -789,26 +824,34 @@ async def get_pool_items(pool_id: str):
     items = await cursor.to_list(length=500)
     return map_docs(items)
 
-async def match_wing_roommate(db, pool: dict, input_name: str) -> str:
+async def match_wing_roommate(db, pool: dict, input_name: str) -> tuple[str, Optional[str]]:
     cleaned = clean_text(input_name, "Roommate name")
+    host_name = pool.get("created_by_name")
+    if pool.get("host_id") and host_name and name_key(cleaned) == name_key(host_name):
+        return host_name, str(pool.get("host_id"))
+
     wing_label = pool.get("wing_label")
     if not wing_label:
-        return cleaned
+        return cleaned, None
 
     profiles_cursor = db.profiles.find({"wing_label": wing_label})
     profiles = await profiles_cursor.to_list(length=100)
     uids = [prof["_id"] for prof in profiles]
     users_cursor = db.users.find({"_id": {"$in": uids}})
     users = await users_cursor.to_list(length=100)
-    wing_members = [u.get("full_name", "").strip() for u in users if u.get("full_name")]
+    wing_members = [
+        (u.get("full_name", "").strip(), str(u.get("_id")))
+        for u in users
+        if u.get("full_name") and u.get("_id")
+    ]
 
     in_key = name_key(cleaned)
-    for member in wing_members:
+    for member, member_id in wing_members:
         m_key = name_key(member)
         if in_key == m_key:
-            return member
+            return member, member_id
 
-    return cleaned
+    return cleaned, None
 
 @router.post("/{pool_id}/items")
 async def insert_pool_item(pool_id: str, req: PoolItemReq):
@@ -829,7 +872,7 @@ async def insert_pool_item(pool_id: str, req: PoolItemReq):
          raise HTTPException(status_code=400, detail="Estimated price must be between ₹1 and ₹5,000")
 
     # Match against registered wing roommates to avoid name collisions/typos
-    matched_name = await match_wing_roommate(db, pool, req.added_by_name)
+    matched_name, matched_user_id = await match_wing_roommate(db, pool, req.added_by_name)
 
     item_id = str(uuid.uuid4())
 
@@ -843,6 +886,8 @@ async def insert_pool_item(pool_id: str, req: PoolItemReq):
         "is_purchased": True,
         "created_at": utcnow()
     }
+    if matched_user_id:
+        new_item["added_by_user_id"] = matched_user_id
 
     await db.cart_pool_items.insert_one(new_item)
     return map_doc(new_item)
@@ -1093,7 +1138,7 @@ async def cron_auto_nudge(user_id: str = Depends(get_current_user)):
     return {"success": True, "messages_sent": nudge_count}
 
 
-# ── Amazon Pay E2E Integration (V2 API Compliant) ───────────────────────────
+# ── Amazon Pay sandbox contract simulation ──────────────────────────────────
 
 class AmazonCheckoutReq(BaseModel):
     final_overhead: int
@@ -1118,8 +1163,10 @@ async def create_amazon_checkout_session(
         
     if pool.get("host_id") != user_id:
         raise HTTPException(status_code=403, detail="Only the pool host can initiate Amazon Pay checkout")
+    if pool.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Amazon Pay sandbox checkout can only start while the pool is open")
         
-    # Generate mock Amazon Pay session ID in region S01 format
+    # Generate a local sandbox session ID in the same visual family as Amazon Pay.
     checkout_session_id = f"S01-{uuid.uuid4().hex[:14].upper()}"
     
     # Calculate net total amount in paise to display in INR
@@ -1128,7 +1175,7 @@ async def create_amazon_checkout_session(
     items_total = sum(it.get("estimated_price", 0) for it in items if it.get("is_purchased", True))
     net_total = max(0, items_total + req.final_overhead - req.final_discount)
     
-    # Store standard Amazon Pay V2 session state
+    # Store a local sandbox session shaped like the Amazon Pay V2 contract.
     amazon_checkout = {
         "checkoutSessionId": checkout_session_id,
         "statusDetails": {"state": "Open"},
@@ -1170,6 +1217,10 @@ async def complete_amazon_checkout_session(
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    if pool.get("host_id") != user_id:
+        raise HTTPException(status_code=403, detail="Only the pool host can complete Amazon Pay checkout")
+    if pool.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Amazon Pay sandbox checkout can only complete while the pool is open")
         
     amzn_checkout = pool.get("amazon_checkout")
     if not amzn_checkout or amzn_checkout.get("checkoutSessionId") != checkout_session_id:
@@ -1208,10 +1259,10 @@ async def complete_amazon_checkout_session(
             "_id": txn_id,
             "user_id": pool.get("host_id"),
             "amount": host_share,
-            "raw_merchant_string": f"{platform_name} Pool - Amazon Pay Host checkout",
-            "mapped_merchant_name": f"{platform_name} Pool (Amazon Pay)",
+            "raw_merchant_string": f"{platform_name} Pool - Amazon Pay Sandbox checkout",
+            "mapped_merchant_name": f"{platform_name} Pool (Amazon Pay Sandbox)",
             "category": "food",
-            "source": "amazon_pay",
+            "source": "amazon_pay_sandbox",
             "is_mapped": True,
             "created_at": utcnow()
         }
@@ -1253,18 +1304,36 @@ async def process_amazon_roommate_payment(
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    if pool.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Roommate settlement is available only after checkout is finalized")
+    if pool.get("host_id") == user_id:
+        raise HTTPException(status_code=400, detail="Host cannot settle their own pool as a roommate")
         
-    # Verify the roommate payment via Amazon Pay Later mock authorization
+    # Record a roommate sandbox settlement. This does not charge a live payment rail.
     exact_roommate_name = await match_wing_roommate(db, pool, req.roommate_name)
+    user_doc = await db.users.find_one({"_id": user_id})
+    user_name = name_key(user_doc.get("full_name")) if user_doc else ""
+    if not user_name or user_name != name_key(exact_roommate_name):
+        raise HTTPException(status_code=403, detail="You can settle only your own roommate split")
+
+    enriched_pool = await enrich_pool_document(db, {**pool, "id": pool.get("_id")}, current_user_id=user_id)
+    roommate_split = (enriched_pool.get("split_breakdown") or {}).get(exact_roommate_name)
+    if not roommate_split:
+        raise HTTPException(status_code=400, detail="Roommate split was not found for this pool")
+    if roommate_split.get("paid"):
+        raise HTTPException(status_code=409, detail="Roommate split is already settled")
+    expected_amount = int(roommate_split.get("total") or 0)
+    if req.amount != expected_amount:
+        raise HTTPException(status_code=400, detail="Settlement amount does not match the finalized split")
     
     charge_permission_id = f"B01-{uuid.uuid4().hex[:14].upper()}"
     payment_entry = {
         "name": exact_roommate_name,
         "utr": charge_permission_id,
-        "status": "verified", # Auto-verifies roommate split immediately via pre-authorized charge permission!
+        "status": "verified",
         "submitted_at": utcnow().isoformat(),
         "verified_at": utcnow().isoformat(),
-        "settlement_mode": "amazon_pay_later",
+        "settlement_mode": "amazon_pay_sandbox",
         "confidence": 1.0
     }
     
@@ -1284,10 +1353,10 @@ async def process_amazon_roommate_payment(
         "_id": txn_id,
         "user_id": user_id,
         "amount": req.amount,
-        "raw_merchant_string": f"Amazon Pay Later - Reimburse {pool.get('created_by_name')}",
-        "mapped_merchant_name": "Amazon Pay Later",
+        "raw_merchant_string": f"Amazon Pay Sandbox - Reimburse {pool.get('created_by_name')}",
+        "mapped_merchant_name": "Amazon Pay Sandbox",
         "category": "food",
-        "source": "amazon_pay",
+        "source": "amazon_pay_sandbox",
         "is_mapped": True,
         "created_at": utcnow()
     }

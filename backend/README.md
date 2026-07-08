@@ -50,11 +50,13 @@ http://127.0.0.1:8000
 
 ## Android Companion Endpoint
 
-The Android connector posts normalized payment notifications to:
+New Android connector builds post sanitized payment events to:
 
 ```http
-POST /api/ingest/notification
+POST /api/ingest/notification-v2
 ```
+
+The older `/api/ingest/notification` route remains for legacy connector builds, but v2 rejects raw `text`/`body` payloads and accepts only structured transaction facts plus a masked preview.
 
 The companion UI reads sync state from:
 
@@ -64,13 +66,53 @@ GET /api/profile
 GET /api/transactions
 ```
 
-New ingest events store a masked `notification_preview`, parsed amount, parsed merchant, and transaction reference. Full raw notification/SMS text is used only in-memory for parsing and is not persisted for new events.
+Privacy-preserving connector v2 events are parsed on-device and send only structured transaction facts plus a masked `notification_preview`. The backend keeps the legacy ingest endpoint for older connector builds, but new connector payloads do not require raw notification/SMS text to be uploaded or persisted.
 
 For USB testing, keep the backend on port `8000` and run:
 
 ```powershell
 $ADB = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $ADB -s <device-id> reverse tcp:8000 tcp:8000
+```
+
+## Auth Privacy Defaults
+
+Email/password auth is the default local/dev login path.
+
+The phone login route is a demo placeholder unless a real OTP provider is integrated, so it is disabled by default:
+
+```env
+DEMO_PHONE_AUTH_ENABLED=false
+ACCESS_TOKEN_EXPIRE_MINUTES=10080
+```
+
+Only set `DEMO_PHONE_AUTH_ENABLED=true` for an explicit demo environment where that tradeoff is understood. Do not use it as a production phone verification flow.
+
+## Account Aggregator Sandbox
+
+PocketBuddy includes a local Account Aggregator style consent sandbox for demos. It uses dummy records only and does not connect to live bank accounts:
+
+```env
+AA_SANDBOX_ENABLED=true
+AA_SANDBOX_PROVIDER=local
+AA_CALLBACK_SECRET=
+```
+
+Use `AA_SANDBOX_PROVIDER=local` to keep the built-in dummy-data consent lifecycle. The sandbox stores generated AA records separately from real transactions.
+
+Authenticated frontend routes use:
+
+```http
+GET  /api/account-aggregator/status
+POST /api/account-aggregator/sandbox/consents
+POST /api/account-aggregator/sandbox/consents/{consent_id}/simulate
+```
+
+Provider callback placeholders are also available for sandbox wiring when `AA_CALLBACK_SECRET` is configured:
+
+```http
+POST /api/account-aggregator/Consent/Notification
+POST /api/account-aggregator/FI/Notification
 ```
 
 ## Campus Food And RAG

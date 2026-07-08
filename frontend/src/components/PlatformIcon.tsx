@@ -1,52 +1,42 @@
-import { Zap, ShoppingBag, ShoppingBasket, ShoppingCart, Store } from "lucide-react";
+import { ShoppingBag, ShoppingBasket, ShoppingCart, Store } from "lucide-react";
 
 export function PlatformIcon({ platform, name, className = "h-5 w-5" }: { platform: string; name?: string; className?: string }) {
   const normalized = platform.toLowerCase();
   
-  if (normalized === "zepto") {
-    return (
-      <div className={`flex items-center justify-center rounded-full bg-[#5E17EB] text-white shrink-0 shadow-[0_2px_8px_rgba(94,23,235,0.45)] ${className}`}>
-        <Zap className="h-3 w-3 fill-current stroke-[2.5]" />
-      </div>
-    );
-  }
+  let logoSrc = "";
+  let shadowClass = "";
   
-  if (normalized === "blinkit") {
-    return (
-      <div className={`flex items-center justify-center rounded-full bg-[#F7EC13] text-black shrink-0 shadow-[0_2px_8px_rgba(247,236,19,0.35)] ${className}`}>
-        <ShoppingBag className="h-3 w-3 stroke-[2.5]" />
-      </div>
-    );
-  }
-  
-  if (normalized === "swiggy_instamart" || normalized === "swiggy instamart" || normalized.includes("instamart")) {
-    return (
-      <div className={`flex items-center justify-center rounded-full bg-[#FC8019] text-white shrink-0 shadow-[0_2px_8px_rgba(252,128,25,0.45)] ${className}`}>
-        <ShoppingCart className="h-3 w-3 stroke-[2.5]" />
-      </div>
-    );
-  }
-  
-  if (normalized === "bigbasket" || normalized.includes("basket")) {
-    return (
-      <div className={`flex items-center justify-center rounded-full bg-[#84C225] text-white shrink-0 shadow-[0_2px_8px_rgba(132,194,37,0.45)] ${className}`}>
-        <ShoppingBasket className="h-3 w-3 stroke-[2.5]" />
-      </div>
-    );
-  }
-  
-  if (normalized === "jiomart" || normalized.includes("jiomart")) {
-    return (
-      <div className={`flex items-center justify-center rounded-full bg-[#0078AD] text-white shrink-0 shadow-[0_2px_8px_rgba(0,120,173,0.45)] ${className}`}>
-        <Store className="h-3 w-3 stroke-[2.5]" />
-      </div>
-    );
+  if (normalized === "zepto" || normalized.includes("zepto")) {
+    logoSrc = "/logos/platforms/zepto.svg";
+    shadowClass = "shadow-[0_2px_8px_rgba(94,23,235,0.2)]";
+  } else if (normalized === "blinkit" || normalized.includes("blinkit")) {
+    logoSrc = "/logos/platforms/blinkit.svg";
+    shadowClass = "shadow-[0_2px_8px_rgba(247,236,19,0.15)]";
+  } else if (normalized === "swiggy_instamart" || normalized === "swiggy instamart" || normalized.includes("instamart") || normalized.includes("swiggy")) {
+    logoSrc = "/logos/platforms/swiggy_instamart.png";
+    shadowClass = "shadow-[0_2px_8px_rgba(252,128,25,0.2)]";
+  } else if (normalized === "amazon_now" || normalized === "amazon now" || normalized.includes("amazon")) {
+    logoSrc = "/logos/platforms/amazon_now.svg";
+    shadowClass = "shadow-[0_2px_8px_rgba(255,153,0,0.15)]";
+  } else if (normalized === "bigbasket" || normalized.includes("basket")) {
+    logoSrc = "/logos/platforms/bigbasket.svg";
+    shadowClass = "shadow-[0_2px_8px_rgba(132,194,37,0.15)]";
+  } else if (normalized === "jiomart" || normalized.includes("jiomart")) {
+    logoSrc = "/logos/platforms/jiomart.svg";
+    shadowClass = "shadow-[0_2px_8px_rgba(227,5,19,0.15)]";
   }
 
-  if (normalized === "amazon_now" || normalized === "amazon now" || normalized.includes("amazon")) {
+  if (logoSrc) {
+    const isZepto = normalized === "zepto" || normalized.includes("zepto");
+    const isJioMart = normalized === "jiomart" || normalized.includes("jiomart");
+    const paddingClass = (isZepto || isJioMart) ? "p-0" : "p-0.5";
     return (
-      <div className={`flex items-center justify-center rounded-full bg-[#FF9900] text-black shrink-0 shadow-[0_2px_8px_rgba(255,153,0,0.45)] ${className}`}>
-        <ShoppingBag className="h-3 w-3 stroke-[2.5]" />
+      <div className={`flex items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-white shrink-0 ${shadowClass} ${paddingClass} ${className}`}>
+        <img
+          src={logoSrc}
+          alt={name || platform}
+          className="h-full w-full object-contain"
+        />
       </div>
     );
   }
@@ -70,10 +60,11 @@ export function PlatformIcon({ platform, name, className = "h-5 w-5" }: { platfo
   ];
   
   const gradient = gradients[Math.abs(hash) % gradients.length];
-
+  
   return (
-    <div className={`flex items-center justify-center rounded-full bg-gradient-to-br ${gradient} text-white font-extrabold text-[10px] tracking-wider shrink-0 shadow-md ${className}`}>
+    <div className={`flex items-center justify-center rounded-xl bg-gradient-to-br ${gradient} text-white font-black text-[9px] tracking-wider shrink-0 shadow-md ${className}`}>
       {initial}
     </div>
   );
 }
+

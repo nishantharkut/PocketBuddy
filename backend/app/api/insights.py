@@ -27,7 +27,8 @@ async def get_insights(user_id: str = Depends(get_current_user)):
     # Fetch last 60 days of transactions
     since = datetime.datetime.utcnow() - datetime.timedelta(days=60)
     cursor = db.transactions.find({"user_id": user_id, "created_at": {"$gte": since}}).sort("created_at", -1)
-    txns = await cursor.to_list(length=2000)
+    all_txns = await cursor.to_list(length=2000)
+    txns = [t for t in all_txns if t.get("direction", "debit") != "credit"]
 
     # Fetch profile for exam dates
     profile = await db.profiles.find_one({"_id": user_id})
@@ -311,10 +312,12 @@ async def get_runway_forecast(user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"_id": user_id}) or {}
     full_name = str(user.get("full_name") or "").strip()
     pool_ids: set[str] = set()
+    user_item_query: dict | None = {"added_by_user_id": user_id}
     if full_name:
         name_regex = re.compile(f"^{re.escape(full_name)}$", re.IGNORECASE)
-        user_items = await db.cart_pool_items.find({"added_by_name": name_regex}).to_list(length=1000)
-        pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
+        user_item_query = {"$or": [{"added_by_user_id": user_id}, {"added_by_name": name_regex}]}
+    user_items = await db.cart_pool_items.find(user_item_query).to_list(length=1000)
+    pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
 
     hosted = await db.cart_pools.find(
         {"host_id": user_id, "status": {"$in": ["open", "closed", "completed"]}}

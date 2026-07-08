@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.security import get_current_user
 from app.core.database import get_db
-from app.services.campus_food import load_campus_food
+from app.services.campus_food import REVIEW_ONLY_STATUSES, build_food_recommendations, load_campus_food
 from app.services.bedrock import generate_text
 from app.services.runway import build_runway_forecast, derive_pool_obligations
 from app.services.subscriptions import detect_recurring_subscriptions
@@ -27,7 +27,9 @@ class RagReq(BaseModel):
 @router.post("/food-rag")
 async def get_food_recommendation(req: RagReq, user_id: str = Depends(get_current_user)):
     db = get_db()
-    cursor = db.campus_food.find({"status": {"$nin": ["pending_verification", "rejected"]}})
+    cursor = db.campus_food.find({
+        "status": {"$nin": list(REVIEW_ONLY_STATUSES)}
+    })
     campus_foods = await cursor.to_list(length=1000)
     if not campus_foods:
         campus_foods = load_campus_food()
@@ -43,10 +45,11 @@ async def get_food_recommendation(req: RagReq, user_id: str = Depends(get_curren
         The student has {req.days_left} days left in their cycle, Rs {req.remaining_budget:.0f} remaining,
         and has spent Rs {req.spent_today:.0f} today.
 
-        Available campus food options are JSON objects where price is in paise:
-        {json.dumps(campus_foods[:20], indent=2)}
+        Trusted, budget-aware campus food options are JSON objects where price is in paise:
+        {json.dumps(fallback.get("ranked_options", [])[:5], indent=2)}
 
         Analyze their runway and suggest exactly one cost-effective food option from the list.
+        Do not recommend any food option that is not present in the trusted options above.
         Provide a very short, encouraging 2-sentence response telling them what to eat and why it fits their tight budget.
         """
 
@@ -68,24 +71,40 @@ def build_local_recommendation(req: RagReq, campus_foods: list[dict]) -> dict:
         return {
             "recommendation": "No campus food data is available yet.",
             "item": None,
+            "ranked_options": [],
         }
 
     daily_budget = max(0, req.remaining_budget / max(req.days_left, 1))
-    candidates = sorted(campus_foods, key=lambda item: item.get("price", 0))
-    affordable = [
-        item for item in candidates if (item.get("price", 0) / 100) <= max(daily_budget, 50)
-    ]
-    item = (affordable or candidates)[0]
+    ranked_options = build_food_recommendations(
+        campus_foods,
+        now=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+        safe_food_budget_paise=int(max(daily_budget, 50) * 100),
+        limit=5,
+    )
+    if not ranked_options:
+        return {
+            "recommendation": "No trusted campus food option is available yet. Use manual review before adding scanned menu items to recommendations.",
+            "item": None,
+            "ranked_options": [],
+        }
+
+    item = ranked_options[0]
     price_rupees = item.get("price", 0) / 100
     venue_name = item.get("venue_name", "campus canteen")
     item_name = item.get("item_name", "a low-cost meal")
+    budget_line = (
+        f"It keeps today's food spend inside a Rs {daily_budget:.0f}/day runway."
+        if price_rupees <= max(daily_budget, 50)
+        else f"It is the strongest trusted option, but it is above today's Rs {daily_budget:.0f}/day runway."
+    )
 
     return {
         "recommendation": (
             f"Try {item_name} at {venue_name} for Rs {price_rupees:.0f}. "
-            f"It keeps today's food spend inside a Rs {daily_budget:.0f}/day runway."
+            f"{budget_line}"
         ),
         "item": item,
+        "ranked_options": ranked_options,
     }
 
 
@@ -113,19 +132,31 @@ async def get_campus_intel(user_id: str = Depends(get_current_user)):
     # Try Bedrock
     if settings.BEDROCK_ENABLED:
         try:
-            cursor_food = db.campus_food.find({"status": {"$nin": ["pending_verification", "rejected"]}})
-            campus_foods = await cursor_food.to_list(length=20)
+            cursor_food = db.campus_food.find({
+                "status": {"$nin": list(REVIEW_ONLY_STATUSES)}
+            })
+            campus_foods = await cursor_food.to_list(length=1000)
             if not campus_foods:
-                campus_foods = load_campus_food()[:5]
+                campus_foods = load_campus_food()
+            safe_budget_paise = 15_000
+            if profile:
+                safe_budget_paise = int((profile.get("monthly_allowance", 0) or 0) / 30)
+            ranked_foods = build_food_recommendations(
+                campus_foods,
+                now=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+                safe_food_budget_paise=safe_budget_paise,
+                meal_gap_hours=last_food_hours,
+                limit=5,
+            )
 
             prompt = f"""You are PocketBuddy, an AI financial wellness guard for Indian college students.
 Student context:
 - Spent Rs {spend_7:.0f} in last 7 days
 - Remaining budget: Rs {remaining:.0f}
 - Last food transaction: {last_food_hours:.0f} hours ago
-- Campus food options: {json.dumps([{"venue": f.get("venue_name"), "item": f.get("item_name"), "price_rs": f.get("price", 0)//100} for f in campus_foods[:5]], indent=None)}
+- Trusted campus food options: {json.dumps([{"venue": f.get("venue_name"), "item": f.get("item_name"), "price_rs": f.get("price", 0)//100, "why": f.get("why"), "trust": f.get("trust_badge")} for f in ranked_foods[:5]], indent=None)}
 
-Generate exactly 2 concise, specific, actionable sentences as a campus financial intelligence summary. Be direct, mention real numbers. No emojis."""
+Generate exactly 2 concise, specific, actionable sentences as a campus financial intelligence summary. Be direct, mention real numbers. No emojis. Do not cite any food option outside the trusted campus food options above."""
 
             text = generate_text(prompt, max_tokens=120, temperature=0.2)
             if text:
@@ -172,10 +203,12 @@ async def get_runway_intel(user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"_id": user_id}) or {}
     full_name = str(user.get("full_name") or "").strip()
     pool_ids: set[str] = set()
+    user_item_query: dict | None = {"added_by_user_id": user_id}
     if full_name:
         name_regex = re.compile(f"^{re.escape(full_name)}$", re.IGNORECASE)
-        user_items = await db.cart_pool_items.find({"added_by_name": name_regex}).to_list(length=1000)
-        pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
+        user_item_query = {"$or": [{"added_by_user_id": user_id}, {"added_by_name": name_regex}]}
+    user_items = await db.cart_pool_items.find(user_item_query).to_list(length=1000)
+    pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
 
     hosted = await db.cart_pools.find(
         {"host_id": user_id, "status": {"$in": ["open", "closed", "completed"]}}
@@ -222,12 +255,30 @@ async def get_runway_intel(user_id: str = Depends(get_current_user)):
     next_action_title = str(next_action.get("title") or "Keep runway stable")
     next_action_detail = str(next_action.get("detail") or "Keep discretionary spend inside the safe daily limit.")
     decision_summary = str(decision_engine.get("summary") or "")
+    pace_source = str((forecast.get("projection") or {}).get("pace_source") or "")
+    stress_band = (forecast.get("projection") or {}).get("stress_band") or {}
+    expected_days = int((stress_band.get("expected") or {}).get("days_until_broke") or broke_days)
+    stress_days = int((stress_band.get("stress") or {}).get("days_until_broke") or broke_days)
 
     # Build local fallback
-    if status == "shortfall":
+    if status == "setup_required":
         fallback_summary = (
-            f"Based on your current spending pace, you will run out of allowance in {broke_days} days "
-            f"({days_left - broke_days} days before the cycle ends). "
+            "Runway needs your allowance or an allowance credit before it can produce a trusted daily limit. "
+            "Add funding in Settings or sync transactions first; no spending recommendation is shown yet."
+        )
+    elif next_action.get("type") == "pause_flexible":
+        fallback_summary = (
+            "There is no safe discretionary amount left after known spending and commitments. "
+            "Pause flexible spending until reset, or add funding before making non-essential payments."
+        )
+    elif pace_source == "no_recent_history":
+        fallback_summary = (
+            f"Use Rs {safe_daily:,}/day only as a temporary cap because there is not enough recent spend history yet. "
+            "Sync or add a few real payments before relying on pace-based suggestions."
+        )
+    elif status == "shortfall":
+        fallback_summary = (
+            f"Expected runway is {expected_days} days, with a stress case of {stress_days} days. "
             f"Ask home for Rs {ask_amount:,} and follow this next action: {next_action_detail}"
         )
     elif status == "watch" or shortfall_prob >= 0.35:
@@ -244,14 +295,15 @@ async def get_runway_intel(user_id: str = Depends(get_current_user)):
     # Try Bedrock
     if settings.BEDROCK_ENABLED:
         try:
-            prompt = f"""You are PocketBuddy, a student budget advisor for college students.
+            prompt = f"""You are PocketBuddy, a campus affordability explainer for college students.
 Here is the student's runway forecast details:
 - Cycle days left: {days_left} days
 - Safe daily spend limit: Rs {safe_daily}
 - Current daily spend pace (EWMA): Rs {projected_daily}
 - Forecast status: {status.upper()}
 - Shortfall probability: {shortfall_prob * 100:.0f}%
-- Days until broke: {broke_days} (out of {days_left} days left)
+- Expected runway: {expected_days} days
+- Stress-case runway: {stress_days} days
 - Ask home amount needed: Rs {ask_amount}
 - Upcoming commitments total: Rs {commitments_total}
 - Meal routine: {food_label}
@@ -260,7 +312,7 @@ Here is the student's runway forecast details:
 - Decision engine summary: {decision_summary}
 - Next best action: {next_action_title} — {next_action_detail}
 
-Generate exactly 2 concise, personalized, and action-oriented sentences. Be direct, reference the specific numbers, and suggest concrete actions that match their meal routine. Do not invent phone numbers, contacts, merchant names, or guarantees. No emojis. No preamble."""
+Generate exactly 2 concise, personalized, and action-oriented sentences. Explain only the deterministic values above. Do not calculate new amounts. Do not invent amounts, dates, probabilities, contacts, merchant names, guarantees, or extra actions. No emojis. No preamble."""
 
             text = generate_text(prompt, max_tokens=150, temperature=0.25)
             if text:

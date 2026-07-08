@@ -1169,7 +1169,53 @@ Business perspective:
 - If sold through colleges, even a low annual per-student fee can fund infra because the workload is lightweight.
 - Amazon/commerce integrations are more valuable as ecosystem engagement and trust layers than as immediate direct subscription revenue.
 
-### 10.10 Business Metrics To Show In PPT/PRD
+### 10.10 Why Phone OTP Is Demo-Gated
+
+Use this for Q&A if a judge asks why phone login/OTP is not fully live in the prototype.
+
+Short answer:
+
+> We intentionally kept OTP behind a demo flag for the prototype. Real OTP is not hard technically, but it creates per-message cost, abuse risk, resend/rate-limit logic, and India DLT/Sender-ID compliance work. For the finals product, email login plus Android connector pairing proves the core value. In production, we would enable OTP through an India-first provider such as 2Factor or MSG91 with strict resend limits, daily budget caps, hashed OTP storage, and provider failover.
+
+Reasoning:
+
+- OTP is not the core innovation. The core product value is passive spend capture, runway, food/travel/pool decisions, and wellness nudges.
+- Real OTP can become expensive during open demos because every failed attempt, resend, typo, and abuse attempt can trigger billable messages.
+- India-focused providers are cheaper than global providers, but still require production controls:
+  - resend cooldown,
+  - max attempts per phone/device/IP,
+  - daily spend caps,
+  - OTP expiry,
+  - hashed OTP storage,
+  - DLT/Sender-ID compliance,
+  - audit logs and abuse monitoring.
+- Firebase/Twilio-style global phone auth is convenient but usually too expensive for a hackathon prototype at Indian student scale.
+- A proper production implementation is straightforward once the provider is chosen; keeping it demo-gated avoids spending credits and engineering time on commodity auth instead of the product's unique decision layer.
+
+Provider direction:
+
+| Option | Use Case | Decision |
+| --- | --- | --- |
+| 2Factor | India-first SMS/voice OTP with simple API and delivered-OTP pricing | Best lean production candidate. |
+| MSG91 | India startup-grade OTP/SMS/WhatsApp provider with broader messaging suite | Good if we want OTP plus notification channels later. |
+| Fast2SMS / low-cost routes | Cheap testing or fallback | Validate reliability before using for important login. |
+| Firebase Phone Auth | Quick global implementation | Too expensive for India-first student OTP unless already committed to Firebase Auth. |
+| Twilio Verify/SMS | Enterprise/global reliability | Strong product, but cost-heavy for Indian campus OTP at prototype scale. |
+
+How to say it:
+
+- Say: "Phone OTP is demo-gated for cost and abuse control; production uses an India-first OTP provider with rate limits and budget caps."
+- Do not say: "OTP is fake because we could not build it."
+- Do not spend pitch time on OTP unless asked. It is a commodity auth detail, not the product's headline.
+
+References checked:
+
+- 2Factor India OTP pricing page lists delivered-OTP pricing in the Rs. 0.34-0.55 range depending route/SLA.
+- Firebase pricing states Phone Auth is billed per SMS sent / phone verification pricing.
+- MSG91 pricing docs describe country-wise SMS/OTP credit deductions.
+- Public startup benchmarks commonly cite Indian OTP routes around Rs. 0.10-0.30 per SMS at volume, but reliability varies by provider and route.
+
+### 10.11 Business Metrics To Show In PPT/PRD
 
 Use a small number of metrics. Do not overload the slide.
 
@@ -1419,6 +1465,10 @@ CloudFront/S3 handle global web delivery. API Gateway/Lambda/SQS/DynamoDB decoup
 ### "What is the biggest technical risk?"
 
 Parser coverage and trust. That is why parser review, consent fallbacks, and privacy controls are top priorities before finals.
+
+### "Why is phone OTP not fully live?"
+
+Because OTP is commodity auth, not the core prototype risk. We kept it demo-gated to avoid per-message cost, resend abuse, and India DLT/Sender-ID work during the prototype. Production OTP should use an India-first provider such as 2Factor or MSG91 with resend cooldowns, max attempts, daily budget caps, expiry, hashed OTP storage, and provider failover.
 
 ## 14. Research-Backed Source Decisions
 

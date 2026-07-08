@@ -3,11 +3,13 @@ import {
   Outlet,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "@/components/ui/sonner";
+import { TopProgressBar } from "@/components/Loader";
 
 function NotFoundComponent() {
   return (
@@ -65,9 +67,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const routerState = useRouterState();
+  const isPending = routerState.status === "pending";
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <TopProgressBar active={isPending} />
         <Outlet />
         <Toaster position="top-center" />
       </AuthProvider>

@@ -62,6 +62,12 @@ async def insert_transaction(req: TxnReq, user_id: str = Depends(get_current_use
         "source": req.source,
         "is_mapped": req.is_mapped,
         "direction": req.direction or "debit",
+        "data_origin": "user_entered",
+        "privacy_mode": "manual_entry",
+        "raw_payload_received": False,
+        "verification_status": "manual_entry",
+        "parsing_confidence": "high",
+        "needs_verification": False,
         "created_at": datetime.datetime.utcnow()
     }
     
@@ -153,6 +159,9 @@ async def update_transaction(txn_id: str, req: UpdateTxnReq, user_id: str = Depe
         update_data["direction"] = clean_transaction_label(req.direction, "Direction", 20)
         
     if update_data:
+        update_data["needs_verification"] = False
+        update_data["verification_status"] = "user_reviewed"
+        update_data["user_confirmed_at"] = datetime.datetime.utcnow()
         await db.transactions.update_one(
             {"_id": txn_id, "user_id": user_id},
             {"$set": update_data}
@@ -168,6 +177,13 @@ async def confirm_transaction(txn_id: str, user_id: str = Depends(get_current_us
         raise HTTPException(status_code=404, detail="Transaction not found")
     await db.transactions.update_one(
         {"_id": txn_id, "user_id": user_id},
-        {"$set": {"needs_verification": False, "user_confirmed_at": datetime.datetime.utcnow()}}
+        {
+            "$set": {
+                "needs_verification": False,
+                "verification_status": "user_reviewed",
+                "parsing_confidence": "high",
+                "user_confirmed_at": datetime.datetime.utcnow(),
+            }
+        }
     )
     return {"status": "ok"}

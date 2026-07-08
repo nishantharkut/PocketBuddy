@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { signUpFn, signInWithPasswordFn, signInWithPhoneFn } from "@/lib/api/auth.functions";
+import { Eye, EyeOff } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   ssr: false,
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/login")({
 
 type Mode = "signin" | "signup";
 type Tab = "email" | "phone";
+const demoPhoneAuthEnabled = import.meta.env.VITE_DEMO_PHONE_AUTH_ENABLED === "true";
 
 function LoginPage() {
   const nav = useNavigate();
@@ -30,10 +32,12 @@ function LoginPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
   const [busy, setBusy] = useState(false);
+  const activeTab: Tab = demoPhoneAuthEnabled ? tab : "email";
 
   useEffect(() => {
     setMounted(true);
@@ -81,13 +85,17 @@ function LoginPage() {
   }
 
   async function handlePhone() {
+    if (!demoPhoneAuthEnabled) {
+      toast.error("Phone sign-in is disabled for this build");
+      return;
+    }
     if (!phone || phone.length < 10) {
       toast.error("Enter a valid phone number");
       return;
     }
     if (!otpSent) {
       setOtpSent(true);
-      toast.success("OTP sent (demo: enter any 6 digits)");
+      toast.success("Demo phone sign-in enabled. Enter any 6 digits to continue.");
       return;
     }
     if (otp.length !== 6) {
@@ -171,21 +179,25 @@ function LoginPage() {
           </p>
         </div>
 
-        <div className="flex bg-surface-raised border border-border rounded-full p-1 max-w-[200px] mx-auto text-[10px] font-bold uppercase tracking-wider">
+        <div
+          className="mx-auto flex max-w-[200px] rounded-full border border-border bg-surface-raised p-1 text-[10px] font-bold uppercase tracking-wider"
+        >
           <button
             id="tab-login-email"
             onClick={() => setTab("email")}
-            className={`flex-1 py-1.5 rounded-full transition-all duration-150 cursor-pointer ${tab === "email" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex-1 py-1.5 rounded-full transition-all duration-150 cursor-pointer ${activeTab === "email" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
           >
             Email
           </button>
-          <button
-            id="tab-login-phone"
-            onClick={() => setTab("phone")}
-            className={`flex-1 py-1.5 rounded-full transition-all duration-150 cursor-pointer ${tab === "phone" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            Phone
-          </button>
+          {demoPhoneAuthEnabled && (
+            <button
+              id="tab-login-phone"
+              onClick={() => setTab("phone")}
+              className={`flex-1 py-1.5 rounded-full transition-all duration-150 cursor-pointer ${activeTab === "phone" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Phone
+            </button>
+          )}
         </div>
 
         <div className="mt-8 space-y-4">
@@ -201,7 +213,7 @@ function LoginPage() {
               />
             </div>
           )}
-          {tab === "email" ? (
+          {activeTab === "email" ? (
             <>
               <div className="space-y-1">
                 <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Email Address</label>
@@ -217,15 +229,28 @@ function LoginPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Password</label>
-                <Input
-                  id="input-login-password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                  className="h-10"
-                />
+                <div className="relative">
+                  <Input
+                    id="input-login-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="********"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    className="h-10 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-foreground cursor-pointer focus:outline-none"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             </>
           ) : (
@@ -266,7 +291,7 @@ function LoginPage() {
         <div className="mt-6">
           <Button
             id={mode === "signup" ? "btn-create-account" : "btn-sign-in"}
-            onClick={tab === "email" ? handleEmail : handlePhone}
+            onClick={activeTab === "email" ? handleEmail : handlePhone}
             disabled={busy}
             className="w-full h-10 bg-foreground text-background font-black uppercase tracking-wider text-xs shadow-md transition-all duration-150 relative flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -277,7 +302,7 @@ function LoginPage() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 <span>
-                  {tab === "phone" && !otpSent
+                  {activeTab === "phone" && !otpSent
                     ? "Sending..."
                     : mode === "signup"
                       ? "Creating Account..."
@@ -285,11 +310,11 @@ function LoginPage() {
                 </span>
               </div>
             ) : (
-              tab === "phone" && !otpSent
+              activeTab === "phone" && !otpSent
                 ? "Send OTP"
                 : mode === "signup"
                   ? "Create Account"
-                  : tab === "phone"
+                  : activeTab === "phone"
                     ? "Verify & Sign In"
                     : "Sign In"
             )}

@@ -1,16 +1,17 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, List, ShoppingCart, Compass, BarChart3 } from "lucide-react";
+import { Activity, LayoutDashboard, List, ShoppingCart, Compass } from "lucide-react";
 
 const tabs = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
-  { to: "/transactions", label: "History", icon: List, id: "nav-transactions" },
-  { to: "/stats", label: "Stats", icon: BarChart3, id: "nav-stats" },
-  { to: "/pool", label: "Pool", icon: ShoppingCart, id: "nav-pool" },
-  { to: "/travel", label: "Travel", icon: Compass, id: "nav-travel" },
+  { to: "/dashboard", search: undefined, label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
+  { to: "/transactions", search: { view: "ledger", tab: "daily" }, label: "Transactions", icon: List, id: "nav-transactions" },
+  { to: "/runway", search: undefined, label: "Runway", icon: Activity, id: "nav-runway" },
+  { to: "/pool", search: undefined, label: "Pool", icon: ShoppingCart, id: "nav-pool" },
+  { to: "/travel", search: undefined, label: "Travel", icon: Compass, id: "nav-travel" },
 ] as const;
 
 export function BottomNav() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const location = useRouterState({ select: (s) => s.location });
+  const pathname = location.pathname;
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/90 backdrop-blur-lg shadow-[0_-4px_16px_rgba(0,0,0,0.12)]"
@@ -21,9 +22,10 @@ export function BottomNav() {
           const active = pathname === t.to || pathname.startsWith(t.to + "/");
           const Icon = t.icon;
           return (
-            <li key={t.to} className="relative">
+            <li key={t.id} className="relative">
               <Link
                 to={t.to}
+                search={t.search}
                 id={t.id}
                 className={`flex h-full flex-col items-center justify-center gap-1 transition-colors duration-150 ${
                   active ? "text-primary" : "text-muted-foreground"

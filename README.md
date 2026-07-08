@@ -72,7 +72,7 @@ The platform combines:
 | Web app | [https://d3g6cg7q9hn7hi.cloudfront.net/](https://d3g6cg7q9hn7hi.cloudfront.net/) |
 | Android connector APK, hosted | [PocketBuddy-Connector-v0.1.0.apk](https://d3g6cg7q9hn7hi.cloudfront.net/downloads/PocketBuddy-Connector-v0.1.0.apk) |
 | Android connector APK, repo copy | [android/releases/PocketBuddy-Connector-v0.1.0.apk](./android/releases/PocketBuddy-Connector-v0.1.0.apk) |
-| Mobile ingest endpoint | [CloudFront webhook route](https://d3g6cg7q9hn7hi.cloudfront.net/api/ingest/notification) |
+| Mobile ingest endpoint | [CloudFront webhook route](https://d3g6cg7q9hn7hi.cloudfront.net/api/ingest/notification-v2) |
 | AWS deployment guide | [docs/aws-e2e-deployment-runbook.md](./docs/aws-e2e-deployment-runbook.md) |
 | Mobile ingest contract | [docs/mobile-ingest-contract.md](./docs/mobile-ingest-contract.md) |
 
@@ -106,8 +106,8 @@ Student creates account
   -> completes onboarding
   -> opens Companion Device page
   -> downloads Android Connector APK
-  -> copies connector config from web
-  -> pastes config into Android app
+  -> taps One-Tap Auto Configure on the Android phone
+  -> connector opens with server/account fields filled
   -> enables notification access
   -> supported UPI/SMS alerts sync into PocketBuddy
   -> dashboard, transactions, pools, and insights update
@@ -131,10 +131,10 @@ Browser
   -> CloudFront
       -> S3 origin for React/Vite frontend assets
       -> EC2 origin for /api/* backend routes
-      -> API Gateway origin for /api/ingest/notification
+      -> API Gateway origin for /api/ingest/notification-v2
 
 Android Connector
-  -> CloudFront /api/ingest/notification
+  -> CloudFront /api/ingest/notification-v2
   -> API Gateway HTTP API
   -> Lambda ingest
   -> SQS queue
@@ -336,14 +336,14 @@ $DEVICE = "10BF821N3M0055M"
 1. Login to the [web app](https://d3g6cg7q9hn7hi.cloudfront.net/).
 2. Open **Settings -> Companion Device**.
 3. Download the Android APK from the install card.
-4. Copy the Android connector config from the page.
-5. Open **PocketBuddy Connector** on the phone.
-6. Tap **Paste copied config**.
-7. Save the config.
-8. Open notification access settings from the app.
-9. Enable notification access for PocketBuddy Connector.
-10. Make a small UPI transaction or use a debug broadcast.
-11. Return to the web app and check **Recent Sync Activity**.
+4. Open PocketBuddy web on the Android phone and tap **One-Tap Auto Configure**.
+5. Confirm the connector shows the linked account.
+6. Open notification access settings from the app.
+7. Enable notification access for PocketBuddy Connector.
+8. Make a small UPI transaction or use a debug broadcast.
+9. Return to the web app and check **Recent Sync Activity**.
+
+If the app link cannot open the connector, use **Copy fallback config** from the Companion Device page.
 
 ---
 

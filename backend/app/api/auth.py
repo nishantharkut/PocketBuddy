@@ -10,6 +10,20 @@ from app.core.security import get_current_user
 
 router = APIRouter()
 
+
+def create_session_token(user_id: str) -> str:
+    now = datetime.datetime.now(datetime.UTC)
+    expires_at = now + datetime.timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return jwt.encode(
+        {
+            "userId": user_id,
+            "iat": now,
+            "exp": expires_at,
+        },
+        settings.JWT_SECRET,
+        algorithm="HS256",
+    )
+
 class AuthReq(BaseModel):
     email: str
     password: str
@@ -47,7 +61,7 @@ async def signup(req: AuthReq):
         "created_at": datetime.datetime.utcnow()
     })
     
-    token = jwt.encode({"userId": user_id}, settings.JWT_SECRET, algorithm="HS256")
+    token = create_session_token(user_id)
     return {
         "sessionToken": token,
         "user": {
@@ -66,7 +80,7 @@ async def login(req: AuthReq):
     if not user or not password_hash or not bcrypt.checkpw(req.password.encode('utf-8'), password_hash.encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    token = jwt.encode({"userId": user["_id"]}, settings.JWT_SECRET, algorithm="HS256")
+    token = create_session_token(user["_id"])
     return {
         "sessionToken": token,
         "user": {
@@ -90,10 +104,17 @@ class PhoneAuthReq(BaseModel):
 
 @router.post("/login/phone")
 async def login_phone(req: PhoneAuthReq):
+    if not settings.DEMO_PHONE_AUTH_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail="Phone demo login is disabled. Use email/password login unless a real OTP provider is configured.",
+        )
+
     db = get_db()
     user = await db.users.find_one({"phone_number": req.phone})
     if not user:
-        # For demo purposes, auto-signup user on first phone login
+        # Demo-only: auto-signup user on first phone login. Keep disabled in
+        # normal environments unless explicitly enabled in backend env.
         user_id = str(uuid.uuid4())
         await db.users.insert_one({
             "_id": user_id,
@@ -116,7 +137,7 @@ async def login_phone(req: PhoneAuthReq):
         })
         user = await db.users.find_one({"_id": user_id})
 
-    token = jwt.encode({"userId": user["_id"]}, settings.JWT_SECRET, algorithm="HS256")
+    token = create_session_token(user["_id"])
     return {
         "sessionToken": token,
         "user": {

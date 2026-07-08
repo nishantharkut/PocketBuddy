@@ -1101,7 +1101,7 @@ function LandingPage() {
   }, []);
 
   const features = [
-    { icon: Smartphone, title: "Headless UPI Ingestion", description: "A background Android connector silently intercepts UPI push notifications from GPay, PhonePe & Paytm ── zero manual entry, ever.", accent: "#8C7853", delay: 0 },
+    { icon: Smartphone, title: "Privacy-first Instant UPI Sync", description: "The optional Android connector parses supported payment alerts on-device and sends only transaction facts ── never raw notification text.", accent: "#8C7853", delay: 0 },
     { icon: Map, title: "Crowdsourced Merchant Mapping", description: "Raw strings like SHREE_BALAJI_ENT resolve into 'Hostel 1 Night Canteen' via 1-tap crowd classification, shared globally across campus.", accent: "#C27D56", delay: 100 },
     { icon: Zap, title: "Geofenced AI Guard", description: "Amazon Bedrock analyzes your runway against a live campus food database to surface hyper-local, cost-effective meal alternatives.", accent: "#D9A05B", delay: 200 },
     { icon: ShoppingCart, title: "Wing Cart Pooler", description: "Open a Blinkit/Zepto pool, share it on WhatsApp, let roommates add items ── delivery fees split automatically. No install needed.", accent: "#F7EC13", delay: 0 },
@@ -1110,7 +1110,7 @@ function LandingPage() {
   ];
 
   const faqs = [
-    { q: "Does PocketBuddy access my bank account or UPI password?", a: "Absolutely not. PocketBuddy only reads push notification strings from UPI apps ── it never connects to your bank, never stores credentials, and never initiates transactions. Think of it as a smart clipboard that reads your phone's notification panel." },
+    { q: "Does PocketBuddy access my bank account or UPI password?", a: "Absolutely not. PocketBuddy never asks for bank login, MPIN, OTP, or payment credentials. Optional Instant UPI Sync parses supported payment alerts locally on your phone and uploads only transaction facts like amount, direction, merchant, source app, and a masked preview." },
     { q: "What if I don't have the Android companion app?", a: "You can still use PocketBuddy in full manual mode ── log transactions in one tap, get AI food suggestions, join Wing Cart Pools, and track subscriptions. The companion just makes it passive and offline-syncing." },
     { q: "How does the crowdsourced merchant mapping work?", a: "When a new merchant string appears (e.g. SHREE_BALAJI_ENT), you get a 1-tap prompt to classify it. Once classified, it's immediately resolved for every student on your campus ── your 10 seconds of effort saves hundreds of others the same friction." },
     { q: "Is this only for one campus?", a: "No. PocketBuddy works for any residential campus. The campus food database is seeded per college and grows through crowdsourcing, so each university can start with its own menus and routes." },
@@ -1381,7 +1381,7 @@ function LandingPage() {
         {/* 3 differentiators */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-12">
           {[
-            { icon: Lock, title: "No Bank Access Ever", body: "PocketBuddy never asks for your bank login, MPIN, or OTP. It works entirely from UPI push notification strings ── publicly visible text on your own device.", accent: "#16a34a" },
+            { icon: Lock, title: "No Credentials, No Raw Alerts", body: "PocketBuddy never asks for your bank login, MPIN, or OTP. Optional Instant UPI Sync parses supported payment alerts on your phone and does not upload raw notification text.", accent: "#16a34a" },
             { icon: Brain, title: "Campus-Native Intelligence", body: "Unlike generic finance apps, PocketBuddy's AI context is scoped to real campus prices, mess schedules, and hostel geography ── not internet averages.", accent: "#C27D56" },
             { icon: Handshake, title: "Network Effects by Design", body: "Every merchant classification, every pool created, every check-in improves the experience for every other student on campus. It compounds.", accent: "#5E17EB" },
           ].map(({ icon: Icon, title, body, accent }) => {
@@ -1420,8 +1420,8 @@ function LandingPage() {
           </div>
           <div className="relative flex flex-col gap-8">
             <div className="absolute left-[18px] top-6 bottom-6 w-[1px] bg-gradient-to-b from-primary to-transparent" />
-            <TimelineStep n="01" title="UPI notification fires" sub="You pay ₹30 at the hostel canteen. Your Android companion app silently intercepts the GPay push string in the background." delay={0} />
-            <TimelineStep n="02" title="FastAPI parses the payload" sub="The string hits an async webhook endpoint. Bedrock extracts merchant ID, amount, and timestamp without touching your bank." delay={80} />
+            <TimelineStep n="01" title="Payment alert appears" sub="You pay ₹30 at the hostel canteen. The optional Android connector checks whether the alert is a supported payment event." delay={0} />
+            <TimelineStep n="02" title="Phone parses locally" sub="Amount, direction, merchant, source app, and a masked preview are created on-device. Raw notification text is not uploaded." delay={80} />
             <TimelineStep n="03" title="Merchant gets crowd-classified" sub="If the merchant is new, one 1-tap prompt classifies it globally for your entire campus. Next student gets it automatically." delay={160} />
             <TimelineStep n="04" title="Runway recalculates instantly" sub="Your dashboard updates the days-remaining metric, checks for subscription collisions, and flags burnout risks in real time." delay={240} />
             <TimelineStep n="05" title="AI guard activates if needed" sub="Bedrock cross-references your spending vector against the campus food database and surfaces the cheapest viable meal option near you." delay={320} />

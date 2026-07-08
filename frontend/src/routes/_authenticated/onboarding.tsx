@@ -2,27 +2,23 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
+import { BankConsentDialog, type BankConsentPayload } from "@/components/privacy/BankConsentDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { getProfile, updateProfile, getCatalog, addCatalogItem } from "@/lib/api/db.functions.js";
-import { Smartphone } from "lucide-react";
+import { createCompanionPairingToken, getProfile, updateProfile, getCatalog, addCatalogItem, startAccountAggregatorSandboxConsent } from "@/lib/api/db.functions.js";
+import { ShieldCheck, Smartphone } from "lucide-react";
 
-const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification";
+const LOCAL_WEBHOOK_URL = "http://127.0.0.1:8000/api/ingest/notification-v2";
 
 function getCompanionWebhookUrl() {
+  const configuredUrl = import.meta.env.VITE_CONNECTOR_WEBHOOK_URL?.trim();
+  if (configuredUrl) return configuredUrl;
   if (typeof window === "undefined") return LOCAL_WEBHOOK_URL;
   const { hostname, origin } = window.location;
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification`;
-}
-
-function randomPairingCode() {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let s = "PB-";
-  for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
+  return isLocalhost ? LOCAL_WEBHOOK_URL : `${origin}/api/ingest/notification-v2`;
 }
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
@@ -56,6 +52,8 @@ function Onboarding() {
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [busy, setBusy] = useState(false);
+  const [bankConsentDialogOpen, setBankConsentDialogOpen] = useState(false);
+  const [connectPath, setConnectPath] = useState<"android" | "sandbox">("android");
 
   const isAndroid = typeof window !== "undefined" && /android/i.test(window.navigator.userAgent);
 
@@ -63,10 +61,8 @@ function Onboarding() {
     if (!user) return;
     setBusy(true);
     try {
-      const code = randomPairingCode();
       await updateProfile({
         data: {
-          pairing_code: code,
           onboarding_completed: true,
           setup_completed: true,
           companion_paired: false,
@@ -74,6 +70,11 @@ function Onboarding() {
           companion_last_sync: null,
         },
       });
+      const tokenResult = await createCompanionPairingToken();
+      const code = tokenResult?.pairing_token;
+      if (!code) {
+        throw new Error("Could not create connector setup token");
+      }
       qc.invalidateQueries({ queryKey: ["profile"] });
       
       const webhookUrl = getCompanionWebhookUrl();
@@ -91,7 +92,41 @@ function Onboarding() {
     }
   }
 
-  // Step 1 — starts empty (no prefilled demo data)
+  async function connectBankFromOnboarding(payload: BankConsentPayload) {
+    if (!user) return;
+    setBusy(true);
+    try {
+      await startAccountAggregatorSandboxConsent({
+        data: {
+          purpose: "Preview the consent sandbox for PocketBuddy insights",
+          requested_range_days: payload.requestedRangeDays,
+          fi_types: ["DEPOSIT"],
+          aa_handle: payload.aaHandle || null,
+          bank_code: payload.bankCode,
+          bank_name: payload.bankName,
+          bank_short_name: payload.bankShortName,
+          selected_accounts: payload.selectedAccounts,
+        },
+      });
+      await updateProfile({
+        data: {
+          onboarding_completed: true,
+          setup_completed: true,
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["profile"] });
+      qc.invalidateQueries({ queryKey: ["aa-status", user.id] });
+      setBankConsentDialogOpen(false);
+      toast.success("Sandbox consent started. Review it from Privacy Center.");
+      nav({ to: "/privacy", replace: true });
+    } catch (err: any) {
+      toast.error(err.message || "Consent sandbox is unavailable right now. You can continue with phone sync or manual logging.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Step 1 starts empty.
   const [allowance, setAllowance] = useState("");
   const [cycleDay, setCycleDay] = useState("1");
   const [college, setCollege] = useState("");
@@ -107,6 +142,8 @@ function Onboarding() {
 
   // Step 2
   const [mess, setMess] = useState(true);
+  const [residenceType, setResidenceType] = useState("hostel");
+  const [mealRoutine, setMealRoutine] = useState("hostel_mess");
   const [meals, setMeals] = useState<{ breakfast: boolean; lunch: boolean; dinner: boolean }>({
     breakfast: false,
     lunch: true,
@@ -169,6 +206,9 @@ function Onboarding() {
         if (data.wing_label) setWing(data.wing_label);
         if (data.room_number) setRoom(data.room_number);
         if (data.phone) setPhone(data.phone);
+        if (data.residence_type) setResidenceType(data.residence_type);
+        if (data.meal_routine) setMealRoutine(data.meal_routine);
+        if (typeof data.mess_enrolled === "boolean") setMess(data.mess_enrolled);
       })
       .catch((err) => console.error("Onboarding profile load error:", err));
   }, [user]);
@@ -244,6 +284,8 @@ function Onboarding() {
       await updateProfile({
         data: {
           mess_enrolled: mess,
+          residence_type: residenceType,
+          meal_routine: mealRoutine,
           meal_schedule: meals,
           upi_apps_used: upiApps.map((a) => a.toLowerCase().replace(/\s+/g, "")),
           exam_start_date: examStart || null,
@@ -290,7 +332,7 @@ function Onboarding() {
   }
 
   const StepBar = ({ currentStep }: { currentStep: number }) => (
-    <div className="flex gap-2 w-full max-w-[280px] mx-auto mb-10">
+    <div className="flex gap-2 w-full max-w-[360px] mx-auto mb-6 lg:mb-7">
       {[1, 2, 3].map((s) => (
         <div key={s} className="flex-1 h-0.5 bg-border rounded-full overflow-hidden">
           <div
@@ -304,15 +346,19 @@ function Onboarding() {
   );
 
   return (
-    <div className="flex min-h-screen items-start justify-center bg-background px-4 py-12 relative overflow-hidden">
+    <div className="flex min-h-dvh items-start justify-center bg-background px-4 py-6 sm:px-6 lg:px-8 lg:py-8 relative overflow-x-hidden">
       {/* Cinematic light overlay */}
       <div className="absolute top-0 right-0 h-[350px] w-[350px] rounded-full bg-primary/5 blur-[100px] pointer-events-none" />
       
-      <div className="w-full max-w-[400px] relative z-10">
+      <div
+        className={`w-full relative z-10 ${
+          step === 3 ? "max-w-[1040px]" : "max-w-[760px]"
+        }`}
+      >
         <StepBar currentStep={step} />
 
         {step === 1 && (
-          <div id="onboarding-step-1" className="space-y-6">
+          <div id="onboarding-step-1" className="space-y-4">
             <div className="mb-2">
               <h2 className="text-[20px] font-black tracking-tight text-foreground uppercase">Campus Financial Guard</h2>
               <p className="mt-1.5 text-xs text-muted-foreground">
@@ -320,6 +366,7 @@ function Onboarding() {
               </p>
             </div>
             
+            <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Monthly Allowance"
               helper="Total amount you receive each month from family"
@@ -332,7 +379,7 @@ function Onboarding() {
                   value={allowance}
                   onChange={(e) => setAllowance(e.target.value)}
                   placeholder="e.g. 8000"
-                  className="flex-1 bg-transparent py-2.5 px-3 text-xs outline-none text-foreground placeholder:text-zinc-600"
+                  className="min-w-0 flex-1 bg-transparent py-2.5 px-3 text-xs outline-none text-foreground placeholder:text-zinc-600"
                 />
               </div>
             </Field>
@@ -351,6 +398,7 @@ function Onboarding() {
                 </SelectContent>
               </Select>
             </Field>
+            </div>
 
             <Field label="College" helper="Search or add your college">
               <div className="relative">
@@ -437,6 +485,7 @@ function Onboarding() {
               </Field>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field
               label="WhatsApp Phone Number *"
               helper="Used for automated split alerts and pool coordination"
@@ -462,15 +511,16 @@ function Onboarding() {
                 className="h-10"
               />
             </Field>
+            </div>
 
-            <Button id="btn-ob-next-1" className="w-full h-10 bg-foreground text-background font-black uppercase tracking-wider text-xs shadow-md mt-2" onClick={saveStep1} disabled={busy}>
+            <Button id="btn-ob-next-1" className="w-full h-10 bg-foreground text-background font-black uppercase tracking-wider text-xs shadow-md" onClick={saveStep1} disabled={busy}>
               Next Step →
             </Button>
           </div>
         )}
 
         {step === 2 && (
-          <div id="onboarding-step-2" className="space-y-6">
+          <div id="onboarding-step-2" className="space-y-4">
             <div className="mb-2">
               <h2 className="text-[20px] font-black tracking-tight text-foreground uppercase">Your Daily Routine</h2>
               <p className="mt-1.5 text-xs text-muted-foreground">
@@ -481,14 +531,21 @@ function Onboarding() {
             <Field label="Enrolled in Hostel Mess?">
               <div id="toggle-ob-mess" className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => setMess(true)}
+                  onClick={() => {
+                    setMess(true);
+                    setResidenceType("hostel");
+                    setMealRoutine("hostel_mess");
+                  }}
                   className={`rounded-md border p-3.5 text-left text-xs transition-all cursor-pointer ${mess ? "border-primary bg-primary/5 font-semibold text-foreground" : "border-border bg-surface-raised/40 text-muted-foreground hover:border-white/10"}`}
                 >
                   <p className="font-bold">Yes</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Mess enrolled</p>
                 </button>
                 <button
-                  onClick={() => setMess(false)}
+                  onClick={() => {
+                    setMess(false);
+                    if (mealRoutine === "hostel_mess") setMealRoutine("mixed");
+                  }}
                   className={`rounded-md border p-3.5 text-left text-xs transition-all cursor-pointer ${!mess ? "border-primary bg-primary/5 font-semibold text-foreground" : "border-border bg-surface-raised/40 text-muted-foreground hover:border-white/10"}`}
                 >
                   <p className="font-bold">No</p>
@@ -496,6 +553,53 @@ function Onboarding() {
                 </button>
               </div>
             </Field>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Living Setup">
+                <Select
+                  value={residenceType}
+                  onValueChange={(value) => {
+                    setResidenceType(value);
+                    if (value === "hostel") {
+                      setMess(true);
+                      setMealRoutine("hostel_mess");
+                    }
+                    if (value === "pg") {
+                      setMess(false);
+                      setMealRoutine("pg_cooking");
+                    }
+                    if (value === "day_scholar") {
+                      setMess(false);
+                      setMealRoutine("day_scholar");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-10 text-xs">
+                    <SelectValue placeholder="Select setup" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hostel">Hostel / dorm</SelectItem>
+                    <SelectItem value="pg">PG / rented room</SelectItem>
+                    <SelectItem value="day_scholar">Day scholar / commute</SelectItem>
+                    <SelectItem value="mixed">Mixed routine</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label="Meal Routine">
+                <Select value={mealRoutine} onValueChange={setMealRoutine}>
+                  <SelectTrigger className="h-10 text-xs">
+                    <SelectValue placeholder="Select routine" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hostel_mess">Hostel mess / campus meals</SelectItem>
+                    <SelectItem value="pg_cooking">PG cooking / groceries</SelectItem>
+                    <SelectItem value="day_scholar">Day scholar meals</SelectItem>
+                    <SelectItem value="mixed">Mixed routine</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
 
             {mess && (
               <Field label="Meals You Typically Eat">
@@ -606,106 +710,254 @@ function Onboarding() {
         )}
 
         {step === 3 && (
-          <div id="onboarding-step-3" className="space-y-6">
+          <div id="onboarding-step-3" className="space-y-4">
             <div className="mb-2">
-              <h2 className="text-[20px] font-black tracking-tight text-foreground uppercase">Auto-Track Expense</h2>
+              <h2 className="text-[20px] font-black tracking-tight text-foreground uppercase">Connect Safely</h2>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Set up the Android connector once. After that, PocketBuddy can sync supported UPI payment alerts automatically.
+                Choose how PocketBuddy should track student spending. Android auto-sync is the working path for instant UPI alerts; the consent sandbox previews how regulated read-only bank access would work.
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { e: "01", l: "Install App" },
-                { e: "02", l: "Paste Config" },
-                { e: "03", l: "Allow Access" },
-              ].map((c) => (
-                <div
-                  key={c.l}
-                  className="rounded-lg bg-surface-raised border border-border p-3 text-center"
-                >
-                  <div className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary">
-                    {c.e}
+            <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
+              <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-1">
+              <button
+                type="button"
+                onClick={() => setConnectPath("android")}
+                className={`rounded-xl border p-4 text-left transition-all ${
+                  connectPath === "android"
+                    ? "border-primary/45 bg-primary/10 shadow-sm"
+                    : "border-border bg-surface-raised/60 hover:border-primary/25 hover:bg-primary/5"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    connectPath === "android" ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                  }`}>
+                    <Smartphone className="h-4 w-4" />
                   </div>
-                  <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground leading-none">{c.l}</p>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[13px] font-bold text-foreground">Android Auto-Sync</p>
+                      <span className="rounded-full bg-primary px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-primary-foreground">
+                        Recommended
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                      Best for the live product: supported UPI and SMS alerts are parsed on-device,
+                      then sent as structured transaction fields.
+                    </p>
+                  </div>
                 </div>
-              ))}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setConnectPath("sandbox")}
+                className={`rounded-xl border p-4 text-left transition-all ${
+                  connectPath === "sandbox"
+                    ? "border-primary/45 bg-primary/10 shadow-sm"
+                    : "border-border bg-surface-raised/60 hover:border-primary/25 hover:bg-primary/5"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg border ${
+                    connectPath === "sandbox"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background text-muted-foreground"
+                  }`}>
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[13px] font-bold text-foreground">Consent Sandbox</p>
+                      <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                        Demo
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                      Shows the AA-style control flow: identifier, institution, masked accounts,
+                      consent, fetch, and revoke. Privacy-first and recommended for iOS users.
+                    </p>
+                  </div>
+                </div>
+              </button>
             </div>
 
             <div className="rounded-lg border border-border bg-surface-raised/40 p-4 space-y-1">
               <p className="text-xs font-bold text-foreground uppercase tracking-wider">
-                What you will do next
+                What this setup means
               </p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                The next page gives you one copy button. Open the Android app, tap paste, save, and allow notification access. You do not need to type any code manually.
+                {connectPath === "android"
+                  ? "Phone sync parses supported payment alerts on your device, sends only structured transaction fields, and can be paused or removed anytime from Privacy Center."
+                  : "The consent sandbox previews a regulated read-only bank data journey with masked accounts. It is privacy-safe for demo, useful for iOS positioning, and never connects to a live bank account."}
               </p>
             </div>
-
-            <div className="rounded-xl border border-border bg-surface-raised p-5">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                Simple setup steps
-              </p>
-              <ol className="mt-3 space-y-3 text-[12px] leading-relaxed text-muted-foreground">
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
-                    1
-                  </span>
-                  <span>Install and open the PocketBuddy Connector app on your Android phone.</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
-                    2
-                  </span>
-                  <span>On the next web page, tap <b className="text-foreground">Copy Android config</b>.</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
-                    3
-                  </span>
-                  <span>In the Android app, tap <b className="text-foreground">Paste config</b>, then <b className="text-foreground">Save connector config</b>.</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
-                    4
-                  </span>
-                  <span>Tap <b className="text-foreground">Open notification access</b> and allow PocketBuddy Connector.</span>
-                </li>
-              </ol>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              {/* One-Tap Auto Configure */}
-              <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-primary shrink-0" />
-                  <p className="text-[13px] font-bold text-foreground">One-Tap Auto Configure</p>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  If you're on Android, tap the button below to instantly launch the connector app and apply all config fields automatically — no copy-paste needed.
-                </p>
-                {isAndroid ? (
-                  <Button
-                    onClick={launchAutoConfigure}
-                    disabled={busy}
-                    className="w-full h-10 bg-primary text-primary-foreground font-black uppercase tracking-wider text-xs"
-                  >
-                    One-Tap Auto Configure
-                  </Button>
-                ) : (
-                  <div className="rounded-lg bg-card border border-border p-3 text-[11px] text-muted-foreground leading-normal">
-                    💡 <b>On Desktop?</b> Log in to PocketBuddy on your Android phone's browser, come back to this step, and tap this button to auto-configure.
-                  </div>
-                )}
               </div>
 
-              <Button
-                id="btn-ob-continue-companion"
-                onClick={() => finish(true)}
-                disabled={busy}
-                className="w-full h-10 bg-foreground text-background font-black uppercase tracking-wider text-xs shadow-md"
-              >
-                Continue to Sync Setup
-              </Button>
+              <div className="min-w-0">
+
+            {connectPath === "android" ? (
+              <div className="space-y-3 pt-2">
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 gap-3">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                        <Smartphone className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-foreground">Set up Android auto-sync</p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                          Use this path for real passive tracking. You can still skip and log manually.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() =>
+                        document
+                          .getElementById("android-sync-setup")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
+                      disabled={busy}
+                      className="h-9 w-full shrink-0 bg-primary text-primary-foreground text-xs font-black uppercase tracking-wider sm:w-fit"
+                    >
+                      View Steps
+                    </Button>
+                  </div>
+                </div>
+
+                <div id="android-sync-setup" className="rounded-xl border border-border bg-surface-raised p-5 scroll-mt-6">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                    Android auto-sync setup
+                  </p>
+                  <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-[11px] leading-relaxed text-muted-foreground">
+                    <p className="font-bold text-foreground">What the connector sends</p>
+                    <p className="mt-1">
+                      PocketBuddy uploads transaction facts only: amount, merchant, direction, source app, reference, confidence, and a masked preview.
+                    </p>
+                    <p className="mt-1">
+                      It never asks for MPIN, OTP, bank login, full SMS inbox access, or permission to initiate payments.
+                    </p>
+                  </div>
+                  <ol className="mt-3 space-y-3 text-[12px] leading-relaxed text-muted-foreground">
+                    <li className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
+                        1
+                      </span>
+                      <span>Install and open the PocketBuddy Connector app on your Android phone.</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
+                        2
+                      </span>
+                      <span>On the Android phone, tap <b className="text-foreground">One-Tap Auto Configure</b> from PocketBuddy web.</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
+                        3
+                      </span>
+                      <span>The connector opens with the server, account, and pairing fields filled from this signed-in session.</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
+                        4
+                      </span>
+                      <span>Tap <b className="text-foreground">Open notification access</b> and allow PocketBuddy Connector.</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black text-primary">
+                        5
+                      </span>
+                      <span>Open <b className="text-foreground">Privacy Center</b> anytime to pause sync, unpair the device, view provenance labels, or review low-confidence entries.</span>
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-primary shrink-0" />
+                    <p className="text-[13px] font-bold text-foreground">One-Tap Auto Configure</p>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    If you're on Android, tap the button below to launch the connector and link this account without typing any setup values.
+                  </p>
+                  {isAndroid ? (
+                    <Button
+                      onClick={launchAutoConfigure}
+                      disabled={busy}
+                      className="w-full h-10 bg-primary text-primary-foreground font-black uppercase tracking-wider text-xs"
+                    >
+                      One-Tap Auto Configure
+                    </Button>
+                  ) : (
+                    <div className="rounded-lg bg-card border border-border p-3 text-[11px] text-muted-foreground leading-normal">
+                      <b>On desktop?</b> Log in to PocketBuddy on your Android phone's browser, come back to this step, and tap this button to auto-configure.
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  id="btn-ob-continue-companion"
+                  onClick={() => finish(true)}
+                  disabled={busy}
+                  className="w-full h-10 bg-foreground text-background font-black uppercase tracking-wider text-xs shadow-md"
+                >
+                  Continue to Sync Setup
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3 pt-2">
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                      <ShieldCheck className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-bold text-foreground">Preview consent sandbox</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                        This path shows how a privacy-first, AA-style consent journey would work for students who cannot use Android notification access, especially iOS users. It uses a sandbox identifier, masked demo accounts, read-only terms, and revocation controls.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 text-[11px] leading-relaxed text-muted-foreground sm:grid-cols-3">
+                    <div className="rounded-lg border border-border bg-background p-3">
+                      <b className="block text-foreground">1. Identify</b>
+                      Enter a sandbox AA identity and choose an institution.
+                    </div>
+                    <div className="rounded-lg border border-border bg-background p-3">
+                      <b className="block text-foreground">2. Select</b>
+                      Review masked sandbox accounts before sharing anything.
+                    </div>
+                    <div className="rounded-lg border border-border bg-background p-3">
+                      <b className="block text-foreground">3. Control</b>
+                      Approve, fetch, and revoke from Privacy Center.
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      onClick={() => setBankConsentDialogOpen(true)}
+                      disabled={busy}
+                      className="h-10 w-full bg-primary text-primary-foreground text-xs font-black uppercase tracking-wider sm:w-fit"
+                    >
+                      Open Consent Sandbox
+                    </Button>
+                    <Button
+                      onClick={() => finish(false)}
+                      disabled={busy}
+                      variant="outline"
+                      className="h-10 w-full text-xs font-black uppercase tracking-wider sm:w-fit"
+                    >
+                      Continue to Dashboard
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-1">
               <button
                 id="link-ob-skip"
                 onClick={() => finish(false)}
@@ -715,9 +967,18 @@ function Onboarding() {
                 Skip — I will log manually
               </button>
             </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
+
+      <BankConsentDialog
+        open={bankConsentDialogOpen}
+        onOpenChange={setBankConsentDialogOpen}
+        onConfirm={connectBankFromOnboarding}
+        busy={busy}
+      />
     </div>
   );
 }

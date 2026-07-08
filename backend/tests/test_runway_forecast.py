@@ -138,6 +138,9 @@ class RunwayForecastTests(unittest.TestCase):
         self.assertEqual(forecast["commitments"]["by_kind"].get("subscription", 0), 0)
         self.assertEqual(forecast["commitments"]["possible_commitments_total"], 299_00)
         self.assertEqual(forecast["commitments"]["possible_commitments"][0]["status"], "possible")
+        self.assertEqual(forecast["possible_commitments_total"], 299_00)
+        self.assertEqual(forecast["possible_commitments"][0]["due_at"], forecast["commitments"]["possible_commitments"][0]["due_at"])
+        self.assertIsInstance(forecast["possible_commitments"][0]["due_at"], str)
 
     def test_confirmed_subscription_accepts_amount_paise(self):
         forecast = build_runway_forecast(

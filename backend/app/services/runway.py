@@ -1161,6 +1161,15 @@ def build_runway_forecast(
         if no_spend_history
         else f"Runway leaves Rs {safe_daily // 100:,}/day after reserving {reserved_text} and tracking food at Rs {food_routine['food_daily_pace'] // 100:,}/day."
     )
+    commitment_items = [
+        {**item, "due_at": _utc_naive(item["due_at"]).isoformat() + "Z"}
+        for item in sorted(commitments, key=lambda entry: entry["due_at"])
+    ]
+    possible_commitment_items = [
+        {**item, "due_at": _utc_naive(item["due_at"]).isoformat() + "Z"}
+        for item in sorted(possible_commitments, key=lambda entry: entry["due_at"])
+    ]
+    possible_commitment_total = sum(item["amount"] for item in possible_commitments)
 
     return {
         "generated_at": now.isoformat() + "Z",
@@ -1184,12 +1193,9 @@ def build_runway_forecast(
         "commitments": {
             "total": commitment_total,
             "by_kind": dict(commitment_by_kind),
-            "items": [{**item, "due_at": _utc_naive(item["due_at"]).isoformat() + "Z"} for item in sorted(commitments, key=lambda entry: entry["due_at"])],
-            "possible_commitments": [
-                {**item, "due_at": _utc_naive(item["due_at"]).isoformat() + "Z"}
-                for item in sorted(possible_commitments, key=lambda entry: entry["due_at"])
-            ],
-            "possible_commitments_total": sum(item["amount"] for item in possible_commitments),
+            "items": commitment_items,
+            "possible_commitments": possible_commitment_items,
+            "possible_commitments_total": possible_commitment_total,
         },
         "projection": {
             "days_until_broke": runway_days,
@@ -1212,8 +1218,8 @@ def build_runway_forecast(
             "flexible": discretionary_spent + round(projected_discretionary),
         },
         "food_routine": food_routine,
-        "possible_commitments": possible_commitments,
-        "possible_commitments_total": sum(item["amount"] for item in possible_commitments),
+        "possible_commitments": possible_commitment_items,
+        "possible_commitments_total": possible_commitment_total,
         "decision_engine": {
             "summary": decision_summary,
             "absorbed": absorbed,

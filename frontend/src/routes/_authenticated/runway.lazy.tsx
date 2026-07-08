@@ -472,9 +472,9 @@ Generated via PocketBuddy Runway.`;
     : "No reserved-cost inputs yet";
   const horizonTakeaway = projectionSignal
     ? projectionSignal.isDeficit
-      ? `First projected deficit appears around ${projectionSignal.label}.`
-      : `Long-range view stays positive through ${projectionSignal.label}.`
-    : "Projection will appear once horizon data is available.";
+      ? `In this scenario, the first deficit appears around ${projectionSignal.label}.`
+      : `In this scenario, the long-range balance stays positive through ${projectionSignal.label}.`
+    : "Scenario view will appear once horizon data is available.";
   const [selectedActionId, setSelectedActionId] = useState("priority");
   const runwayActions = useMemo(() => {
     if (!forecast) return [];
@@ -2279,7 +2279,7 @@ Generated via PocketBuddy Runway.`;
               </div>
             </Card>
 
-            {/* Predictions Grid */}
+            {/* Scenario Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {forecast.horizons.map((h: any) => {
                 const isNegative = h.projected_balance < 0;
@@ -2313,8 +2313,13 @@ Generated via PocketBuddy Runway.`;
                       </div>
 
                       <div className="text-[11px] md:text-xs text-zinc-500 leading-relaxed">
-                        <span className="font-semibold block text-zinc-400">Expected range ({forecast.confidence.score}% confidence):</span>
+                        <span className="font-semibold block text-zinc-400">Scenario range ({forecast.confidence.score}% model confidence):</span>
                         {formatRs(h.balance_low)} to {formatRs(h.balance_high)}
+                        {h.basis && (
+                          <span className="mt-1 block text-[10px] text-muted-foreground">
+                            Basis: {h.basis}
+                          </span>
+                        )}
                       </div>
                     </div>
 

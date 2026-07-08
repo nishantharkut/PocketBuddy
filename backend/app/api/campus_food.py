@@ -23,6 +23,7 @@ from app.core.security import get_current_user, map_doc, map_docs
 from app.services.campus_food import (
     REVIEW_ONLY_STATUSES,
     apply_food_context_metadata,
+    build_price_matched_food_options,
     build_food_recommendations,
     build_food_trust_metadata,
     compute_food_verification_threshold,
@@ -76,6 +77,12 @@ async def _campus_review_population(db, campus: str) -> int:
     return max(recent_count, min(profile_count, 300))
 
 
+async def _campus_for_user(db, user_id: str) -> str:
+    profile = await db.profiles.find_one({"_id": user_id})
+    campus = str((profile or {}).get("college_name") or "").strip()
+    return campus or "ABV-IIITM Gwalior"
+
+
 async def _verification_threshold_for(db, campus: str, source_type: str) -> int:
     population = await _campus_review_population(db, campus)
     return compute_food_verification_threshold(source_type, active_reviewers=population)
@@ -119,6 +126,8 @@ def _review_source_for_item(item: dict) -> str:
         return "external_snapshot"
     if source in {"partner_api", "partner_verified", "swiggy_partner", "zomato_partner", "ondc_partner"}:
         return "partner_verified"
+    if source in {"manual_menu_add"}:
+        return "manual_menu_add"
     if source in {"community_item_quiz"}:
         return "community_item_quiz"
     if source in {"ocr_menu_scan", "demo_menu_scan"}:
@@ -390,7 +399,7 @@ async def create_food_item(
     if existing:
         return map_doc(existing)
 
-    source_type = "trusted_direct_edit" if status == "active" and is_trusted else "menu_scan_pending"
+    source_type = "trusted_direct_edit" if status == "active" and is_trusted else "manual_menu_add"
     review_counts = (
         _review_counts_after_submitter_confirmation(user_id)
         if status == "pending_verification"
@@ -402,7 +411,7 @@ async def create_food_item(
         "venue_id": venue_name.lower().replace(" ", "_"),
         "venue_name": venue_name,
         "item_name": item_name,
-        "category": "other",
+        "category": "food",
         "price": body.price,
         "price_history": [{"price": body.price, "changed_at": datetime.datetime.utcnow().isoformat()}],
         "status": status,
@@ -1086,7 +1095,7 @@ async def scan_receipt(
 
 
 # ---------------------------------------------------------------------------
-# Interactive Crowdsourced Canteen Quizzes Endpoints
+# Contextual Food Signals
 # ---------------------------------------------------------------------------
 
 class SubmitQuizRequest(BaseModel):
@@ -1123,13 +1132,29 @@ def mask_merchant_name(raw_string: str) -> str:
     return raw_string
 
 
+def _category_from_signal_response(response: str) -> str:
+    value = response.strip().lower()
+    if any(token in value for token in ("food", "canteen", "mess", "tea", "chai", "snack", "meal")):
+        return "food"
+    if any(token in value for token in ("stationery", "book", "notebook", "print", "xerox", "pen")):
+        return "stationery"
+    if any(token in value for token in ("delivery", "swiggy", "zomato", "blinkit", "zepto", "instamart", "quick-commerce")):
+        return "delivery"
+    if any(token in value for token in ("general", "store", "shopping", "mart", "grocery")):
+        return "shopping"
+    return "other"
+
+
 @router.get("/quizzes")
 @router.get("/quizzes/")
-async def get_community_quizzes(user_id: str = Depends(get_current_user)):
+@router.get("/signals")
+@router.get("/signals/")
+async def get_food_signals(user_id: str = Depends(get_current_user)):
     db = get_db()
     quizzes = []
+    user_campus = await _campus_for_user(db, user_id)
 
-    # 1. Category check quizzes: Find unmapped transactions with repeating count across different users
+    # 1. Repeated merchant signals: only from labels seen across enough independent users.
     try:
         pipeline = [
             {
@@ -1179,18 +1204,19 @@ async def get_community_quizzes(user_id: str = Depends(get_current_user)):
             quizzes.append({
                 "id": quiz_id,
                 "type": "category",
-                "title": "Category Audit",
-                "question": "Is this repeated campus payment label likely a food joint, tapri, or canteen?",
-                "options": ["Food Canteen", "Stationery", "Delivery Services", "General Stores"],
-                "detail": f"Detected {tx_count} payment{'s' if tx_count > 1 else ''} across {user_count} student{'s' if user_count > 1 else ''}."
+                "title": "Repeated Payment Signal",
+                "question": "PocketBuddy found the same unmapped campus payment label across students. What kind of place should it be treated as?",
+                "options": ["Food / canteen", "Stationery", "Delivery", "General store", "Not sure"],
+                "detail": f"Seen in {tx_count} payment{'s' if tx_count > 1 else ''} across {user_count} independent student{'s' if user_count > 1 else ''}. Raw payer details stay private.",
+                "privacy_note": "Shared data changes only after independent matching confirmations.",
             })
     except Exception as e:
-        logger.exception("Error generating category quizzes: %s", str(e))
+        logger.exception("Error generating category food signals: %s", str(e))
 
     # 2. Meal guessing remains disabled outside explicit demo flows.
     # User-specific merchant prompts do not meet the community privacy thresholds.
 
-    # 3. Item Identification quizzes: only from shared venue clusters meeting privacy thresholds.
+    # 3. Item identification signals: repeated payments at active venues, grounded by trusted menu prices.
     try:
         pipeline = [
             {
@@ -1210,12 +1236,11 @@ async def get_community_quizzes(user_id: str = Depends(get_current_user)):
             {"$sort": {"count": -1}},
         ]
         item_clusters = await db.transactions.aggregate(pipeline).to_list(length=100)
-        active_venues = set(await db.campus_food.distinct("venue_name", {"status": "active"}))
 
         for cluster in item_clusters:
             venue = (cluster.get("_id") or {}).get("venue")
             amt_paise = (cluster.get("_id") or {}).get("amount")
-            if not venue or not amt_paise or venue not in active_venues:
+            if not venue or not amt_paise:
                 continue
 
             count = cluster.get("count", 0)
@@ -1225,6 +1250,7 @@ async def get_community_quizzes(user_id: str = Depends(get_current_user)):
 
             amt_rs = amt_paise / 100.0
             item_match = await db.campus_food.find_one({
+                "campus": {"$regex": f"^{re.escape(user_campus)}$", "$options": "i"},
                 "venue_name": {"$regex": f"^{re.escape(venue)}$", "$options": "i"},
                 "price": amt_paise,
                 "status": "active"
@@ -1232,84 +1258,37 @@ async def get_community_quizzes(user_id: str = Depends(get_current_user)):
             if item_match:
                 continue
 
-            suggestions = ["Tea/Chai", "Veg Maggi", "Samosa", "Cold Drink"]
-            if amt_rs == 10:
-                suggestions = ["Tea / Chai", "Biscuits", "Samosa"]
-            elif amt_rs == 15:
-                suggestions = ["Ginger Tea", "Samosa", "Bun Maska"]
-            elif amt_rs == 30:
-                suggestions = ["Veg Maggi", "Cold Coffee", "Aloo Paratha"]
-            elif amt_rs == 40:
-                suggestions = ["Cheese Maggi", "Aloo Paratha", "Veg Sandwich"]
-            elif amt_rs == 80:
-                suggestions = ["Veg Thali", "Paneer Roll", "Chola Bhatura"]
+            venue_items = await db.campus_food.find({
+                "campus": {"$regex": f"^{re.escape(user_campus)}$", "$options": "i"},
+                "venue_name": {"$regex": f"^{re.escape(str(venue))}$", "$options": "i"},
+                "status": "active",
+            }).to_list(length=100)
+            suggestions = build_price_matched_food_options(venue_items, int(amt_paise))
+            if not suggestions:
+                continue
 
             quiz_id = _stable_quiz_id("quiz_item", venue, amt_paise)
             quizzes.append({
                 "id": quiz_id,
                 "type": "item_name",
-                "title": "Menu Predictor",
-                "question": f"Students frequently log a ₹{amt_rs:.0f} food payment at a verified campus venue. What menu item is this?",
+                "title": "Food Signal",
+                "question": f"This verified venue repeatedly receives {amt_rs:.0f}-rupee food payments. Which trusted menu item is it closest to?",
                 "venue_name": venue,
                 "price": amt_paise,
                 "options": suggestions,
-                "detail": f"Recorded {count} matching payments across {user_count} students. No raw payment label is shared."
+                "detail": f"Recorded {count} matching payments across {user_count} students. Options come from current trusted menu prices, not fixed guesses.",
+                "privacy_note": "Your answer creates a pending menu candidate first; it is not recommended publicly until independently confirmed.",
             })
     except Exception as e:
-        logger.exception("Error generating item quizzes: %s", str(e))
-
-    # Fallback to seed default community quizzes matching user screenshot requests
-    if not quizzes and settings.DEMO_MODE:
-        demo_cat_1 = _stable_quiz_id("quiz_cat", "QK_PAY_SNACKS")
-        demo_cat_2 = _stable_quiz_id("quiz_cat", "UPI_TXN_BALAJI")
-        await _store_quiz_context(db, demo_cat_1, "category", {"merchant_raw": "QK_PAY_SNACKS"})
-        await _store_quiz_context(db, demo_cat_2, "category", {"merchant_raw": "UPI_TXN_BALAJI"})
-        quizzes.extend([
-            {
-                "id": demo_cat_1,
-                "type": "category",
-                "title": "Category Audit",
-                "question": "Is this repeated campus payment label likely a food joint, tapri, or canteen?",
-                "options": ["Food Canteen", "Stationery", "Delivery Services", "General Stores"],
-                "detail": "Detected 14 payments across 6 students."
-            },
-            {
-                "id": demo_cat_2,
-                "type": "category",
-                "title": "Category Audit",
-                "question": "Is this repeated campus payment label likely a food joint, tapri, or canteen?",
-                "options": ["Food Canteen", "Stationery", "Delivery Services", "General Stores"],
-                "detail": "Detected 8 payments across 3 students."
-            },
-            {
-                "id": "quiz_item_bh2_night_canteen_1500",
-                "type": "item_name",
-                "title": "Menu Predictor",
-                "question": "Students frequently spend ₹15 at BH-2 Night Canteen. What menu item is this?",
-                "venue_name": "BH-2 Night Canteen",
-                "price": 1500,
-                "options": ["Ginger Tea", "Samosa", "Bun Maska"],
-                "detail": "Recorded 14 payments of exactly ₹15 here."
-            },
-            {
-                "id": "quiz_spike_bh2_egg_roll",
-                "type": "price_spike",
-                "title": "Price Hike Audit",
-                "question": "Did BH-2 Night Canteen increase the price of Egg Paratha from ₹45 to ₹50?",
-                "venue_name": "BH-2 Night Canteen",
-                "item_name": "Egg Paratha",
-                "old_price": 4500,
-                "new_price": 5000,
-                "options": ["Yes, price increased to ₹50", "No, it is still ₹45", "Not Sure"],
-                "detail": "Recent student payments suggest a price rise of +11%."
-            }
-        ])
+        logger.exception("Error generating item food signals: %s", str(e))
 
     return quizzes
 
 @router.post("/submit-quiz")
 @router.post("/submit-quiz/")
-async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(get_current_user)):
+@router.post("/signals/respond")
+@router.post("/signals/respond/")
+async def submit_food_signal_response(req: SubmitQuizRequest, user_id: str = Depends(get_current_user)):
     db = get_db()
     now = datetime.datetime.utcnow()
 
@@ -1317,12 +1296,36 @@ async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(ge
         context = await _get_quiz_context(db, req.quiz_id)
         raw_merchant = context.get("merchant_raw")
         if not raw_merchant:
-            raise HTTPException(status_code=400, detail="Quiz context expired. Please refresh and try again.")
+            raise HTTPException(status_code=400, detail="Signal context expired. Please refresh and try again.")
 
         # Resolve category value: check custom_category or response_val
         final_cat = req.custom_category or req.response_val
-        category_val = "food" if "food" in final_cat.lower() or "canteen" in final_cat.lower() or "tea" in final_cat.lower() else "shopping"
-        clean_name = req.venue_name or ("Community-verified campus food merchant" if category_val == "food" else "Community-verified campus merchant")
+        final_cat_lower = final_cat.strip().lower()
+        if final_cat_lower in {"not sure", "unsure", "unknown"}:
+            await db.community_quiz_votes.replace_one(
+                {"_id": _stable_quiz_id("quiz_vote", req.quiz_id, user_id)},
+                {
+                    "_id": _stable_quiz_id("quiz_vote", req.quiz_id, user_id),
+                    "quiz_id": req.quiz_id,
+                    "quiz_type": "category",
+                    "user_id": user_id,
+                    "category": "unsure",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                upsert=True,
+            )
+            return {
+                "status": "no_shared_change",
+                "message": "Answer saved. Unsure responses are kept as feedback and do not change shared merchant data.",
+            }
+
+        category_val = _category_from_signal_response(final_cat)
+        clean_name = req.venue_name or (
+            "Community-verified campus food merchant"
+            if category_val == "food"
+            else "Community-verified campus merchant"
+        )
         location_val = req.location.strip() if req.location else None
 
         vote_id = _stable_quiz_id("quiz_vote", req.quiz_id, user_id)
@@ -1347,15 +1350,23 @@ async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(ge
         category_counts: dict[str, int] = {}
         for vote in vote_docs:
             cat = vote.get("category")
+            if cat == "unsure":
+                continue
             if cat:
                 category_counts[cat] = category_counts.get(cat, 0) + 1
 
-        top_category = max(category_counts, key=category_counts.get) if category_counts else category_val
+        if not category_counts:
+            return {
+                "status": "pending_verification",
+                "message": "Answer saved. Shared merchant data changes only after matching category confirmations.",
+            }
+
+        top_category = max(category_counts, key=category_counts.get)
         top_count = category_counts.get(top_category, 0)
         if len(unique_voters) < MIN_QUIZ_USERS_THRESHOLD or top_count < MIN_QUIZ_USERS_THRESHOLD:
             return {
                 "status": "pending_verification",
-                "message": f"Answer saved. This merchant category needs {MIN_QUIZ_USERS_THRESHOLD} independent matching confirmations before shared data changes.",
+                "message": "Answer saved. Shared merchant data changes only after independent matching confirmations.",
             }
 
         matching_votes = [v for v in vote_docs if v.get("category") == top_category]
@@ -1394,18 +1405,19 @@ async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(ge
         )
         return {
             "status": "success",
-            "message": f"Community verified this repeated campus payment as {top_category}. Shared data updated after {top_count} matching confirmations."
+            "message": f"Community verified this repeated campus payment as {top_category}. Shared data updated after independent confirmations."
         }
 
     elif req.quiz_type in ["item_name", "meal_guess"]:
         # Create a pending food item candidate under this canteen.
         if not req.venue_name or not req.price:
-            raise HTTPException(status_code=400, detail="Missing venue_name or price for item/meal quiz submission")
+            raise HTTPException(status_code=400, detail="Missing venue_name or price for item/meal signal submission")
 
+        campus_name = await _campus_for_user(db, user_id)
         item_id = f"{req.venue_name.lower().replace(' ', '_')}_{req.response_val.lower().replace(' ', '_')}_{uuid.uuid4().hex[:6]}"
         doc = {
             "_id": item_id,
-            "campus": "ABV-IIITM Gwalior",
+            "campus": campus_name,
             "venue_id": req.venue_name.lower().replace(" ", "_"),
             "venue_name": req.venue_name,
             "item_name": req.response_val,
@@ -1414,7 +1426,7 @@ async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(ge
             "price_history": [{"price": req.price, "changed_at": now.isoformat()}],
             "status": "pending_verification",
             **_review_counts_after_submitter_confirmation(user_id),
-            "verification_threshold": await _verification_threshold_for(db, "ABV-IIITM Gwalior", "community_item_quiz"),
+            "verification_threshold": await _verification_threshold_for(db, campus_name, "community_item_quiz"),
             "scanned_by": user_id,
             "submitted_by": user_id,
             "source": "community_item_quiz",
@@ -1427,7 +1439,7 @@ async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(ge
 
     elif req.quiz_type == "price_spike":
         if not req.venue_name or not req.item_name or not req.new_price:
-            raise HTTPException(status_code=400, detail="Missing fields for price spike quiz submission")
+            raise HTTPException(status_code=400, detail="Missing fields for price check signal submission")
 
         if "yes" in req.response_val.lower() or req.image_b64:
             active_item = await db.campus_food.find_one({
@@ -1570,4 +1582,4 @@ async def submit_quiz_response(req: SubmitQuizRequest, user_id: str = Depends(ge
             )
             return {"status": "success", "message": "Feedback recorded, price unchanged."}
 
-    raise HTTPException(status_code=400, detail="Invalid quiz type submitted")
+    raise HTTPException(status_code=400, detail="Invalid food signal type submitted")

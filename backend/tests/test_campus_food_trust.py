@@ -7,6 +7,7 @@ os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017/pocketbuddy_test")
 
 from app.services.campus_food import (  # noqa: E402
     apply_food_context_metadata,
+    build_price_matched_food_options,
     build_food_trust_metadata,
     build_food_recommendations,
     compute_food_verification_threshold,
@@ -246,6 +247,46 @@ class CampusFoodTrustMetadataTests(unittest.TestCase):
         )
 
         self.assertEqual([item["item_name"] for item in recs], ["Egg Paratha"])
+
+    def test_food_signal_options_are_derived_from_nearby_trusted_menu_items(self):
+        options = build_price_matched_food_options(
+            [
+                {"item_name": "Ginger Tea", "price": 1200, "status": "active"},
+                {"item_name": "Samosa", "price": 1500, "status": "active"},
+                {"item_name": "Paneer Thali", "price": 8500, "status": "active"},
+                {"item_name": "Pending Maggi", "price": 1500, "status": "pending_verification"},
+            ],
+            amount_paise=1500,
+        )
+
+        self.assertEqual(options, ["Samosa", "Ginger Tea"])
+
+    def test_food_signal_options_return_empty_when_menu_has_no_price_evidence(self):
+        options = build_price_matched_food_options(
+            [
+                {"item_name": "Paneer Thali", "price": 8500, "status": "active"},
+                {"item_name": "Cold Coffee", "price": 4500, "status": "active"},
+            ],
+            amount_paise=1000,
+        )
+
+        self.assertEqual(options, [])
+
+    def test_pending_manual_menu_submission_is_not_marked_trusted(self):
+        now = datetime.datetime(2026, 7, 7, 21, 0, 0)
+        metadata = build_food_trust_metadata(
+            {
+                "item_name": "Ginger Tea",
+                "price": 1200,
+                "status": "pending_verification",
+                "source": "manual_menu_add",
+                "confirmation_count": 1,
+            },
+            now,
+        )
+
+        self.assertEqual(metadata["trust_badge"], "Needs review")
+        self.assertEqual(metadata["source_type"], "student_menu_submission")
 
 
 if __name__ == "__main__":

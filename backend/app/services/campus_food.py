@@ -192,6 +192,56 @@ def _price_to_paise(value: Any) -> int:
     return int(round(price))
 
 
+def build_price_matched_food_options(
+    menu_items: list[dict[str, Any]],
+    amount_paise: int,
+    max_options: int = 4,
+) -> list[str]:
+    """
+    Suggest likely food labels for a repeated payment amount using trusted menu data.
+
+    This intentionally avoids amount-bucket guesses such as "Rs. 10 means chai".
+    If the campus menu has no nearby trusted price evidence, return no options and
+    let the product ask for a manual correction instead of inventing public data.
+    """
+    try:
+        amount = int(amount_paise or 0)
+    except (TypeError, ValueError):
+        return []
+    if amount <= 0:
+        return []
+
+    tolerance = max(300, min(2000, int(amount * 0.25)))
+    ranked: list[tuple[int, int, str]] = []
+    seen: set[str] = set()
+
+    for item in menu_items:
+        if str(item.get("status") or "active").lower() != "active":
+            continue
+        name = str(item.get("item_name") or "").strip()
+        if not name:
+            continue
+        try:
+            price = int(item.get("price") or 0)
+        except (TypeError, ValueError):
+            continue
+        if price <= 0:
+            continue
+
+        distance = abs(price - amount)
+        if distance > tolerance:
+            continue
+
+        normalized = name.casefold()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        ranked.append((distance, price, name))
+
+    ranked.sort(key=lambda row: (row[0], row[1], row[2].casefold()))
+    return [name for _, _, name in ranked[: max(1, min(max_options, 8))]]
+
+
 def _format_seen_label(seen_at: datetime.datetime | None, now: datetime.datetime) -> str:
     if not seen_at:
         return "baseline"
@@ -238,7 +288,9 @@ def _food_source_type(item: dict[str, Any]) -> str:
         return "external_snapshot"
     if source in {"partner_api", "partner_verified", "swiggy_partner", "zomato_partner", "ondc_partner"}:
         return "partner_verified"
-    if source in {"community_item_quiz", "student_correction", "trusted_direct_edit"} or confirmations >= 3:
+    if source in {"manual_menu_add", "community_item_quiz"} and status in REVIEW_ONLY_STATUSES:
+        return "student_menu_submission"
+    if source in {"manual_menu_add", "community_item_quiz", "student_correction", "trusted_direct_edit"} or confirmations >= 3:
         return "student_confirmed"
     if source in {"transaction_seen", "passive_transaction_seen"}:
         return "transaction_seen"
@@ -262,6 +314,7 @@ def build_food_trust_metadata(item: dict[str, Any], now: datetime.datetime) -> d
         "curated_baseline": (62, "Campus baseline", "Curated campus baseline catalog"),
         "external_snapshot": (55, "External snapshot", "External menu/place snapshot, pending campus confirmation"),
         "price_change_review": (44, "Price review", "Possible price change awaiting student confirmation"),
+        "student_menu_submission": (40, "Needs review", "Student menu submission awaiting confirmation"),
         "menu_scan_pending": (35, "Needs review", "Menu scan candidate awaiting student confirmation"),
     }
     score, badge, reason = trust_map.get(source_type, trust_map["curated_baseline"])

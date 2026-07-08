@@ -66,10 +66,56 @@ export async function scanMenuPhoto({ data }: { data: FormData }) {
   });
 }
 
+export async function createCampusFoodItem({ data }: { data: { venue_name: string; item_name: string; price: number; campus?: string } }) {
+  return apiRequest("/api/campus-food", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function editCampusFoodItem({ id, data }: { id: string; data: { item_name?: string; price?: number } }) {
+  return apiRequest(`/api/campus-food/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCampusFoodItem({ id }: { id: string }) {
+  return apiRequest(`/api/campus-food/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function verifyCampusFoodItem({ id, vote }: { id: string; vote: "up" | "down" }) {
   return apiRequest(`/api/campus-food/${id}/verify`, {
     method: "POST",
     body: JSON.stringify({ vote }),
+  });
+}
+
+export async function getFoodSignals() {
+  return apiRequest("/api/campus-food/signals");
+}
+
+export async function submitFoodSignalResponse({
+  data,
+}: {
+  data: {
+    quiz_id: string;
+    quiz_type: string;
+    response_val: string;
+    venue_name?: string;
+    price?: number;
+    item_name?: string;
+    old_price?: number;
+    new_price?: number;
+    custom_category?: string;
+    location?: string;
+  };
+}) {
+  return apiRequest("/api/campus-food/signals/respond", {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 }
 

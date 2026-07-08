@@ -54,7 +54,12 @@ import {
   addCatalogItem,
   getTravelSavings,
   scanMenuPhoto,
+  createCampusFoodItem,
+  editCampusFoodItem,
+  deleteCampusFoodItem,
   verifyCampusFoodItem,
+  getFoodSignals,
+  submitFoodSignalResponse,
   submitParserCorrection,
   getWingNettedBalances,
 } from "@/lib/api/db.functions";
@@ -113,6 +118,16 @@ const getTrustBadgeClass = (label: string) => {
     default:
       return "border-zinc-500/20 bg-zinc-500/5 text-zinc-400";
   }
+};
+
+const getFoodReviewSourceLabel = (item: any) => {
+  const source = String(item.source_type || item.source || "").toLowerCase();
+  if (source === "manual_menu_add" || source === "student_menu_submission") return "Added manually";
+  if (source === "community_item_quiz") return "From food signal";
+  if (source === "manual_correction") return "Suggested correction";
+  if (source === "price_change_review" || source === "price_spike_quiz" || source === "receipt_price_spike_review") return "Price check signal";
+  if (source === "ocr_menu_scan" || source === "demo_menu_scan" || source === "menu_scan_pending") return "Submitted from menu scan";
+  return "Campus review candidate";
 };
 
 export const Route = createLazyFileRoute("/_authenticated/dashboard")({
@@ -971,15 +986,27 @@ function Dashboard() {
   const [isWellnessExpanded, setIsWellnessExpanded] = useState(false);
 
   // Food scanner and crowdsourced verification state & hooks
-  const [foodTab, setFoodTab] = useState<"menus" | "scan" | "verify">("menus");
+  const [foodTab, setFoodTab] = useState<"menus" | "add" | "signals" | "verify">("menus");
   const [scanVenue, setScanVenue] = useState("");
   const [scanFile, setScanFile] = useState<File | null>(null);
   const [scanBusy, setScanBusy] = useState(false);
+  const [manualVenue, setManualVenue] = useState("");
+  const [manualItemName, setManualItemName] = useState("");
+  const [manualPrice, setManualPrice] = useState("");
+  const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
+  const [editingFoodName, setEditingFoodName] = useState("");
+  const [editingFoodPrice, setEditingFoodPrice] = useState("");
 
   const { data: pendingFoods, refetch: refetchPending } = useQuery({
     queryKey: ["pending-foods", "review_queue"],
     queryFn: () => getCampusFood("review_queue"),
     enabled: showFoodSheet && foodTab === "verify",
+  });
+
+  const { data: foodSignals, refetch: refetchFoodSignals } = useQuery({
+    queryKey: ["food-signals"],
+    queryFn: () => getFoodSignals(),
+    enabled: showFoodSheet && foodTab === "signals",
   });
 
   const reviewFoods = useMemo(() => {
@@ -993,6 +1020,11 @@ function Dashboard() {
   const disputedItems = useMemo(() => {
     return reviewFoods.filter(it => Number(it.dispute_count ?? 0) > 0);
   }, [reviewFoods]);
+
+  const canRemoveFoodCandidate = (item: any) => {
+    const ownerId = item?.submitted_by || item?.scanned_by;
+    return Boolean(user?.id && ownerId === user.id);
+  };
 
   const verifyMutation = useMutation({
     mutationFn: verifyCampusFoodItem,
@@ -1024,10 +1056,120 @@ function Dashboard() {
     verifyMutation.mutate({ id, vote });
   };
 
+  const createFoodMutation = useMutation({
+    mutationFn: createCampusFoodItem,
+    onSuccess: (res: any) => {
+      toast.success(res.message || "Menu item saved for campus verification.");
+      setManualVenue("");
+      setManualItemName("");
+      setManualPrice("");
+      setFoodTab("verify");
+      refetchPending();
+      qc.invalidateQueries({ queryKey: ["foods"] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to save menu item.");
+    },
+  });
+
+  const editFoodMutation = useMutation({
+    mutationFn: editCampusFoodItem,
+    onSuccess: (res: any) => {
+      toast.success(res.message || "Correction saved for campus verification.");
+      setEditingFoodId(null);
+      setEditingFoodName("");
+      setEditingFoodPrice("");
+      refetchPending();
+      qc.invalidateQueries({ queryKey: ["foods"] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to save food correction.");
+    },
+  });
+
+  const deleteFoodMutation = useMutation({
+    mutationFn: deleteCampusFoodItem,
+    onSuccess: () => {
+      toast.success("Menu candidate removed.");
+      refetchPending();
+      qc.invalidateQueries({ queryKey: ["foods"] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Only your pending submissions can be removed.");
+    },
+  });
+
+  const foodSignalMutation = useMutation({
+    mutationFn: submitFoodSignalResponse,
+    onSuccess: (res: any) => {
+      toast.success(res.message || "Food signal saved.");
+      refetchFoodSignals();
+      refetchPending();
+      qc.invalidateQueries({ queryKey: ["foods"] });
+      qc.invalidateQueries({ queryKey: ["txns"] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to submit food signal.");
+    },
+  });
+
+  const handleManualFoodSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const priceRupees = Number(manualPrice);
+    if (!manualVenue.trim() || !manualItemName.trim() || !Number.isFinite(priceRupees) || priceRupees <= 0) {
+      toast.error("Enter venue, item, and a positive price.");
+      return;
+    }
+    createFoodMutation.mutate({
+      data: {
+        venue_name: manualVenue.trim(),
+        item_name: manualItemName.trim(),
+        price: Math.round(priceRupees * 100),
+        campus: profile?.college_name || "ABV-IIITM Gwalior",
+      },
+    });
+  };
+
+  const startFoodEdit = (item: Food) => {
+    setEditingFoodId(item.id);
+    setEditingFoodName(String(item.item_name || ""));
+    setEditingFoodPrice(String(Number(item.price || 0) / 100));
+  };
+
+  const submitFoodEdit = (item: Food) => {
+    const priceRupees = Number(editingFoodPrice);
+    if (!editingFoodName.trim() || !Number.isFinite(priceRupees) || priceRupees <= 0) {
+      toast.error("Enter an item name and positive price.");
+      return;
+    }
+    editFoodMutation.mutate({
+      id: item.id,
+      data: {
+        item_name: editingFoodName.trim(),
+        price: Math.round(priceRupees * 100),
+      },
+    });
+  };
+
+  const submitFoodSignal = (signal: any, response: string) => {
+    foodSignalMutation.mutate({
+      data: {
+        quiz_id: signal.id,
+        quiz_type: signal.type,
+        response_val: response,
+        venue_name: signal.venue_name,
+        price: signal.price,
+        item_name: signal.item_name,
+        old_price: signal.old_price,
+        new_price: signal.new_price,
+      },
+    });
+  };
+
   const scanMutation = useMutation({
     mutationFn: scanMenuPhoto,
     onSuccess: (res) => {
-      toast.success(res.message || `Successfully parsed menu!`);
+      toast.success(res.message || "Menu photo saved for campus review.");
       setScanVenue("");
       setScanFile(null);
       setFoodTab("verify"); // Switch to verification page to see it
@@ -2443,14 +2585,24 @@ function Dashboard() {
                   Eat Now
                 </button>
                 <button
-                  onClick={() => setFoodTab("scan")}
+                  onClick={() => setFoodTab("add")}
                   className={`flex-1 py-2 text-xs font-black uppercase tracking-wider text-center border-b-2 transition-all ${
-                    foodTab === "scan"
+                    foodTab === "add"
                       ? "border-primary text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Scan Menu
+                  Add Menu
+                </button>
+                <button
+                  onClick={() => setFoodTab("signals")}
+                  className={`flex-1 py-2 text-xs font-black uppercase tracking-wider text-center border-b-2 transition-all ${
+                    foodTab === "signals"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Signals
                 </button>
                 <button
                   onClick={() => setFoodTab("verify")}
@@ -2529,6 +2681,52 @@ function Dashboard() {
                                 </span>
                               )}
                             </div>
+
+                            {editingFoodId === it.id ? (
+                              <div className="grid gap-2 rounded-lg border border-border bg-surface-raised p-2 md:grid-cols-[1fr_120px_auto]">
+                                <Input
+                                  value={editingFoodName}
+                                  onChange={(e) => setEditingFoodName(e.target.value)}
+                                  placeholder="Item name"
+                                  className="h-8 text-xs"
+                                />
+                                <Input
+                                  value={editingFoodPrice}
+                                  onChange={(e) => setEditingFoodPrice(e.target.value)}
+                                  placeholder="Price"
+                                  inputMode="decimal"
+                                  className="h-8 text-xs"
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={editFoodMutation.isPending}
+                                    onClick={() => submitFoodEdit(it)}
+                                    className="h-8 px-3 text-xs"
+                                  >
+                                    Save
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setEditingFoodId(null)}
+                                    className="h-8 px-3 text-xs"
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => startFoodEdit(it)}
+                                className="self-start text-xs font-bold uppercase tracking-wider text-primary hover:text-primary/80"
+                              >
+                                Suggest edit
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -2541,8 +2739,52 @@ function Dashboard() {
               </div>
             )}
 
-            {foodTab === "scan" && (
-              <form onSubmit={handleScanSubmit} className="space-y-4 py-4 animate-[fadeIn_0.2s_ease-out]">
+            {foodTab === "add" && (
+              <div className="space-y-5 py-4 animate-[fadeIn_0.2s_ease-out]">
+                <form onSubmit={handleManualFoodSubmit} className="space-y-3 rounded-xl border border-border bg-surface p-3">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Add one menu item</h4>
+                    <p className="text-xs text-zinc-400">
+                      New items stay in campus review before they affect recommendations.
+                    </p>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-[1fr_1fr_120px]">
+                    <Input
+                      value={manualVenue}
+                      onChange={(e) => setManualVenue(e.target.value)}
+                      placeholder="Venue, e.g. BH-2 Night Canteen"
+                      className="bg-surface-raised border-border text-xs font-semibold"
+                    />
+                    <Input
+                      value={manualItemName}
+                      onChange={(e) => setManualItemName(e.target.value)}
+                      placeholder="Item, e.g. Ginger Tea"
+                      className="bg-surface-raised border-border text-xs font-semibold"
+                    />
+                    <Input
+                      value={manualPrice}
+                      onChange={(e) => setManualPrice(e.target.value)}
+                      placeholder="Price"
+                      inputMode="decimal"
+                      className="bg-surface-raised border-border text-xs font-semibold"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={createFoodMutation.isPending}
+                    className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-black uppercase text-xs h-9 tracking-wider"
+                  >
+                    Save for verification
+                  </Button>
+                </form>
+
+                <form onSubmit={handleScanSubmit} className="space-y-4 rounded-xl border border-border bg-surface p-3">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-foreground">Bulk add from menu photo</h4>
+                    <p className="text-xs text-zinc-400">
+                      OCR candidates also go to review; they are not used as trusted recommendations immediately.
+                    </p>
+                  </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Canteen / Venue Name</label>
                   <Input
@@ -2586,15 +2828,75 @@ function Dashboard() {
                   disabled={scanBusy}
                   className="w-full bg-primary hover:bg-primary/95 text-primary-foreground font-black uppercase text-xs h-10 tracking-wider disabled:opacity-50"
                 >
-                  {scanBusy ? "OCR Scanning & Structuring (AWS Nova)..." : "Analyze Menu with AI"}
+                  {scanBusy ? "Reading menu photo..." : "Scan menu for review"}
                 </Button>
-              </form>
+                </form>
+              </div>
+            )}
+
+            {foodTab === "signals" && (
+              <div className="space-y-4 py-4 animate-[fadeIn_0.2s_ease-out]">
+                <div className="rounded-xl border border-border bg-surface-raised p-3.5 text-xs text-zinc-300">
+                  <p className="font-semibold text-foreground">Food Signals turn repeated payments into better campus menus.</p>
+                  <p className="mt-1 text-zinc-400">
+                    These are not random prompts. PocketBuddy asks only when a payment pattern has enough independent evidence or a trusted menu needs confirmation.
+                  </p>
+                </div>
+
+                {!foodSignals ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-24" />
+                    <Skeleton className="h-24" />
+                  </div>
+                ) : foodSignals.length === 0 ? (
+                  <div className="rounded-xl border border-border bg-surface p-6 text-center">
+                    <p className="text-sm font-semibold text-foreground">No food signals need input right now.</p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      New signals appear when PocketBuddy sees repeated campus food payments or menu price changes.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {foodSignals.map((signal: any) => (
+                      <div key={signal.id} className="rounded-xl border border-border bg-surface p-3.5 text-xs">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-primary">{signal.title || "Food Signal"}</p>
+                            <p className="text-sm font-bold text-foreground">{signal.question}</p>
+                            {signal.detail && <p className="text-xs text-zinc-400">{signal.detail}</p>}
+                            {signal.privacy_note && <p className="text-[11px] text-zinc-500">{signal.privacy_note}</p>}
+                          </div>
+                          {signal.price ? (
+                            <span className="tnum shrink-0 rounded-lg bg-surface-raised px-2 py-1 font-mono text-xs font-black text-primary">
+                              {rupees(signal.price)}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {(signal.options || []).map((option: string) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => submitFoodSignal(signal, option)}
+                              disabled={foodSignalMutation.isPending}
+                              className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-xs font-bold text-foreground hover:border-primary/50 hover:text-primary disabled:opacity-50"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {foodTab === "verify" && (
               <div className="space-y-4 py-4 animate-[fadeIn_0.2s_ease-out] max-h-[50vh] overflow-y-auto">
                 <div className="bg-surface-raised border border-border p-3.5 rounded-xl text-xs text-zinc-300 leading-relaxed font-normal space-y-1.5">
-                  <p>Scanned menu items are not used in recommendations until enough independent students confirm them.</p>
+                  <p>Menu candidates are not used in recommendations until enough independent students confirm them.</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1.5 border-t border-border/30 text-[11px] text-zinc-400">
                     <span className="flex items-center gap-1">
                       <span className="h-1.5 w-1.5 rounded-full bg-success" />
@@ -2616,14 +2918,14 @@ function Dashboard() {
                   <div className="py-10 text-center space-y-3">
                     <p className="text-sm text-zinc-300 font-semibold">No menu items need review right now.</p>
                     <p className="text-xs text-zinc-400 max-w-sm mx-auto font-normal">
-                      Scan a canteen menu to help PocketBuddy build trusted campus food options.
+                      Add a menu item or scan a canteen menu to help PocketBuddy build trusted campus food options.
                     </p>
                     <Button
                       id="btn-switch-to-scan"
-                      onClick={() => setFoodTab("scan")}
+                      onClick={() => setFoodTab("add")}
                       className="bg-primary hover:bg-primary/95 text-primary-foreground font-black uppercase text-xs h-8 px-4 tracking-wider cursor-pointer"
                     >
-                      Scan Menu
+                      Add Menu
                     </Button>
                   </div>
                 ) : (
@@ -2654,7 +2956,7 @@ function Dashboard() {
                                     {(it.verification_threshold ?? 5) - (it.confirmation_count ?? Math.max(0, it.verification_votes ?? 0)) > 0
                                       ? `Needs ${Math.max(0, (it.verification_threshold ?? 5) - (it.confirmation_count ?? Math.max(0, it.verification_votes ?? 0)))} more confirmations`
                                       : "Pending final approval"}
-                                    <span className="text-zinc-500 font-normal"> · Submitted from menu scan</span>
+                                    <span className="text-zinc-500 font-normal"> · {getFoodReviewSourceLabel(it)}</span>
                                   </p>
                                 </div>
 
@@ -2675,6 +2977,16 @@ function Dashboard() {
                                   >
                                     ✕ Dispute
                                   </button>
+                                  {canRemoveFoodCandidate(it) && (
+                                    <button
+                                      onClick={() => deleteFoodMutation.mutate({ id: it.id })}
+                                      disabled={deleteFoodMutation.isPending}
+                                      className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface border border-border text-zinc-300 font-bold text-xs uppercase cursor-pointer text-center"
+                                      title="Remove this pending submission"
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -2709,7 +3021,7 @@ function Dashboard() {
                                     <span className="text-destructive">
                                       {it.dispute_count} student{it.dispute_count === 1 ? "" : "s"} disputed this
                                     </span>
-                                    <span className="text-zinc-500 font-normal"> · Submitted from menu scan</span>
+                                    <span className="text-zinc-500 font-normal"> · {getFoodReviewSourceLabel(it)}</span>
                                   </p>
                                 </div>
 
@@ -2730,6 +3042,16 @@ function Dashboard() {
                                   >
                                     ✕ Dispute
                                   </button>
+                                  {canRemoveFoodCandidate(it) && (
+                                    <button
+                                      onClick={() => deleteFoodMutation.mutate({ id: it.id })}
+                                      disabled={deleteFoodMutation.isPending}
+                                      className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface border border-border text-zinc-300 font-bold text-xs uppercase cursor-pointer text-center"
+                                      title="Remove this pending submission"
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>

@@ -14,7 +14,7 @@ if (localPropertiesFile.exists()) {
 
 val pocketBuddyWebhookUrl =
     localProperties.getProperty("POCKETBUDDY_WEBHOOK_URL")
-        ?: "http://10.0.2.2:8000/api/ingest/notification"
+        ?: "http://10.0.2.2:8000/api/ingest/notification-v2"
 val pocketBuddyWebhookToken =
     localProperties.getProperty("POCKETBUDDY_WEBHOOK_TOKEN") ?: ""
 val pocketBuddyUserId =
@@ -68,4 +68,5 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
 }

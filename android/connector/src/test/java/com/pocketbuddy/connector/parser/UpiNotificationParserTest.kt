@@ -1,6 +1,7 @@
 package com.pocketbuddy.connector.parser
 
 import com.pocketbuddy.connector.model.NotificationCaptureSource
+import com.pocketbuddy.connector.model.ParserConfidence
 import com.pocketbuddy.connector.model.TransactionDirection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -23,6 +24,7 @@ class UpiNotificationParserTest {
         assertEquals(50.0, parsed?.amount ?: -1.0, 0.001)
         assertEquals("Hostel 3 Night Canteen", parsed?.merchant)
         assertEquals("TXN123", parsed?.transactionId)
+        assertEquals(ParserConfidence.HIGH, parsed?.confidence)
     }
 
     @Test
@@ -52,6 +54,7 @@ class UpiNotificationParserTest {
         assertEquals(125.0, parsed?.amount ?: -1.0, 0.001)
         assertEquals("CAMPUS CANTEEN", parsed?.merchant)
         assertEquals("123456789012", parsed?.transactionId)
+        assertEquals(ParserConfidence.HIGH, parsed?.confidence)
     }
 
     @Test
@@ -97,5 +100,48 @@ class UpiNotificationParserTest {
         )
 
         assertNull(parsed)
+    }
+
+    @Test
+    fun sendsReviewableLowConfidenceEventWhenMerchantIsMissing() {
+        val parsed = parser.parse(
+            packageName = "com.google.android.apps.messaging",
+            rawText = "HDFC Bank: A/c XX1234 debited by Rs.125.00 via UPI. UTR 123456789012",
+        )
+
+        assertNotNull(parsed)
+        assertEquals(NotificationCaptureSource.SMS_NOTIFICATION, parsed?.captureSource)
+        assertEquals(TransactionDirection.DEBIT, parsed?.direction)
+        assertEquals(125.0, parsed?.amount ?: -1.0, 0.001)
+        assertNull(parsed?.merchant)
+        assertEquals(ParserConfidence.LOW, parsed?.confidence)
+    }
+
+    @Test
+    fun detectsRecurringMandateSignalsWithoutDecidingSubscriptionStatus() {
+        val parsed = parser.parse(
+            packageName = "com.google.android.apps.messaging",
+            rawText = "HDFC Bank: A/c XX1234 debited by Rs.59.00 via UPI to Spotify. AutoPay mandate renewal successful. UTR 123456789012",
+        )
+
+        assertNotNull(parsed)
+        assertEquals("Spotify", parsed?.merchant)
+        assertEquals(ParserConfidence.HIGH, parsed?.confidence)
+        assertEquals(listOf("autopay", "mandate", "renewal"), parsed?.recurringKeywords)
+    }
+
+    @Test
+    fun sendsLowConfidenceReviewEventForPaymentLikeAlertWithoutDirection() {
+        val parsed = parser.parse(
+            packageName = "com.google.android.apps.messaging",
+            rawText = "HDFC Bank: UPI transaction of Rs.125.00 at CAMPUS CANTEEN. UTR 123456789012",
+        )
+
+        assertNotNull(parsed)
+        assertEquals(NotificationCaptureSource.SMS_NOTIFICATION, parsed?.captureSource)
+        assertEquals(125.0, parsed?.amount ?: -1.0, 0.001)
+        assertNull(parsed?.direction)
+        assertEquals("CAMPUS CANTEEN", parsed?.merchant)
+        assertEquals(ParserConfidence.LOW, parsed?.confidence)
     }
 }

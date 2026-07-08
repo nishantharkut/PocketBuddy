@@ -8,8 +8,10 @@ import com.pocketbuddy.connector.identity.DeviceIdentityStore
 import com.pocketbuddy.connector.model.TransactionNotificationPayload
 import com.pocketbuddy.connector.network.WebhookClient
 import com.pocketbuddy.connector.parser.UpiNotificationParser
+import com.pocketbuddy.connector.privacy.NotificationTextMasker
 import com.pocketbuddy.connector.retry.RetryScheduler
 import com.pocketbuddy.connector.retry.WebhookRetryQueue
+import com.pocketbuddy.connector.sync.SyncStatusStore
 
 class PocketBuddyNotificationListener : NotificationListenerService() {
     private val parser = UpiNotificationParser()
@@ -17,6 +19,7 @@ class PocketBuddyNotificationListener : NotificationListenerService() {
     private val webhookClient by lazy { WebhookClient(applicationContext) }
     private val identityStore by lazy { DeviceIdentityStore(applicationContext) }
     private val retryQueue by lazy { WebhookRetryQueue(applicationContext) }
+    private val syncStatusStore by lazy { SyncStatusStore(applicationContext) }
 
     override fun onListenerConnected() {
         RetryScheduler.schedule(applicationContext)
@@ -47,7 +50,6 @@ class PocketBuddyNotificationListener : NotificationListenerService() {
 
         val payload = TransactionNotificationPayload(
             packageName = sbn.packageName,
-            text = notificationText,
             timestamp = sbn.postTime,
             sourceApp = parsedNotification.sourceApp,
             captureSource = parsedNotification.captureSource,
@@ -58,14 +60,21 @@ class PocketBuddyNotificationListener : NotificationListenerService() {
             direction = parsedNotification.direction,
             merchant = parsedNotification.merchant,
             transactionId = parsedNotification.transactionId,
+            maskedPreview = NotificationTextMasker.mask(notificationText),
+            confidence = parsedNotification.confidence,
+            recurringKeywords = parsedNotification.recurringKeywords,
         )
 
         webhookClient.post(payload) { result ->
             when (result) {
-                WebhookClient.PostResult.Success -> Log.d(TAG, "Forwarded UPI notification")
+                WebhookClient.PostResult.Success -> {
+                    syncStatusStore.recordSuccess(payload)
+                    Log.d(TAG, "Forwarded UPI notification")
+                }
                 is WebhookClient.PostResult.Failure -> {
                     Log.w(TAG, "Webhook rejected notification: ${result.reason}")
                     retryQueue.enqueue(payload)
+                    syncStatusStore.recordQueuedFailure(result.reason)
                     RetryScheduler.schedule(applicationContext)
                 }
             }

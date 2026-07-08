@@ -6,22 +6,25 @@ The Android connector posts normalized payment events after reading UPI app and 
 
 ## Android Webhook
 
-Target endpoint for the Python backend:
+Target endpoint for new Android connector builds:
 
 ```http
-POST /api/ingest/notification
+POST /api/ingest/notification-v2
 Content-Type: application/json
-Authorization: Bearer <optional server-issued-token>
+Authorization: Bearer <pairing-token>
 X-PocketBuddy-Connector: com.pocketbuddy.connector
 X-PocketBuddy-Connector-Version: 0.1.0
 X-PocketBuddy-Device-Id: <installation-scoped-device-id>
 X-PocketBuddy-User-Id: <optional-user-id>
+X-PocketBuddy-Timestamp: <unix-ms>
+X-PocketBuddy-Event-Id: <client-event-id>
+X-PocketBuddy-Signature: sha256=<hmac>
 ```
 
 During local USB testing with `adb reverse`, the Android app should use:
 
 ```text
-http://127.0.0.1:8000/api/ingest/notification
+http://127.0.0.1:8000/api/ingest/notification-v2
 ```
 
 ## Request Body
@@ -29,9 +32,8 @@ http://127.0.0.1:8000/api/ingest/notification
 ```json
 {
   "packageName": "com.google.android.apps.messaging",
-  "text": "Sent Rs.1.00 from XXXXXX6243 to CAMPUS CANTEEN on 13/06/2026. UPI ref no. 653029277807.",
   "timestamp": 1781379188000,
-  "sourceApp": "com.google.android.apps.messaging",
+  "sourceApp": "Google Messages",
   "captureSource": "sms_notification",
   "deviceId": "installation-scoped-uuid",
   "userId": "user-id-if-configured",
@@ -40,33 +42,49 @@ http://127.0.0.1:8000/api/ingest/notification
   "direction": "debit",
   "merchant": "CAMPUS CANTEEN",
   "transactionId": "653029277807",
-  "detectedAtDeviceMillis": 1781379188000
+  "detectedAtDeviceMillis": 1781379188000,
+  "maskedPreview": "Sent Rs.1.00 from XXXXXX[digits] to CAMPUS CANTEEN. UPI ref no. [ref].",
+  "parserVersion": "android-upi-v2",
+  "confidence": "high",
+  "privacyMode": "on_device_only",
+  "rawTextSuppressed": true,
+  "schemaVersion": 2,
+  "clientEventId": "installation-event-uuid",
+  "recurringKeywords": []
 }
 ```
 
 Required fields:
 
 - `packageName`
-- `text`
 - `timestamp`
 - `sourceApp`
 - `captureSource`
 - `deviceId`
-- `amount`
 - `currency`
-- `direction`
-- `merchant`
 - `detectedAtDeviceMillis`
+- `maskedPreview`
+- `parserVersion`
+- `confidence`
+- `privacyMode`
+- `rawTextSuppressed`
+- `schemaVersion`
+- `clientEventId`
 
 Optional fields:
 
 - `userId`
+- `amount`
+- `direction`
+- `merchant`
 - `transactionId`
+- `recurringKeywords`
 
 Valid `captureSource` values:
 
-- `payment_app_notification`
+- `payment_app`
 - `sms_notification`
+- `debug`
 
 Valid `direction` values:
 
@@ -77,12 +95,14 @@ Valid `direction` values:
 
 The webhook should:
 
-1. Validate the payload structure and reject non-payment events.
-2. Bind the event to a user from `userId`, `X-PocketBuddy-User-Id`, bearer token, or a future pairing flow.
-3. Store a masked `companion_sync_log` row for observability.
-4. De-duplicate app notification and SMS pairs for the same payment.
-5. Create or update one canonical `transactions` row.
-6. Update the user's profile with companion status.
+1. Validate the payload structure and reject raw `text`/`body` on `/notification-v2`.
+2. Require a valid connector HMAC signature on `/notification-v2`.
+3. Bind the event to a user from `userId`, `X-PocketBuddy-User-Id`, bearer token, or a future pairing flow.
+4. Store a masked `companion_sync_log` row for observability.
+5. Mark payment-like events with missing amount, merchant, or direction as `incomplete` rather than silently dropping them.
+6. De-duplicate app notification and SMS pairs for the same payment.
+7. Create or update one canonical `transactions` row when the core transaction fields are present.
+8. Update the user's profile with companion status.
 
 Suggested profile fields:
 
@@ -107,6 +127,9 @@ Suggested sync-log fields:
   "processing_status": "parsed",
   "parsed_amount": 1.0,
   "parsed_merchant": "CAMPUS CANTEEN",
+  "source_confidence": "high",
+  "raw_payload_received": false,
+  "recurring_keywords": [],
   "created_at": "2026-06-13T17:12:08.232975Z"
 }
 ```
@@ -116,6 +139,8 @@ Valid `processing_status` values:
 - `pending`
 - `parsed`
 - `duplicate`
+- `incomplete`
+- `needs_review`
 - `failed`
 
 ## Frontend Companion Reads
@@ -150,10 +175,21 @@ The frontend treats the Android connector as connected only when at least one of
 
 The frontend does not mark the device connected by itself. Real connection state must come from backend ingest.
 
+## Signature Rule
+
+When a pairing token is configured, Android signs the exact JSON request body with:
+
+```text
+HMAC_SHA256(pairing_token, "<timestamp-ms>.<client-event-id>.<raw-json-body>")
+```
+
+The backend verifies this using `X-PocketBuddy-Timestamp`, `X-PocketBuddy-Event-Id`, and `X-PocketBuddy-Signature`.
+Unsigned events are rejected on `/api/ingest/notification-v2`. The legacy `/api/ingest/notification` route can remain temporarily migration-friendly, but new connector builds should use signed v2 requests only.
+
 ## Privacy Rule
 
-The Android request body includes `text` because older payloads and fallback parsers need it. The backend should use that value only in-memory during request processing. New database rows should persist parsed fields plus `notification_preview`; they should not persist full raw notification or SMS text.
+The v2 Android request body must not include full notification or SMS text. Android parses the alert on-device and sends structured fields plus `maskedPreview`. The legacy `/api/ingest/notification` route exists only for older connector builds and is disabled by default for raw text.
 
 ## Compatibility Note
 
-The current Express backend has a legacy public webhook route with a different payload shape. The Python backend should implement the contract above. If the legacy route must remain temporarily, add it as an alias or adapter rather than changing the Android payload.
+The Python backend still exposes `/api/ingest/notification` for older connector builds, but new Android builds should use `/api/ingest/notification-v2`. Keep any legacy adapter isolated so the v2 privacy contract stays stable.

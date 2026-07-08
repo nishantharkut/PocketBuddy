@@ -12,6 +12,8 @@ import com.pocketbuddy.connector.identity.DeviceIdentityStore
 import com.pocketbuddy.connector.model.TransactionNotificationPayload
 import com.pocketbuddy.connector.network.WebhookClient
 import com.pocketbuddy.connector.parser.UpiNotificationParser
+import com.pocketbuddy.connector.privacy.NotificationTextMasker
+import com.pocketbuddy.connector.sync.SyncStatusStore
 
 class DebugNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -54,25 +56,35 @@ class DebugNotificationReceiver : BroadcastReceiver() {
                 return
             }
 
-            WebhookClient(context.applicationContext).post(
-                TransactionNotificationPayload(
+            val appContext = context.applicationContext
+            val payload = TransactionNotificationPayload(
                     packageName = parserPackageName,
-                    text = notificationText,
                     timestamp = timestamp,
                     sourceApp = parsedNotification.sourceApp,
                     captureSource = parsedNotification.captureSource,
-                    deviceId = DeviceIdentityStore(context).deviceId(),
-                    userId = DeviceIdentityStore(context).userId(),
+                    deviceId = DeviceIdentityStore(appContext).deviceId(),
+                    userId = DeviceIdentityStore(appContext).userId(),
                     amount = parsedNotification.amount,
                     currency = parsedNotification.currency,
                     direction = parsedNotification.direction,
                     merchant = parsedNotification.merchant,
                     transactionId = parsedNotification.transactionId,
-                ),
-            ) { result ->
+                    maskedPreview = NotificationTextMasker.mask(notificationText),
+                    confidence = parsedNotification.confidence,
+                    recurringKeywords = parsedNotification.recurringKeywords,
+                )
+            val syncStatusStore = SyncStatusStore(appContext)
+
+            WebhookClient(appContext).post(payload) { result ->
                 when (result) {
-                    WebhookClient.PostResult.Success -> Log.d(TAG, "Posted debug webhook")
-                    is WebhookClient.PostResult.Failure -> Log.w(TAG, "Debug webhook failed: ${result.reason}")
+                    WebhookClient.PostResult.Success -> {
+                        syncStatusStore.recordSuccess(payload)
+                        Log.d(TAG, "Posted debug webhook")
+                    }
+                    is WebhookClient.PostResult.Failure -> {
+                        syncStatusStore.recordQueuedFailure(result.reason)
+                        Log.w(TAG, "Debug webhook failed: ${result.reason}")
+                    }
                 }
             }
         }

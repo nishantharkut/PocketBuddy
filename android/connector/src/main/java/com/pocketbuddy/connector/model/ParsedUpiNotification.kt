@@ -17,12 +17,26 @@ enum class NotificationCaptureSource(val apiValue: String) {
     }
 }
 
+enum class ParserConfidence(val apiValue: String) {
+    HIGH("high"),
+    MEDIUM("medium"),
+    LOW("low"),
+    ;
+
+    companion object {
+        fun fromApiValue(value: String?): ParserConfidence =
+            entries.firstOrNull { it.apiValue == value?.lowercase() } ?: MEDIUM
+    }
+}
+
 data class ParsedUpiNotification(
     val sourceApp: String,
     val captureSource: NotificationCaptureSource,
-    val amount: Double,
+    val amount: Double?,
     val currency: String,
-    val direction: TransactionDirection,
+    val direction: TransactionDirection?,
     val merchant: String?,
     val transactionId: String?,
+    val confidence: ParserConfidence,
+    val recurringKeywords: List<String> = emptyList(),
 )

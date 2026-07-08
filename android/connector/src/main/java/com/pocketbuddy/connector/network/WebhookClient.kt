@@ -6,6 +6,7 @@ import com.pocketbuddy.connector.BuildConfig
 import com.pocketbuddy.connector.config.ConnectorConfigStore
 import com.pocketbuddy.connector.model.TransactionNotificationPayload
 import java.io.IOException
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import okhttp3.Call
 import okhttp3.Callback
@@ -34,9 +35,10 @@ class WebhookClient(
             return
         }
 
-        val request = Request.Builder()
+        val requestBodyBytes = payload.toJson().toString().toByteArray(Charsets.UTF_8)
+        val requestBuilder = Request.Builder()
             .url(endpointUrl)
-            .post(payload.toJson().toString().toRequestBody(JSON_MEDIA_TYPE))
+            .post(requestBodyBytes.toRequestBody(JSON_MEDIA_TYPE))
             .header("X-PocketBuddy-Connector", BuildConfig.APPLICATION_ID)
             .header("X-PocketBuddy-Connector-Version", BuildConfig.VERSION_NAME)
             .header("X-PocketBuddy-Device-Id", payload.deviceId)
@@ -44,7 +46,15 @@ class WebhookClient(
                 payload.userId?.let { header("X-PocketBuddy-User-Id", it) }
                 webhookToken?.let { header("Authorization", "Bearer $it") }
             }
-            .build()
+        webhookToken?.takeIf(String::isNotBlank)?.let { token ->
+            addSignatureHeaders(
+                builder = requestBuilder,
+                token = token,
+                eventId = payload.clientEventId,
+                body = requestBodyBytes,
+            )
+        }
+        val request = requestBuilder.build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -82,18 +92,24 @@ class WebhookClient(
             put("userId", userId)
             put("deviceId", deviceId)
             put("type", "unpair")
-            put("text", "unpair")
             put("packageName", "com.pocketbuddy.connector")
             put("sourceApp", "PocketBuddy Android Connector")
             put("timestamp", System.currentTimeMillis())
             put("amount", 0.0)
             put("currency", "INR")
             put("direction", "debit")
+            put("maskedPreview", "Connector unpair requested")
+            put("parserVersion", "android-upi-v2")
+            put("privacyMode", "on_device_only")
+            put("rawTextSuppressed", true)
+            put("schemaVersion", 2)
         }
 
-        val request = Request.Builder()
+        val requestBodyBytes = json.toString().toByteArray(Charsets.UTF_8)
+        val eventId = UUID.randomUUID().toString()
+        val requestBuilder = Request.Builder()
             .url(endpointUrl)
-            .post(json.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .post(requestBodyBytes.toRequestBody(JSON_MEDIA_TYPE))
             .header("X-PocketBuddy-Connector", BuildConfig.APPLICATION_ID)
             .header("X-PocketBuddy-Connector-Version", BuildConfig.VERSION_NAME)
             .header("X-PocketBuddy-Device-Id", deviceId)
@@ -101,7 +117,15 @@ class WebhookClient(
                 header("X-PocketBuddy-User-Id", userId)
                 webhookToken?.let { header("Authorization", "Bearer $it") }
             }
-            .build()
+        webhookToken?.takeIf(String::isNotBlank)?.let { token ->
+            addSignatureHeaders(
+                builder = requestBuilder,
+                token = token,
+                eventId = eventId,
+                body = requestBodyBytes,
+            )
+        }
+        val request = requestBuilder.build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -137,5 +161,26 @@ class WebhookClient(
             .writeTimeout(5, TimeUnit.SECONDS)
             .callTimeout(10, TimeUnit.SECONDS)
             .build()
+
+        private fun addSignatureHeaders(
+            builder: Request.Builder,
+            token: String,
+            eventId: String,
+            body: ByteArray,
+        ) {
+            val timestampMillis = System.currentTimeMillis().toString()
+            builder
+                .header("X-PocketBuddy-Timestamp", timestampMillis)
+                .header("X-PocketBuddy-Event-Id", eventId)
+                .header(
+                    "X-PocketBuddy-Signature",
+                    WebhookRequestSigner.signature(
+                        token = token,
+                        timestampMillis = timestampMillis,
+                        eventId = eventId,
+                        body = body,
+                    ),
+                )
+        }
     }
 }

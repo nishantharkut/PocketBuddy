@@ -9,19 +9,21 @@ Headless Android APK for PocketBuddy's local UPI notification ingestion layer.
 - Reads bank/SMS app notification text from supported messaging apps.
 - Filters out notifications without a payment signal and INR amount.
 - Extracts amount, debit/credit direction, merchant text, and transaction reference where possible.
-- Sends a JSON payload to the configured webhook with OkHttp.
+- Sends low-confidence masked events when a supported payment-like alert is missing direction or merchant, so the web app can show review activity instead of losing the signal.
+- Sends structured JSON plus a masked preview to the configured webhook with OkHttp.
+- Does not upload full notification/SMS text on the v2 ingest path.
 
 ## Provider coverage
 
 The connector is designed to work with UPI/payment notifications that expose readable notification text containing:
 
 - an INR amount such as `Rs.50`, `INR 50`, or `₹50`
-- a debit/credit word such as `paid`, `sent`, `debited`, `received`, or `credited`
 - a UPI/payment identifier such as `UPI`, `VPA`, `UTR`, `txn id`, or `ref no`
+- a debit/credit word such as `paid`, `sent`, `debited`, `received`, or `credited`, when available
 
 Known payment-app package coverage includes Google Pay, PhonePe, Paytm, BHIM, Amazon Pay through Amazon Shopping, WhatsApp, and common Indian bank/payment package name fragments such as Kotak, Axis, ICICI, HDFC, SBI, PayZapp, CRED, MobiKwik, Freecharge, Airtel, and Jio.
 
-Known SMS notification package coverage includes Google Messages, Vivo/Android Messages, Samsung Messages, and common `messaging`, `mms`, and `sms` package fragments. SMS notifications are intentionally stricter than payment-app notifications: they must include amount, debit/credit direction, a bank/account signal, and a strong UPI/reference signal. OTP and promotional messages are rejected.
+Known SMS notification package coverage includes Google Messages, Vivo/Android Messages, Samsung Messages, and common `messaging`, `mms`, and `sms` package fragments. SMS notifications are intentionally stricter than payment-app notifications: they must include amount, a bank/account signal, and a strong UPI/reference signal. If direction is missing, the connector sends a low-confidence review event. OTP and promotional messages are rejected.
 
 Exact merchant extraction still depends on each app's notification wording. During testing, keep `adb logcat -s PocketBuddyListener PocketBuddyWebhook` open and add real notification samples when a provider is missed.
 
@@ -30,7 +32,7 @@ Exact merchant extraction still depends on each app's notification wording. Duri
 From `PocketBuddy/android`, copy `local.properties.example` to `local.properties` and change:
 
 ```properties
-POCKETBUDDY_WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app/api/ingest/notification
+POCKETBUDDY_WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app/api/ingest/notification-v2
 ```
 
 `local.properties` provides build-time defaults. After the APK is installed, open `PocketBuddy Connector` from the launcher to change the webhook URL, user ID, and token at runtime without rebuilding.
@@ -40,7 +42,7 @@ The Android folder includes a local FastAPI test harness at `tools/ingest_test_b
 For an Android emulator, the default host URL is:
 
 ```properties
-POCKETBUDDY_WEBHOOK_URL=http://10.0.2.2:8000/api/ingest/notification
+POCKETBUDDY_WEBHOOK_URL=http://10.0.2.2:8000/api/ingest/notification-v2
 ```
 
 Optional backend binding fields:
@@ -50,7 +52,7 @@ POCKETBUDDY_WEBHOOK_TOKEN=
 POCKETBUDDY_USER_ID=
 ```
 
-When `POCKETBUDDY_WEBHOOK_TOKEN` is set, the connector sends `Authorization: Bearer <token>`. Every webhook includes an installation-scoped `deviceId`; `userId` is included when configured.
+When `POCKETBUDDY_WEBHOOK_TOKEN` is set, the connector sends `Authorization: Bearer <token>` and signs the request body with `X-PocketBuddy-Signature`. The production `/notification-v2` endpoint rejects unsigned connector requests. Every webhook includes an installation-scoped `deviceId`; `userId` is included when configured.
 
 The final backend contract is tracked in `docs/mobile-ingest-contract.md` from the repository root.
 
@@ -118,7 +120,6 @@ Fallback parser + direct webhook test for OEM phones that block app notification
 ```json
 {
   "packageName": "com.google.android.apps.nbu.paisa.user",
-  "text": "Paid Rs.50 to Hostel 3 Night Canteen using UPI",
   "timestamp": 1781358622143,
   "sourceApp": "Google Pay",
   "captureSource": "payment_app",
@@ -129,6 +130,14 @@ Fallback parser + direct webhook test for OEM phones that block app notification
   "direction": "debit",
   "merchant": "Hostel 3 Night Canteen",
   "transactionId": null,
-  "detectedAtDeviceMillis": 1781358622999
+  "detectedAtDeviceMillis": 1781358622999,
+  "maskedPreview": "Paid Rs.50 to Hostel 3 Night Canteen using UPI",
+  "parserVersion": "android-upi-v2",
+  "confidence": "medium",
+  "privacyMode": "on_device_only",
+  "rawTextSuppressed": true,
+  "schemaVersion": 2,
+  "clientEventId": "installation-event-uuid",
+  "recurringKeywords": []
 }
 ```

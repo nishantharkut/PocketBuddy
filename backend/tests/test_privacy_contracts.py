@@ -13,9 +13,13 @@ from app.api.auth import create_session_token
 from app.api.webhook import (
     build_android_consent_id,
     clean_confidence,
+    clean_recurring_keywords,
     connector_ingest_block_reason,
     connector_device_binding_block_reason,
+    extract_connector_event_context,
     pairing_rotated_after_revocation,
+    verify_connector_request_signature,
+    WebhookReq,
 )
 from app.core.config import Settings, settings
 from app.core.privacy import connector_token_hash, connector_token_preview, device_fingerprint, verify_connector_pairing_token
@@ -151,9 +155,61 @@ class PrivacyContractTests(unittest.TestCase):
         self.assertEqual(clean_confidence(" medium "), "medium")
         self.assertIsNone(clean_confidence("certain"))
         self.assertEqual(
+            clean_recurring_keywords(["AutoPay", "unknown", "renewal", "auto pay", "renewal"]),
+            ["autopay", "renewal"],
+        )
+        self.assertEqual(
             build_android_consent_id("user-1", None),
             "android:user-1:unknown-device",
         )
+
+    def test_connector_v2_signature_requirement_blocks_unsigned_payloads(self):
+        with self.assertRaisesRegex(Exception, "Missing connector request signature") as raised:
+            verify_connector_request_signature(
+                supplied_token="secret",
+                raw_body=b"{}",
+                timestamp_header=None,
+                event_id_header=None,
+                signature_header=None,
+                now=datetime.datetime(2026, 7, 8, 12, 0, 0),
+                signature_required=True,
+            )
+
+        self.assertEqual(getattr(raised.exception, "status_code", None), 401)
+
+    def test_connector_signature_verifier_accepts_matching_hmac(self):
+        now = datetime.datetime.fromtimestamp(0.123, datetime.UTC).replace(tzinfo=None)
+        timestamp = "123"
+
+        self.assertTrue(
+            verify_connector_request_signature(
+                supplied_token="secret",
+                raw_body=b"{}",
+                timestamp_header=timestamp,
+                event_id_header="evt-1",
+                signature_header="sha256=9d5da139d7a384cee1a6c360a198cb0fb4a3c49fa4957dd0565a6c87a6e4d424",
+                now=now,
+                signature_required=True,
+            )
+        )
+
+    def test_connector_event_context_preserves_partial_v2_parse(self):
+        amount_paise, merchant, transaction_reference, merchant_was_missing = extract_connector_event_context(
+            WebhookReq(
+                amount=125.0,
+                merchant="CAMPUS CANTEEN",
+                transactionId="123456789012",
+                direction=None,
+            ),
+            raw_body="",
+            direction=None,
+            strict_sanitized=True,
+        )
+
+        self.assertEqual(amount_paise, 12500)
+        self.assertEqual(merchant, "CAMPUS CANTEEN")
+        self.assertEqual(transaction_reference, "123456789012")
+        self.assertFalse(merchant_was_missing)
 
     def test_connector_pairing_token_hash_verification(self):
         token = "pb_secure-test-token"

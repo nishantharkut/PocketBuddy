@@ -31,6 +31,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.ConnectorTransparencyActivity"
+            android:exported="false"
+            android:label="How PocketBuddy Connector works" />
+
         <service
             android:name=".PocketBuddyNotificationListener"
             android:exported="true"

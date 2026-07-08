@@ -10,6 +10,7 @@ from app.services.subscriptions import (
     next_future_debit,
     subscription_name_for_merchant,
     upsert_subscription,
+    upsert_subscription_for_transaction,
 )
 
 router = APIRouter()
@@ -51,17 +52,29 @@ async def get_transactions(user_id: str = Depends(get_current_user)):
 async def insert_transaction(req: TxnReq, user_id: str = Depends(get_current_user)):
     db = get_db()
     txn_id = str(uuid.uuid4())
+    if req.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    direction = (req.direction or "debit").strip().lower()
+    if direction not in {"debit", "credit"}:
+        raise HTTPException(status_code=400, detail="Direction must be 'debit' or 'credit'")
+    category = (req.category or "other").strip().lower() or "other"
+    raw_merchant = clean_transaction_label(req.raw_merchant_string, "Merchant", 120)
+    mapped_merchant = (
+        clean_transaction_label(req.mapped_merchant_name, "Mapped merchant", 120)
+        if req.mapped_merchant_name
+        else raw_merchant
+    )
     
     new_txn = {
         "_id": txn_id,
         "user_id": user_id,
         "amount": req.amount,
-        "raw_merchant_string": req.raw_merchant_string,
-        "mapped_merchant_name": req.mapped_merchant_name or req.raw_merchant_string,
-        "category": req.category or "other",
+        "raw_merchant_string": raw_merchant,
+        "mapped_merchant_name": mapped_merchant,
+        "category": category,
         "source": req.source,
         "is_mapped": req.is_mapped,
-        "direction": req.direction or "debit",
+        "direction": direction,
         "data_origin": "user_entered",
         "privacy_mode": "manual_entry",
         "raw_payload_received": False,
@@ -74,7 +87,7 @@ async def insert_transaction(req: TxnReq, user_id: str = Depends(get_current_use
     await db.transactions.insert_one(new_txn)
     merchant = new_txn["mapped_merchant_name"] or new_txn["raw_merchant_string"]
     service_name = subscription_name_for_merchant(merchant)
-    if (new_txn["category"] == "subscription" or service_name) and new_txn["direction"] == "debit":
+    if new_txn["category"] == "subscription" and new_txn["direction"] == "debit":
         service_name = service_name or clean_merchant_name(merchant)
         if service_name:
             await upsert_subscription(
@@ -87,6 +100,15 @@ async def insert_transaction(req: TxnReq, user_id: str = Depends(get_current_use
                 observed_at=new_txn["created_at"],
                 observed_interval_days=30,
             )
+    elif service_name and new_txn["direction"] == "debit":
+        await upsert_subscription_for_transaction(
+            db,
+            user_id=user_id,
+            merchant=merchant,
+            amount_paise=new_txn["amount"],
+            observed_at=new_txn["created_at"],
+            detected_from="auto_detected",
+        )
     return map_doc(new_txn)
 
 @router.post("/delete-recent")

@@ -530,12 +530,25 @@ function MealRunwayCheck({ calc, runwayView }: { calc: any; runwayView?: any }) 
   const routine = runwayView?.foodRoutine ?? {};
   const safeDailyPaise = runwayView?.safeDailyPaise ?? Math.round((calc?.safeDailyLimit ?? 200) * 100);
   const foodCapPaise = routine?.recommended_daily_food_cap ?? safeDailyPaise;
-  const deliveryCostPaise = routine?.delivery?.avg_order || 25_000;
   const routineType = routine?.type ?? "mixed";
+  const routineCostSource = String(routine?.routine_meal_cost_source ?? "");
+  const routineCostBasis = String(routine?.routine_meal_cost_basis ?? "");
+  const routineCostConfidence = String(routine?.routine_meal_cost_confidence ?? "low");
+  const deliveryCostPaise =
+    routine?.delivery_meal_cost ||
+    routine?.delivery?.avg_order ||
+    Math.max(9_000, Math.min(25_000, (foodCapPaise || 9_000) + 2_000));
+  const deliveryCostBasis = String(routine?.delivery_cost_basis ?? "");
+  const deliveryCostConfidence = String(routine?.delivery_cost_confidence ?? (routine?.delivery?.count > 1 ? "high" : "low"));
+  const sharedCostPaise =
+    routine?.shared_meal_cost ||
+    Math.max(4_000, Math.min(deliveryCostPaise, Math.round(deliveryCostPaise * 0.85)));
+  const sharedCostBasis = String(routine?.shared_cost_basis ?? "");
+  const sharedCostConfidence = String(routine?.shared_cost_confidence ?? "low");
   const routineMeta: Record<string, { label: string; option: string; detail: string }> = {
     hostel_mess: {
       label: "Hostel mess / campus meals",
-      option: "Use mess or campus meal",
+      option: "Use hostel mess",
       detail: "Best when your mess is prepaid or predictable. It keeps delivery from eating into the safe/day number.",
     },
     pg_cooking: {
@@ -556,27 +569,44 @@ function MealRunwayCheck({ calc, runwayView }: { calc: any; runwayView?: any }) 
   };
   const activeRoutine = routineMeta[routineType] ?? routineMeta.mixed;
   const routineMealCostPaise =
-    routine?.routine_meal_cost ||
-    Math.max(4_000, Math.min(foodCapPaise || 14_000, Math.round((foodCapPaise || 14_000) / 2)));
-  const sharedCostPaise = Math.max(
-    4_000,
-    Math.min(deliveryCostPaise, Math.round((deliveryCostPaise + routineMealCostPaise) / 2))
-  );
+    typeof routine?.routine_meal_cost === "number"
+      ? routine.routine_meal_cost
+      : Math.max(4_000, Math.min(foodCapPaise || 14_000, Math.round((foodCapPaise || 14_000) / 2)));
+  const routineOptionLabel = String(routine?.routine_option_label ?? activeRoutine.option);
+  const routineDetail =
+    routineCostSource === "mess_included"
+      ? "Your mess plan is already accounted for in runway, so this meal does not add extra spend today."
+      : routineCostSource === "mess_per_meal"
+        ? "This uses your configured mess rate and is the most stable routine option for today."
+        : activeRoutine.detail;
+
+  const renderPlanCost = (cost: number, source: string, confidence: string) => {
+    if (source === "mess_included" && cost <= 0) return "Covered";
+    const amount = rupees(cost);
+    return confidence === "low" ? `Est. ${amount}` : amount;
+  };
+
   const plans = [
     {
       id: "routine" as const,
-      label: activeRoutine.option,
+      label: routineOptionLabel,
       cost: routineMealCostPaise,
+      costSource: routineCostSource,
+      costConfidence: routineCostConfidence,
+      basis: routineCostBasis,
       icon: Utensils,
       tone: "text-pb-green",
       border: "border-pb-green/20",
       bg: "bg-pb-green/5",
-      detail: activeRoutine.detail,
+      detail: routineDetail,
     },
     {
       id: "shared" as const,
       label: routineType === "pg_cooking" ? "Split groceries with roommate" : "Pool / shared campus order",
       cost: sharedCostPaise,
+      costSource: String(routine?.shared_cost_source ?? "shared"),
+      costConfidence: sharedCostConfidence,
+      basis: sharedCostBasis,
       icon: Users,
       tone: "text-primary",
       border: "border-primary/20",
@@ -590,119 +620,164 @@ function MealRunwayCheck({ calc, runwayView }: { calc: any; runwayView?: any }) 
       id: "delivery" as const,
       label: "Individual delivery order",
       cost: deliveryCostPaise,
+      costSource: "delivery",
+      costConfidence: deliveryCostConfidence,
+      basis: deliveryCostBasis,
       icon: ShoppingBag,
       tone: "text-pb-red",
       border: "border-pb-red/20",
       bg: "bg-pb-red/5",
-      detail: "Convenient, but this is usually the fastest way food pace starts reducing runway.",
+      detail:
+        deliveryCostConfidence === "low"
+          ? "PocketBuddy is using a delivery estimate until it sees more delivery payments."
+          : "Convenient, but this is usually the fastest way food pace starts reducing runway.",
     },
   ];
-  const selected = plans.find((plan) => plan.id === selectedPlan);
-  const savedVsDelivery = selected ? Math.max(0, deliveryCostPaise - selected.cost) : 0;
-  const safeUsage = selected && safeDailyPaise > 0 ? Math.round((selected.cost / safeDailyPaise) * 100) : 0;
-  const capGap = selected ? selected.cost - foodCapPaise : 0;
-  const SelectedIcon = selected?.icon;
 
-  if (selected && SelectedIcon) {
-    return (
-      <Card id="card-interactive-runway-check" className={`bg-surface border ${selected.border} p-4 relative overflow-hidden transition-all duration-300`}>
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.04), transparent 65%)" }} />
-        <div className="relative space-y-4">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className={`w-fit ${selected.border} ${selected.bg} ${selected.tone} text-[10px] uppercase tracking-wider font-semibold`}>
-                {activeRoutine.label}
-              </Badge>
-              <Badge variant="outline" className="w-fit border-border bg-surface-raised text-[10px] md:text-xs uppercase tracking-wider font-semibold">
-                {rupees(selected.cost)} today
-              </Badge>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className={`mt-0.5 h-10 w-10 rounded-xl border ${selected.border} ${selected.bg} ${selected.tone} flex items-center justify-center shrink-0`}>
-                <SelectedIcon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <h4 className="text-sm sm:text-base font-semibold text-foreground">{selected.label}</h4>
-                <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed">{selected.detail}</p>
-              </div>
-            </div>
-            <div className="rounded-xl border border-border/70 bg-surface-raised/60 p-3 text-xs leading-relaxed text-muted-foreground">
-              {capGap > 0 ? (
-                <>
-                  This is <span className="font-semibold text-pb-amber">{rupees(capGap)} above</span> your food cap of{" "}
-                  <span className="font-semibold text-foreground">{rupees(foodCapPaise)}</span>. Choose lighter spends for the rest of today.
-                </>
-              ) : (
-                <>
-                  This stays within your food cap of <span className="font-semibold text-foreground">{rupees(foodCapPaise)}</span> and uses{" "}
-                  <span className="font-semibold text-foreground">{safeUsage}%</span> of your safe daily limit.
-                </>
-              )}
-            </div>
-          </div>
+  const planViews = plans.map((plan) => {
+    const isCovered = plan.costSource === "mess_included" && plan.cost <= 0;
+    const capGap = Math.max(0, plan.cost - foodCapPaise);
+    const saved = Math.max(0, deliveryCostPaise - plan.cost);
+    const safeUsage = !isCovered && safeDailyPaise > 0 ? Math.round((plan.cost / safeDailyPaise) * 100) : 0;
+    const withinCap = isCovered || capGap <= 0;
+    const fitLabel = isCovered ? "Covered" : withinCap ? "Within cap" : `+${rupees(capGap)}`;
+    const fitTone = isCovered
+      ? "border-emerald-500/15 bg-emerald-500/8 text-emerald-400"
+      : withinCap
+        ? "border-primary/15 bg-primary/8 text-primary"
+        : "border-amber-500/15 bg-amber-500/8 text-amber-400";
+    const confidenceLabel =
+      plan.costConfidence === "high" ? "Observed" : plan.costConfidence === "medium" ? "Recent pattern" : "Estimate";
+    const supportLine = isCovered
+      ? "Already accounted for in runway."
+      : capGap > 0
+        ? `${rupees(capGap)} above today's food cap.`
+        : saved > 0 && plan.id !== "delivery"
+          ? `Keeps ${rupees(saved)} inside runway vs solo delivery.`
+          : "Fits today's runway without extra pressure.";
+    const score =
+      (isCovered ? 100 : 0) +
+      (withinCap ? 28 : -Math.min(24, Math.round(capGap / 1000))) +
+      (plan.id === "routine" ? 8 : plan.id === "shared" ? 4 : -8) +
+      (plan.costConfidence === "high" ? 6 : plan.costConfidence === "medium" ? 3 : 0) +
+      Math.min(18, Math.round(saved / 1000)) -
+      Math.round(Math.max(plan.cost, 0) / 1000);
+    return {
+      ...plan,
+      isCovered,
+      capGap,
+      saved,
+      safeUsage,
+      withinCap,
+      fitLabel,
+      fitTone,
+      confidenceLabel,
+      supportLine,
+      score,
+    };
+  });
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border/70 pt-3">
-            <p className="text-xs text-zinc-500 leading-relaxed">
-              {savedVsDelivery > 0
-                ? `Choosing this instead of individual delivery keeps about ${rupees(savedVsDelivery)} inside your runway today.`
-                : "This option is useful only when today's safe/day can absorb the full cost."}
-            </p>
-            <div className="flex flex-wrap gap-2 shrink-0">
-              <Link to="/runway" className="h-8 rounded-lg bg-primary text-primary-foreground px-3 flex items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
-                Full Runway
-              </Link>
-              <button onClick={() => setSelectedPlan(null)} className="h-8 rounded-lg bg-surface-raised text-zinc-400 px-3 text-[10px] md:text-xs font-bold uppercase tracking-wider hover:text-zinc-200 transition-all cursor-pointer">
-                Change
-              </button>
-            </div>
-          </div>
-        </div>
-      </Card>
-    );
-  }
+  const recommendedPlan = planViews.reduce((best, current) => (current.score > best.score ? current : best), planViews[0]);
+  const activePlan = planViews.find((plan) => plan.id === selectedPlan) ?? recommendedPlan;
+  const activeIsRecommended = activePlan.id === recommendedPlan.id;
+  const activeSummary = activePlan.isCovered
+    ? "Already covered by your mess plan."
+    : activePlan.capGap > 0
+      ? `${rupees(activePlan.capGap)} above today's cap.`
+      : activePlan.id !== "delivery" && activePlan.saved > 0
+        ? `Saves ${rupees(activePlan.saved)} vs solo delivery.`
+        : `${activePlan.safeUsage}% of your safe daily limit.`;
+  const activeContext = activePlan.id === "delivery" && activePlan.costConfidence === "low"
+    ? "Delivery estimate will improve as more food payment history arrives."
+    : activePlan.basis || activePlan.supportLine;
+  const recommendedSummary = recommendedPlan.isCovered
+    ? "covered by your mess plan"
+    : recommendedPlan.capGap > 0
+      ? `${rupees(recommendedPlan.capGap)} above cap`
+      : recommendedPlan.id !== "delivery" && recommendedPlan.saved > 0
+        ? `saves ${rupees(recommendedPlan.saved)} vs solo delivery`
+        : "fits today's cap";
 
   return (
-    <Card id="card-interactive-runway-check" className="bg-surface border border-border rounded-2xl p-4 relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.04), transparent 65%)" }} />
-      <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Compass className="h-4.5 w-4.5 text-primary" />
-            <p className="text-xs font-bold tracking-[0.15em] text-zinc-500 uppercase">Meal check</p>
+    <Card id="card-interactive-runway-check" className="bg-surface border border-border rounded-2xl p-4">
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Compass className="h-4 w-4 text-zinc-400" />
+              <p className="text-xs font-bold tracking-[0.15em] text-zinc-500 uppercase">Meal check</p>
+            </div>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Use the option that fits today's runway best.
+            </p>
           </div>
-          <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed font-medium max-w-2xl">
-            Pick the likely meal and see if it fits today.
-          </p>
+          <Badge variant="outline" className="w-fit border-border bg-surface-raised text-[10px] md:text-xs uppercase tracking-wider font-semibold text-zinc-500">
+            Cap {rupees(foodCapPaise)}
+          </Badge>
         </div>
-        <Badge variant="outline" className="w-fit border-primary/20 bg-primary/10 text-primary text-[10px] md:text-xs uppercase tracking-wider font-semibold">
-          Food cap {rupees(foodCapPaise)}
-        </Badge>
-      </div>
 
-      <div className="relative grid grid-cols-1 md:grid-cols-3 gap-3">
-        {plans.map((plan) => {
-          const Icon = plan.icon;
-          const saved = Math.max(0, deliveryCostPaise - plan.cost);
-          return (
-            <button
-              key={plan.id}
-              onClick={() => setSelectedPlan(plan.id)}
-              className="w-full text-left p-3 rounded-xl border border-border bg-surface-raised/60 hover:bg-surface hover:border-primary/35 transition-all cursor-pointer group"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 shrink-0 ${plan.tone}`} />
-                    <span className="text-xs font-semibold text-foreground">{plan.label}</span>
+        <div className="text-xs leading-relaxed text-zinc-500">
+          <span className="font-semibold text-foreground">Recommended:</span>{" "}
+          <span className="text-foreground">{recommendedPlan.label}</span>
+          <span className="text-zinc-500">, {recommendedSummary}.</span>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-border/80 bg-surface-raised/20">
+          {planViews.map((plan) => {
+            const Icon = plan.icon;
+            const isActive = activePlan.id === plan.id;
+            const isRecommended = recommendedPlan.id === plan.id;
+            return (
+              <button
+                key={plan.id}
+                onClick={() => setSelectedPlan(plan.id)}
+                className={`w-full text-left px-3 py-3 transition-colors cursor-pointer ${
+                  isActive
+                    ? "bg-surface"
+                    : "hover:bg-surface/70"
+                }`}
+              >
+                <div className={`flex items-start justify-between gap-3 ${plan.id !== planViews[planViews.length - 1].id ? "border-b border-border/70 pb-3" : ""}`}>
+                  <div className="min-w-0 flex items-start gap-2.5">
+                    <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${isActive ? "bg-primary" : isRecommended ? "bg-zinc-400" : "bg-transparent border border-border"}`} />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : "text-zinc-400"}`} />
+                        <span className="text-xs font-semibold text-foreground">{plan.label}</span>
+                        <span className="text-[11px] text-zinc-500">
+                          {plan.fitLabel} • {plan.confidenceLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                        {isActive ? activeSummary : plan.supportLine}
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-foreground tnum">{rupees(plan.cost)}</p>
-                  {saved > 0 && <p className="text-[10px] md:text-xs font-bold text-pb-green">Saves {rupees(saved)} vs delivery</p>}
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold text-foreground tnum">
+                      {renderPlanCost(plan.cost, plan.costSource, plan.costConfidence)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-zinc-500">
+                      {isActive ? (activeIsRecommended ? "Recommended" : "Selected") : isRecommended ? "Best fit" : ""}
+                    </p>
+                  </div>
                 </div>
-                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-primary transition-transform group-hover:translate-x-0.5 shrink-0" />
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-border/70 pt-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs leading-relaxed text-zinc-500 max-w-2xl">
+            {activeContext}
+          </p>
+          <Link
+            to="/runway"
+            className="h-8 rounded-lg border border-border bg-surface-raised px-3 flex items-center justify-center text-[10px] md:text-xs font-semibold text-foreground hover:bg-surface transition-all shrink-0"
+          >
+            Full runway
+          </Link>
+        </div>
       </div>
     </Card>
   );
@@ -882,17 +957,17 @@ function Dashboard() {
   const { data: foods } = useQuery({
     queryKey: [
       "foods",
-      runwayView?.safeDailyPaise,
+      runwayView?.foodRoutine?.recommended_daily_food_cap ?? runwayView?.safeDailyPaise,
       menuFoodGapHours ? Math.floor(menuFoodGapHours) : null,
-      runwayView?.foodRoutine?.routine_type,
+      runwayView?.foodRoutine?.type,
       profile?.mess_enrolled,
     ],
     staleTime: 30_000,
     queryFn: () =>
       getCampusFood({
-        safeFoodBudgetPaise: runwayView?.safeDailyPaise,
+        safeFoodBudgetPaise: runwayView?.foodRoutine?.recommended_daily_food_cap ?? runwayView?.safeDailyPaise,
         mealGapHours: menuFoodGapHours,
-        foodRoutineType: runwayView?.foodRoutine?.routine_type,
+        foodRoutineType: runwayView?.foodRoutine?.type,
         messEnrolled: profile?.mess_enrolled,
       }),
   });
@@ -998,7 +1073,6 @@ function Dashboard() {
 
   // Student Fuel Swapper State
   const [showFoodSheet, setShowFoodSheet] = useState(false);
-  const [activeFuelItem, setActiveFuelItem] = useState<'exam' | 'mess' | 'commute' | 'stationery'>('exam');
 
   // Food scanner and crowdsourced verification state & hooks
   const [foodTab, setFoodTab] = useState<"menus" | "add" | "signals" | "verify">("menus");
@@ -2339,105 +2413,6 @@ function Dashboard() {
             )}
 
             {/* ── Interactive Student Allocation Planner ─────────────────── */}
-            {(() => {
-              const plannerTargets = {
-                exam: { label: "Exam Safety", cost: 150000, description: "Semester exam registration fee reserve" },
-                mess: { label: "Hostel Mess", cost: 400000, description: "Monthly campus food & dining hall dues" },
-                commute: { label: "Commute Pass", cost: 250000, description: "Transit & local travel allowance" },
-                stationery: { label: "Academic Prep", cost: 100000, description: "Books, lab manuals & study materials" }
-              };
-              const discPaise = runwayForecast?.commitments?.discretionary_left_paise ?? runwayForecast?.current_cycle?.remaining ?? 80000;
-              const activeKey = (["exam", "mess", "commute", "stationery"].includes(activeFuelItem) ? activeFuelItem : "exam") as keyof typeof plannerTargets;
-              const selectedTarget = plannerTargets[activeKey];
-              const coveragePct = Math.min(100, Math.round((discPaise / selectedTarget.cost) * 100));
-              const gapPaise = Math.max(0, selectedTarget.cost - discPaise);
-
-              return (
-                <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden transition-all duration-300 hover:border-primary/20">
-                  <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(255,107,0,0.04), transparent 65%)" }} />
-                  <div className="flex items-center justify-between gap-2 mb-4">
-                    <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase">Allocation planner</p>
-                    <Link to="/runway" className="text-[10px] font-black uppercase tracking-wider text-primary flex items-center gap-0.5 hover:underline">
-                      View Forecast
-                      <ChevronRight className="h-3 w-3" />
-                    </Link>
-                  </div>
-
-                  <div className="space-y-4">
-                    <p className="text-xs text-zinc-400 leading-normal font-medium">
-                      Select a student reserve target to check funding coverage from your discretionary cash.
-                    </p>
-
-                    {/* Selector Tabs */}
-                    <div className="grid grid-cols-4 gap-1 p-1 bg-muted/20 border border-border/30 rounded-xl">
-                      {(Object.keys(plannerTargets) as Array<keyof typeof plannerTargets>).map((key) => {
-                        const active = activeKey === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setActiveFuelItem(key)}
-                            className={`py-1.5 rounded-lg text-center text-[10px] font-bold select-none transition-all cursor-pointer truncate px-1 border ${
-                              active
-                                ? "bg-primary/10 text-primary border-primary/20"
-                                : "border-transparent text-zinc-400 hover:text-foreground hover:bg-white/5"
-                            }`}
-                          >
-                            {plannerTargets[key].label.split(" ")[0]}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Target Detail Panel */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-xs font-bold text-foreground">{selectedTarget.label} Target</span>
-                        <span className="text-sm font-black text-foreground tnum">{rupees(selectedTarget.cost)}</span>
-                      </div>
-                      <p className="text-[11px] text-zinc-500 font-medium leading-relaxed">
-                        {selectedTarget.description}
-                      </p>
-                    </div>
-
-                    {/* Progress Bar & Status */}
-                    <div className="space-y-1.5 pt-1.5 border-t border-border/30">
-                      <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider">
-                        <span className="text-zinc-500">Coverage</span>
-                        <span className={coveragePct === 100 ? "text-pb-green" : "text-pb-amber"}>
-                          {coveragePct}% Funded
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full bg-muted border border-border/40 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            coveragePct === 100 ? "bg-pb-green" : "bg-pb-amber"
-                          }`}
-                          style={{ width: `${coveragePct}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Actionable Advice Card */}
-                    <div className={`rounded-xl border p-3 text-[11px] font-medium leading-normal transition-all duration-300 ${
-                      gapPaise === 0
-                        ? "border-pb-green/20 bg-pb-green/5 text-pb-green"
-                        : "border-pb-amber/20 bg-pb-amber/5 text-pb-amber"
-                    }`}>
-                      {gapPaise === 0 ? (
-                        <span>
-                          Target fully covered. Your discretionary pool is sufficient to cover this category reserve.
-                        </span>
-                      ) : (
-                        <span>
-                          Deficit of <span className="font-bold text-foreground">{rupees(gapPaise)}</span>. Reduce discretionary daily spending to build this reserve.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
 
             {/* ── AI Campus Intelligence (Bedrock) ──────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">

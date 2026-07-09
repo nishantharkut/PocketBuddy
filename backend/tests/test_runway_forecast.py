@@ -244,6 +244,49 @@ class RunwayForecastTests(unittest.TestCase):
             forecast["current_cycle"]["days_left"] * 10_000,
         )
 
+    def test_monthly_mess_routine_is_covered_without_fake_extra_meal_cost(self):
+        forecast = build_runway_forecast(
+            profile={
+                "monthly_allowance": 1_000_000,
+                "cycle_start_day": 1,
+                "mess_enrolled": True,
+                "mess_billing_model": "monthly",
+                "mess_monthly_cost": 90_000,
+            },
+            transactions=[txn(10_000, days_ago=1, category="shopping", merchant="Notebook Store")],
+            subscriptions=[],
+            now=NOW,
+        )
+
+        food_routine = forecast["food_routine"]
+        self.assertEqual(food_routine["routine_option_label"], "Use hostel mess")
+        self.assertEqual(food_routine["routine_meal_cost"], 0)
+        self.assertEqual(food_routine["routine_meal_cost_source"], "mess_included")
+        self.assertEqual(food_routine["routine_meal_cost_confidence"], "high")
+
+    def test_noisy_campus_history_falls_back_to_sane_routine_estimate(self):
+        forecast = build_runway_forecast(
+            profile={
+                "monthly_allowance": 1_000_000,
+                "cycle_start_day": 1,
+                "meal_routine": "day_scholar",
+            },
+            transactions=[
+                txn(311_300, days_ago=2, category="food", merchant="Campus Canteen"),
+                txn(9_800, days_ago=1, category="food", merchant="Swiggy"),
+            ],
+            subscriptions=[],
+            now=NOW,
+        )
+
+        food_routine = forecast["food_routine"]
+        self.assertEqual(food_routine["routine_meal_cost_source"], "campus_meal_history")
+        self.assertEqual(food_routine["routine_meal_cost"], 9_000)
+        self.assertEqual(food_routine["routine_meal_cost_confidence"], "low")
+        self.assertTrue(food_routine["routine_meal_cost_adjusted"])
+        self.assertEqual(food_routine["delivery_meal_cost"], 9_800)
+        self.assertLess(food_routine["shared_meal_cost"], food_routine["delivery_meal_cost"])
+
     def test_pool_obligations_match_user_id_before_legacy_name(self):
         pools = [
             {

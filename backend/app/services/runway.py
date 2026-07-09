@@ -185,12 +185,16 @@ def _is_food_expense(txn: dict) -> bool:
 
 
 def _food_stats(items: list[dict]) -> dict:
-    total = sum(_valid_amount(txn) for txn in items)
-    count = len(items)
+    amounts = sorted(_valid_amount(txn) for txn in items if _valid_amount(txn))
+    total = sum(amounts)
+    count = len(amounts)
     return {
         "count": count,
         "spend": total,
         "avg_order": round(total / count) if count else 0,
+        "median_order": _percentile(amounts, 0.50) if amounts else 0,
+        "min_order": amounts[0] if amounts else 0,
+        "max_order": amounts[-1] if amounts else 0,
     }
 
 
@@ -232,6 +236,123 @@ def _routine_fallback_daily(routine_type: str) -> int:
     if routine_type == "day_scholar":
         return 18_000
     return 20_000
+
+
+def _routine_option_label(routine_type: str, *, mess_model: str, mess_enrolled: bool) -> str:
+    if routine_type == "hostel_mess":
+        return "Use hostel mess" if mess_enrolled or mess_model in {"monthly", "per_meal", "included"} else "Use campus meal"
+    if routine_type == "pg_cooking":
+        return "Cook or heat PG meal"
+    if routine_type == "day_scholar":
+        return "Packed/home meal + campus snack"
+    return "Use campus meal"
+
+
+def _routine_cost_basis_label(source: str, *, adjusted: bool = False) -> str:
+    labels = {
+        "mess_included": "Covered by your mess plan",
+        "mess_per_meal": "From your mess settings",
+        "campus_meal_history": "From recent campus meals",
+        "grocery_history": "From recent grocery pace",
+        "food_history": "From recent food history",
+        "fallback_routine_estimate": "Routine fallback estimate",
+        "delivery_history": "From recent delivery orders",
+        "delivery_fallback": "Delivery fallback estimate",
+        "shared_delivery_estimate": "Split estimate from delivery history",
+        "split_grocery_estimate": "Split estimate from grocery routine",
+        "shared_fallback": "Shared-order fallback estimate",
+    }
+    label = labels.get(source, "Estimated from current routine")
+    return f"{label} (capped for noisy history)" if adjusted else label
+
+
+def _fallback_routine_meal_cost(routine_type: str, recommended_daily_food_cap: int) -> int:
+    fallback = max(4_000, round(_routine_fallback_daily(routine_type) / 2))
+    if recommended_daily_food_cap > 0:
+        fallback = min(fallback, max(4_000, recommended_daily_food_cap))
+    return fallback
+
+
+def _normalize_routine_meal_cost(
+    *,
+    candidate: int,
+    source: str,
+    routine_type: str,
+    recommended_daily_food_cap: int,
+    delivery_avg: int,
+    sample_count: int,
+) -> tuple[int, str, bool]:
+    if source == "mess_included":
+        return 0, "high", False
+    if source == "mess_per_meal":
+        return max(0, candidate), "high", False
+
+    fallback = _fallback_routine_meal_cost(routine_type, recommended_daily_food_cap)
+    cost = candidate if candidate > 0 else fallback
+    confidence = "medium" if candidate > 0 and sample_count >= 2 else "low"
+    adjusted = False
+
+    high_history_ceiling = max(
+        fallback + 4_000,
+        int(recommended_daily_food_cap * 1.35) if recommended_daily_food_cap > 0 else fallback + 4_000,
+    )
+    if cost > high_history_ceiling:
+        cost = fallback
+        confidence = "low"
+        adjusted = True
+
+    if delivery_avg >= 5_000 and cost >= delivery_avg:
+        discount = max(500, round(delivery_avg * 0.10))
+        cost = max(4_000, delivery_avg - discount)
+        confidence = "low"
+        adjusted = True
+
+    return max(4_000, cost), confidence, adjusted
+
+
+def _estimate_delivery_meal_cost(
+    *,
+    delivery: dict,
+    recommended_daily_food_cap: int,
+    routine_meal_cost: int,
+) -> tuple[int, str, str]:
+    if delivery["avg_order"]:
+        confidence = "high" if delivery["count"] >= 2 else "medium"
+        return delivery["avg_order"], "delivery_history", confidence
+
+    fallback = max(
+        9_000,
+        routine_meal_cost + 2_000 if routine_meal_cost > 0 else 9_000,
+        int(recommended_daily_food_cap * 1.2) if recommended_daily_food_cap > 0 else 0,
+    )
+    return min(25_000, fallback), "delivery_fallback", "low"
+
+
+def _estimate_shared_meal_cost(
+    *,
+    routine_type: str,
+    routine_meal_cost: int,
+    delivery_meal_cost: int,
+    delivery_cost_source: str,
+) -> tuple[int, str, str]:
+    if routine_type == "pg_cooking":
+        base = max(4_000, round(max(routine_meal_cost, 4_000) * 0.9))
+        if delivery_meal_cost >= 5_000:
+            base = min(base, max(4_000, delivery_meal_cost - max(500, round(delivery_meal_cost * 0.15))))
+        return base, "split_grocery_estimate", "medium" if routine_meal_cost else "low"
+
+    if delivery_cost_source == "delivery_history" and delivery_meal_cost >= 5_000:
+        discount = max(500, round(delivery_meal_cost * 0.15))
+        shared = delivery_meal_cost - discount
+        if routine_meal_cost > 0:
+            shared = min(shared, round((delivery_meal_cost + routine_meal_cost) / 2))
+        shared = max(4_000, shared)
+        if shared >= delivery_meal_cost:
+            shared = max(4_000, delivery_meal_cost - discount)
+        return shared, "shared_delivery_estimate", "medium"
+
+    fallback = max(4_000, routine_meal_cost or 6_000)
+    return fallback, "shared_fallback", "low"
 
 
 def _build_food_routine(
@@ -326,16 +447,56 @@ def _build_food_routine(
     projected_remaining_food_cap = recommended_daily_food_cap * days_left
     over_cap_remaining = max(0, projected_remaining_food_pace - projected_remaining_food_cap)
 
-    if mess_per_meal:
-        routine_meal_cost = mess_per_meal
-    elif campus_direct["avg_order"]:
-        routine_meal_cost = campus_direct["avg_order"]
+    routine_option_label = _routine_option_label(
+        routine_type,
+        mess_model=mess_model,
+        mess_enrolled=bool(profile.get("mess_enrolled")),
+    )
+    if routine_type == "hostel_mess" and mess_model in {"monthly", "included"}:
+        routine_meal_candidate = 0
+        routine_meal_source = "mess_included"
+        routine_meal_samples = meals_per_day
+    elif mess_per_meal:
+        routine_meal_candidate = mess_per_meal
+        routine_meal_source = "mess_per_meal"
+        routine_meal_samples = meals_per_day
+    elif campus_direct["median_order"]:
+        routine_meal_candidate = campus_direct["median_order"]
+        routine_meal_source = "campus_meal_history"
+        routine_meal_samples = campus_direct["count"]
     elif cooking_daily_pace:
-        routine_meal_cost = max(4_000, round(cooking_daily_pace / 2))
+        routine_meal_candidate = max(4_000, round(cooking_daily_pace / 2))
+        routine_meal_source = "grocery_history"
+        routine_meal_samples = cooking["count"]
+    elif food["median_order"]:
+        routine_meal_candidate = food["median_order"]
+        routine_meal_source = "food_history"
+        routine_meal_samples = food["count"]
     else:
-        routine_meal_cost = round(_routine_fallback_daily(routine_type) / 2)
+        routine_meal_candidate = _fallback_routine_meal_cost(routine_type, recommended_daily_food_cap)
+        routine_meal_source = "fallback_routine_estimate"
+        routine_meal_samples = 0
+    routine_meal_cost, routine_meal_confidence, routine_meal_adjusted = _normalize_routine_meal_cost(
+        candidate=routine_meal_candidate,
+        source=routine_meal_source,
+        routine_type=routine_type,
+        recommended_daily_food_cap=recommended_daily_food_cap,
+        delivery_avg=delivery["avg_order"],
+        sample_count=routine_meal_samples,
+    )
+    delivery_meal_cost, delivery_cost_source, delivery_cost_confidence = _estimate_delivery_meal_cost(
+        delivery=delivery,
+        recommended_daily_food_cap=recommended_daily_food_cap,
+        routine_meal_cost=routine_meal_cost,
+    )
+    shared_meal_cost, shared_cost_source, shared_cost_confidence = _estimate_shared_meal_cost(
+        routine_type=routine_type,
+        routine_meal_cost=routine_meal_cost,
+        delivery_meal_cost=delivery_meal_cost,
+        delivery_cost_source=delivery_cost_source,
+    )
     savings_if_replace_two_deliveries = (
-        max(0, delivery["avg_order"] - routine_meal_cost) * 2 if delivery["avg_order"] else 0
+        max(0, delivery_meal_cost - routine_meal_cost) * 2 if delivery_meal_cost else 0
     )
 
     if not food["count"]:
@@ -395,7 +556,23 @@ def _build_food_routine(
         "projected_remaining_food_cap": projected_remaining_food_cap,
         "over_cap_remaining": over_cap_remaining,
         "avg_meal_cost": food["avg_order"],
+        "routine_option_label": routine_option_label,
         "routine_meal_cost": routine_meal_cost,
+        "routine_meal_cost_source": routine_meal_source,
+        "routine_meal_cost_basis": _routine_cost_basis_label(
+            routine_meal_source,
+            adjusted=routine_meal_adjusted,
+        ),
+        "routine_meal_cost_confidence": routine_meal_confidence,
+        "routine_meal_cost_adjusted": routine_meal_adjusted,
+        "delivery_meal_cost": delivery_meal_cost,
+        "delivery_cost_source": delivery_cost_source,
+        "delivery_cost_basis": _routine_cost_basis_label(delivery_cost_source),
+        "delivery_cost_confidence": delivery_cost_confidence,
+        "shared_meal_cost": shared_meal_cost,
+        "shared_cost_source": shared_cost_source,
+        "shared_cost_basis": _routine_cost_basis_label(shared_cost_source),
+        "shared_cost_confidence": shared_cost_confidence,
         "delivery": {**delivery, "daily_pace": delivery_daily_pace},
         "campus_direct": {**campus_direct, "daily_pace": campus_daily_pace},
         "cooking": {**cooking, "daily_pace": cooking_daily_pace},

@@ -13,6 +13,7 @@ from app.services.campus_food import REVIEW_ONLY_STATUSES, build_food_recommenda
 from app.services.bedrock import generate_text
 from app.services.runway import build_runway_forecast, derive_pool_obligations
 from app.services.subscriptions import detect_recurring_subscriptions
+from app.services.wellness import current_meal_gap_hours, meal_signal_events
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -117,15 +118,19 @@ async def get_campus_intel(user_id: str = Depends(get_current_user)):
     profile = await db.profiles.find_one({"_id": user_id})
 
     # Basic spending stats
-    since_7 = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+    now = datetime.datetime.utcnow()
+    since_7 = now - datetime.timedelta(days=7)
     cursor = db.transactions.find({"user_id": user_id, "created_at": {"$gte": since_7}})
     txns = await cursor.to_list(length=500)
     spend_7 = sum(t.get("amount", 0) for t in txns) / 100
     food_txns = [t for t in txns if t.get("category") == "food"]
-    last_food_hours = 0
-    if food_txns:
-        last_food = max(food_txns, key=lambda t: t.get("created_at", datetime.datetime.min))
-        last_food_hours = (datetime.datetime.utcnow() - last_food["created_at"]).total_seconds() / 3600
+    checkins = await db.checkin_logs.find({
+        "user_id": user_id,
+        "created_at": {"$gte": since_7},
+    }).sort("created_at", -1).to_list(length=500)
+    meal_events = meal_signal_events(food_txns, checkins)
+    last_food_hours = current_meal_gap_hours(now, meal_events, default=0.0)
+    last_food_source = meal_events[-1]["source"] if meal_events else None
 
     remaining = (profile.get("monthly_allowance", 0) / 100) if profile else 0
 
@@ -149,33 +154,49 @@ async def get_campus_intel(user_id: str = Depends(get_current_user)):
                 limit=5,
             )
 
-            prompt = f"""You are PocketBuddy, an AI financial wellness guard for Indian college students.
+            prompt = f"""You are PocketBuddy, a student budget and routine assistant for Indian college students.
 Student context:
 - Spent Rs {spend_7:.0f} in last 7 days
 - Remaining budget: Rs {remaining:.0f}
-- Last food transaction: {last_food_hours:.0f} hours ago
+- Last food payment/check-in signal: {last_food_hours:.0f} hours ago
 - Trusted campus food options: {json.dumps([{"venue": f.get("venue_name"), "item": f.get("item_name"), "price_rs": f.get("price", 0)//100, "why": f.get("why"), "trust": f.get("trust_badge")} for f in ranked_foods[:5]], indent=None)}
 
-Generate exactly 2 concise, specific, actionable sentences as a campus financial intelligence summary. Be direct, mention real numbers. No emojis. Do not cite any food option outside the trusted campus food options above."""
+Generate exactly 2 concise, specific, actionable sentences as a campus financial intelligence summary.
+Be direct and mention real numbers.
+Describe only budget and routine signals; do not infer illness, stress, sleep quality, or medical risk.
+If you mention food, cite only trusted campus food options above.
+No emojis. No preamble."""
 
             text = generate_text(prompt, max_tokens=120, temperature=0.2)
             if text:
-                return {"summary": text, "source": "bedrock", "spend_7d": spend_7, "last_food_hours": round(last_food_hours, 1)}
+                return {
+                    "summary": text,
+                    "source": "bedrock",
+                    "spend_7d": spend_7,
+                    "last_food_hours": round(last_food_hours, 1),
+                    "last_food_signal_source": last_food_source,
+                }
         except Exception as exc:
             logger.warning("Bedrock campus-intel failed: %s", exc)
 
     # Local fallback
-    parts = []
+    routine_parts = []
     if spend_7 > 0:
-        parts.append(f"You've spent ₹{spend_7:.0f} in the last 7 days.")
+        routine_parts.append(f"You've spent Rs {spend_7:.0f} in the last 7 days.")
     if last_food_hours > 8:
-        parts.append(f"Your last food transaction was {last_food_hours:.0f} hours ago — consider eating soon.")
+        routine_parts.append(f"Your last meal signal was {last_food_hours:.0f} hours ago; log a meal or use a trusted campus option if needed.")
     elif last_food_hours > 0:
-        parts.append(f"Last meal logged {last_food_hours:.0f} hours ago, you're on track.")
+        routine_parts.append(f"Last meal signal was {last_food_hours:.0f} hours ago.")
     if remaining > 0:
-        parts.append(f"₹{remaining:.0f} remaining in your current cycle.")
-    summary = " ".join(parts) if parts else "Start logging transactions to activate campus intelligence."
-    return {"summary": summary, "source": "local_fallback", "spend_7d": spend_7, "last_food_hours": round(last_food_hours, 1)}
+        routine_parts.append(f"Rs {remaining:.0f} remaining in your current cycle.")
+    summary = " ".join(routine_parts) if routine_parts else "Start logging transactions to activate campus intelligence."
+    return {
+        "summary": summary,
+        "source": "local_fallback",
+        "spend_7d": spend_7,
+        "last_food_hours": round(last_food_hours, 1),
+        "last_food_signal_source": last_food_source,
+    }
 
 
 @router.get("/runway-intel")

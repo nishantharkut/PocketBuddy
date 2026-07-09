@@ -3,11 +3,14 @@ import datetime
 import os
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
+
+from fastapi import HTTPException
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017/pocketbuddy_test")
 
-from app.api.pools import build_payment_state
+from app.api.pools import PaymentConfirmReq, build_payment_state, payment_confirm
 from app.api.webhook import try_auto_verify_pool_payment
 
 
@@ -35,6 +38,29 @@ class FakeCartPools:
                 continue
             docs.append(pool)
         return FakeCursor(docs)
+
+    async def find_one(self, query):
+        for pool in self.pools:
+            if "_id" in query:
+                expected_id = query["_id"]
+                if isinstance(expected_id, dict):
+                    if "$ne" in expected_id and pool.get("_id") == expected_id["$ne"]:
+                        continue
+                elif pool.get("_id") != expected_id:
+                    continue
+            if query.get("host_id") and pool.get("host_id") != query["host_id"]:
+                continue
+            payment_query = query.get("payments", {}).get("$elemMatch")
+            if payment_query:
+                utr = payment_query.get("utr")
+                statuses = set(payment_query.get("status", {}).get("$in", []))
+                if not any(
+                    payment.get("utr") == utr and payment.get("status") in statuses
+                    for payment in pool.get("payments", [])
+                ):
+                    continue
+            return pool
+        return None
 
     async def update_one(self, query, update):
         pool = next((p for p in self.pools if p.get("_id") == query.get("_id")), None)
@@ -67,10 +93,28 @@ class FakeCartPoolItems:
         return FakeCursor([item for item in self.items if item.get("pool_id") == query.get("pool_id")])
 
 
+class FakeUsers:
+    async def find_one(self, query):
+        return None
+
+    def find(self, query):
+        return FakeCursor([])
+
+
+class FakeProfiles:
+    async def find_one(self, query):
+        return None
+
+    def find(self, query):
+        return FakeCursor([])
+
+
 def make_db(pool, items):
     return SimpleNamespace(
         cart_pools=FakeCartPools([pool]),
         cart_pool_items=FakeCartPoolItems(items),
+        users=FakeUsers(),
+        profiles=FakeProfiles(),
     )
 
 
@@ -162,6 +206,29 @@ class PoolingHardeningTests(unittest.TestCase):
         self.assertEqual(result["payment_status"], "needs_review")
         self.assertEqual(pool["payments"][0]["status"], "needs_review")
         self.assertIn("amount does not match", pool["payments"][0]["review_reason"])
+
+    def test_roommate_cannot_replace_already_verified_payment(self):
+        pool = make_completed_pool([
+            {
+                "name": "Asha",
+                "utr": "123456789012",
+                "status": "verified",
+                "submitted_at": datetime.datetime.utcnow().isoformat(),
+                "expected_amount": 10000,
+            }
+        ])
+        db = make_db(pool, make_items())
+
+        with patch("app.api.pools.get_db", return_value=db):
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(payment_confirm(
+                    "pool-1",
+                    PaymentConfirmReq(roommate_name="Asha", utr="987654321098"),
+                ))
+
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(pool["payments"][0]["status"], "verified")
+        self.assertEqual(pool["payments"][0]["utr"], "123456789012")
 
     def test_refund_credit_is_not_treated_as_pool_payment(self):
         pool = make_completed_pool()

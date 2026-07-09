@@ -1000,6 +1000,16 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
     )
 
     payments = pool.get("payments", [])
+    existing_roommate_payment = next(
+        (
+            payment for payment in payments
+            if name_key(payment.get("name")) == name_key(exact_roommate_name)
+        ),
+        None,
+    )
+    if existing_roommate_payment and existing_roommate_payment.get("status") == "verified":
+        raise HTTPException(status_code=409, detail="This split is already settled")
+
     same_pool_duplicate = next(
         (
             payment for payment in payments

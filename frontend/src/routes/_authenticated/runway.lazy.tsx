@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { getRunwayForecast, getRunwayIntel } from "@/lib/api/db.functions";
-import { rupees } from "@/lib/format";
+import { rupees, rupeesFromInt } from "@/lib/format";
 import {
   TrendingUp, TrendingDown, AlertTriangle, AlertCircle, CheckCircle2,
   Calendar, CreditCard, PieChart, Info, HelpCircle, ChevronRight,
@@ -269,10 +269,10 @@ function RunwayPage() {
     const categoryAdvice = affordCategory === "food"
       ? foodRoutine?.action?.title || "Use the lowest-cost routine meal if possible."
       : affordCategory === "travel"
-        ? "Book only if the ride is essential or fits today’s safe limit."
+        ? "Book only if the ride is essential or fits todayÃ¢â‚¬â„¢s safe limit."
         : affordCategory === "shopping"
           ? "Delay this unless it is required before reset."
-          : "Keep it inside today’s safe limit.";
+          : "Keep it inside todayÃ¢â‚¬â„¢s safe limit.";
     if (safeDailyIsZero || affordAmountPaise > remainingDiscretionary) {
       return {
         status: "avoid",
@@ -285,7 +285,7 @@ function RunwayPage() {
     if (affordAmountPaise <= safeDailyPaise) {
       return {
         status: "safe",
-        title: "Safe if this is today’s main flexible spend",
+        title: "Safe if this is todayÃ¢â‚¬â„¢s main flexible spend",
         detail: `${formatRs(affordAmountPaise)} keeps the next safe/day near ${formatRs(nextSafeDaily)}. ${categoryAdvice}`,
         tone: "border-pb-green/20 bg-pb-green/5 text-pb-green",
         runwayDaysLost,
@@ -294,7 +294,7 @@ function RunwayPage() {
     return {
       status: "tight",
       title: "Tight",
-      detail: `${formatRs(affordAmountPaise)} is above today’s safe/day and uses about ${runwayDaysLost.toFixed(1)} runway days. ${categoryAdvice}`,
+      detail: `${formatRs(affordAmountPaise)} is above todayÃ¢â‚¬â„¢s safe/day and uses about ${runwayDaysLost.toFixed(1)} runway days. ${categoryAdvice}`,
       tone: "border-pb-amber/20 bg-pb-amber/5 text-pb-amber",
       runwayDaysLost,
     };
@@ -304,12 +304,7 @@ function RunwayPage() {
     return Math.min(100, (affordCheck.runwayDaysLost / daysLeftInCycle) * 100);
   }, [affordCheck.runwayDaysLost, daysLeftInCycle]);
 
-  const radius = 42;
-  const circumference = 2 * Math.PI * radius;
   const gaugePercentage = Math.min(100, (simulatedDays / Math.max(1, daysLeftInCycle)) * 100);
-  const strokeDashoffset = circumference - (gaugePercentage / 100) * circumference;
-  const strokeColor = isSimulatedSafe ? "stroke-pb-green" : "stroke-pb-red";
-  const gaugeFilter = `drop-shadow(0 0 5px ${isSimulatedSafe ? "rgba(22,163,74,0.25)" : "rgba(220,38,38,0.25)"})`;
 
   const copyFlightBrief = () => {
     if (!forecast) return;
@@ -378,7 +373,7 @@ From PocketBuddy Runway.`;
     if (!forecast) return { grade: "N/A", text: "Calculating", color: "text-zinc-500", bg: "bg-zinc-500/10", border: "border-zinc-500/20", description: "Calculating runway projections..." };
     if (forecast.status === "setup_required") {
       return {
-        grade: "—",
+        grade: "Ã¢â‚¬â€",
         text: "Setup needed",
         color: "text-primary",
         bg: "bg-primary/10",
@@ -488,6 +483,7 @@ From PocketBuddy Runway.`;
   const sectionTitleClass = "text-sm font-semibold tracking-tight text-foreground sm:text-base";
   const sectionBodyClass = "text-xs leading-relaxed text-muted-foreground sm:text-sm";
   const [selectedActionId, setSelectedActionId] = useState("action-1");
+  const [selectedMealRoutineView, setSelectedMealRoutineView] = useState<"campus" | "shared" | "delivery">("campus");
   const runwayActions = useMemo(() => {
     if (!forecast) return [];
     const actionsList = [
@@ -801,7 +797,7 @@ From PocketBuddy Runway.`;
       </div>
 
       <div className="py-4 pb-32 space-y-6 animate-[fadeIn_0.3s_ease-out]">
-        {/* ── Runway Advisor Narration (Sleek Notification Bar) ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Runway Advisor Narration (Sleek Notification Bar) Ã¢â€â‚¬Ã¢â€â‚¬ */}
         <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-xs font-medium border transition-all duration-300 ${
           activeActionType === "ask_home"
             ? "border-pb-red/30 bg-pb-red/5 text-pb-red"
@@ -853,7 +849,7 @@ From PocketBuddy Runway.`;
           </button>
         </div>
 
-        {/* ── Tab: Overview ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Tab: Overview Ã¢â€â‚¬Ã¢â€â‚¬ */}
         {activeTab === "overview" && (
           <div className="space-y-6">
             {false && (
@@ -949,23 +945,23 @@ From PocketBuddy Runway.`;
             <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <Card className="border border-border bg-card/25 p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <div className="space-y-1">
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">What changed the runway</p>
-                    <h3 className="mt-2 text-base font-semibold text-foreground">Main pressure points</h3>
+                    <h3 className="text-base font-semibold text-foreground">Main pressure points</h3>
                   </div>
                   <Badge variant="outline" className="border-border bg-surface text-[10px] font-bold uppercase tracking-wider">
                     {forecast.confidence.level} confidence
                   </Badge>
                 </div>
 
-                <div className="mt-5 divide-y divide-border/60">
-                  <div className="flex items-center justify-between gap-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Food routine</p>
-                      <p className="text-xs text-muted-foreground">
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-start justify-between gap-4 rounded-2xl border border-border/60 bg-background/55 px-3 py-3">
+                    <div className="min-w-0 border-l-2 border-pb-green pl-3">
+                      <p className="text-sm font-semibold text-foreground">Food routine</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                         {(foodRoutine?.cycle_food_count ?? 0) > 0
                           ? `${foodRoutine?.label ?? "Meal pattern"} tracked from current cycle.`
-                          : "No food payments this cycle; routine is estimated from profile until transactions sync."}
+                          : "No food payments this cycle; routine is estimated until transactions sync."}
                       </p>
                     </div>
                     <span className="shrink-0 text-sm font-semibold text-foreground tnum">
@@ -973,10 +969,10 @@ From PocketBuddy Runway.`;
                     </span>
                   </div>
                   {commitmentSummary.length ? commitmentSummary.map((item) => (
-                    <div key={item.key} className="flex items-center justify-between gap-4 py-3">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{item.label}</p>
-                        <p className="text-xs text-muted-foreground">
+                    <div key={item.key} className="flex items-start justify-between gap-4 rounded-2xl border border-border/60 bg-background/55 px-3 py-3">
+                      <div className="min-w-0 border-l-2 border-primary/60 pl-3">
+                        <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                           {item.key === "subscription" ? "Scheduled before reset." :
                            item.key === "pool" ? "Shared cart dues included." :
                            item.key === "exam_buffer" ? "Kept aside for exam days." :
@@ -986,7 +982,7 @@ From PocketBuddy Runway.`;
                       <span className="shrink-0 text-sm font-semibold text-foreground tnum">{formatRs(item.amount)}</span>
                     </div>
                   )) : (
-                    <div className="py-4 text-sm text-muted-foreground">
+                    <div className="rounded-2xl border border-dashed border-border/60 bg-background/55 px-3 py-4 text-sm text-muted-foreground">
                       No fixed commitments found yet. Add subscriptions, mess cost, or pool dues to make this more accurate.
                     </div>
                   )}
@@ -1016,7 +1012,7 @@ From PocketBuddy Runway.`;
                       <div>
                         <span className="block text-[10px] sm:text-xs font-bold text-foreground truncate">{mode.title}</span>
                         <span className="mt-1 block text-xs sm:text-sm font-black text-foreground tnum">
-                          {mode.amount === null ? (mode.key === "normal" ? "—" : "Pause") : formatRs(mode.amount)}
+                          {mode.amount === null ? (mode.key === "normal" ? "Ã¢â‚¬â€" : "Pause") : formatRs(mode.amount)}
                           {mode.amount !== null && <span className="text-[9px] font-normal text-muted-foreground">/day</span>}
                         </span>
                       </div>
@@ -1123,20 +1119,6 @@ From PocketBuddy Runway.`;
               </Card>
             </div>
 
-            {foodRoutine?.action && (
-              <Card className="border border-border bg-card/20 p-5 sm:p-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">Meal routine</p>
-                    <h3 className="mt-1 text-base font-semibold text-foreground">{foodRoutine.action.title}</h3>
-                    <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">{foodRoutine.action.detail}</p>
-                  </div>
-                  <Badge variant="outline" className="w-fit border-border bg-surface text-[10px] font-bold uppercase tracking-wider">
-                    {foodRoutine.label}
-                  </Badge>
-                </div>
-              </Card>
-            )}
               </>
             )}
 
@@ -1146,7 +1128,7 @@ From PocketBuddy Runway.`;
                 <div className="p-5 sm:p-6">
                   {/* Header row: badge always inline-left of meta labels */}
                   <div className="flex items-start gap-3 mb-4">
-                    {/* Grade badge — smaller on mobile, with glow */}
+                    {/* Grade badge Ã¢â‚¬â€ smaller on mobile, with glow */}
                     <div className="relative shrink-0 mt-0.5">
                       <div className={`absolute inset-0 rounded-full blur-md opacity-30 ${safetyGrade.bg}`} />
                       <div className={`relative inline-flex h-10 items-center rounded-full border px-3 text-[10px] font-bold uppercase tracking-[0.16em] select-none sm:h-11 sm:px-4 ${safetyGrade.bg} ${safetyGrade.border} ${safetyGrade.color}`}>
@@ -1177,7 +1159,7 @@ From PocketBuddy Runway.`;
                         : safetyGrade.description}
                   </p>
 
-                  {/* Metrics — 2-col on mobile, 3-col on sm+ */}
+                  {/* Metrics Ã¢â‚¬â€ 2-col on mobile, 3-col on sm+ */}
                   <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-4 border-t border-border/40 pt-4">
                     <div className="space-y-1">
                       <p className="text-[9px] font-black uppercase tracking-[0.13em] text-muted-foreground">Daily Limit</p>
@@ -1199,7 +1181,7 @@ From PocketBuddy Runway.`;
                     <div className="space-y-1 col-span-2 sm:col-span-1 sm:border-l sm:border-border/30 sm:pl-3 border-t sm:border-t-0 border-border/30 pt-3 sm:pt-0">
                       <p className="text-[9px] font-black uppercase tracking-[0.13em] text-muted-foreground">Scenario Range</p>
                       <p className="text-base sm:text-lg font-black text-foreground tnum leading-none">
-                        {stressRunwayDays} – {calmRunwayDays} days
+                        {stressRunwayDays} Ã¢â‚¬â€œ {calmRunwayDays} days
                       </p>
                       <p className="text-[10px] text-muted-foreground leading-tight">Stress to Calm</p>
                     </div>
@@ -1275,12 +1257,12 @@ From PocketBuddy Runway.`;
               </div>
             </Card>
 
-            {/* ── Runway Drivers & Inputs ── */}
+            {/* Ã¢â€â‚¬Ã¢â€â‚¬ Runway Drivers & Inputs Ã¢â€â‚¬Ã¢â€â‚¬ */}
             <Card className="p-5 sm:p-6 border border-border bg-card/25">
               <div className="flex items-center justify-between border-b border-border/40 pb-3 mb-4">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">What changed?</h3>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Main factors affecting today’s runway estimate.</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Main factors affecting todayÃ¢â‚¬â„¢s runway estimate.</p>
                 </div>
 
                 {/* Included in Forecast Dialog Trigger */}
@@ -1494,61 +1476,136 @@ From PocketBuddy Runway.`;
 
 
             {foodRoutine && (
-              <Card className="p-5 sm:p-6 border border-border bg-card/25">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.22em] text-zinc-500">Meal Routine</p>
-                    <h3 className="text-base sm:text-lg font-semibold text-foreground">{foodRoutine.label}</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
-                      Runway separates delivery, campus meals, and groceries so your food budget is based on how you actually eat, not a hostel-only assumption.
+              <Card className="border border-border bg-card/25 p-4 sm:p-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Meal routine</p>
+                    <h3 className={sectionTitleClass}>{foodRoutine.label}</h3>
+                    <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                      Compare the three common meal patterns fast. The cost anchor and the cycle effect stay visible without stretching the section.
                     </p>
                   </div>
-                  <Badge variant="outline" className="w-fit border-border bg-surface text-[10px] md:text-xs uppercase tracking-wider font-black">
+                  <Badge variant="outline" className="w-fit border-border bg-surface text-[10px] uppercase tracking-wider text-muted-foreground">
                     {foodRoutine.meal_cost_source?.replace(/_/g, " ") ?? "food history"}
                   </Badge>
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="rounded-xl border border-border/70 bg-surface/70 p-3">
-                    <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-zinc-500">Food pace</p>
-                    <p className="mt-1 text-base sm:text-lg font-semibold text-foreground tnum">
-                      {(foodRoutine.food_daily_pace ?? 0) > 0 ? <>{formatRs(foodRoutine.food_daily_pace ?? 0)}<span className="text-[10px] md:text-xs text-zinc-500">/day</span></> : "No logs"}
-                    </p>
-                    <p className="mt-1 text-[10px] md:text-xs text-zinc-500">{foodRoutine.cycle_food_count ?? 0} food logs this cycle</p>
+                <div className="mt-4 border-y border-border/50">
+                  <div className="grid gap-0 sm:grid-cols-3">
+                    {[
+                      { id: "campus" as const, label: "Campus", value: routineMealUnitRs, tone: "text-pb-green", note: "Steady daily choice" },
+                      { id: "shared" as const, label: "Shared", value: sharedMealUnitRs, tone: "text-primary", note: "When one order is split" },
+                      { id: "delivery" as const, label: "Delivery", value: deliveryOrderUnitRs, tone: "text-pb-amber", note: "Fastest cap pressure" },
+                    ].map((view, index) => {
+                      const active = selectedMealRoutineView === view.id;
+                      return (
+                        <button
+                          key={view.id}
+                          type="button"
+                          onClick={() => setSelectedMealRoutineView(view.id)}
+                          className={`group flex min-h-[78px] flex-col justify-between px-3 py-3 text-left transition-all ${
+                            active
+                              ? "bg-surface/70"
+                              : "bg-transparent hover:bg-surface/45"
+                          } ${index !== 0 ? "border-t border-border/50 sm:border-t-0 sm:border-l" : ""} ${index !== 2 ? "sm:border-r sm:border-border/50" : ""}`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${active ? view.tone : "text-muted-foreground"}`}>
+                                {active ? "Selected" : "Compare"}
+                              </p>
+                              <h4 className="mt-1 text-sm font-semibold text-foreground">{view.label}</h4>
+                            </div>
+                            <p className={`shrink-0 text-sm font-semibold tnum ${active ? view.tone : "text-foreground"}`}>
+                              {rupeesFromInt(view.value)}
+                            </p>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                            <span className="truncate">{view.note}</span>
+                            <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${active ? "rotate-90 text-primary" : "text-muted-foreground/70"}`} />
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="rounded-xl border border-border/70 bg-surface/70 p-3">
-                    <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-zinc-500">Suggested cap</p>
-                    <p className="mt-1 text-base sm:text-lg font-semibold text-primary tnum">
-                      {(foodRoutine.recommended_daily_food_cap ?? 0) > 0 ? <>{formatRs(foodRoutine.recommended_daily_food_cap ?? 0)}<span className="text-[10px] md:text-xs text-zinc-500">/day</span></> : "No cap"}
-                    </p>
-                    <p className="mt-1 text-[10px] md:text-xs text-zinc-500">Aligned to safe/day</p>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-surface/70 p-3">
-                    <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-zinc-500">Delivery</p>
-                    <p className="mt-1 text-base sm:text-lg font-semibold text-foreground tnum">{foodRoutine.delivery?.count ?? 0}x</p>
-                    <p className="mt-1 text-[10px] md:text-xs text-zinc-500">{formatRs(foodRoutine.delivery?.spend ?? 0)} this cycle</p>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-surface/70 p-3">
-                    <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-zinc-500">Two-order switch</p>
-                    <p className="mt-1 text-base sm:text-lg font-semibold text-pb-green tnum">{formatRs(foodRoutine.savings_if_replace_two_deliveries ?? 0)}</p>
-                    <p className="mt-1 text-[10px] md:text-xs text-zinc-500">Potential runway recovery</p>
-                  </div>
-                </div>
 
-                <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-3.5">
-                  <p className="text-xs font-black text-foreground">{foodRoutine.action?.title ?? "Keep food pace stable"}</p>
-                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{foodRoutine.action?.detail ?? "Use your routine meal option before delivery becomes the default."}</p>
+                  <div className="border-t border-border/50 px-3 py-3 sm:px-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Selected pattern</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            {selectedMealRoutineView === "campus" ? "Campus meal" : selectedMealRoutineView === "shared" ? "Shared order" : "Delivery order"}
+                          </p>
+                          <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Cost anchor</span>
+                          <p className={`text-sm font-semibold tnum ${selectedMealRoutineView === "delivery" ? "text-pb-amber" : selectedMealRoutineView === "shared" ? "text-primary" : "text-pb-green"}`}>
+                            {selectedMealRoutineView === "campus"
+                              ? rupeesFromInt(routineMealUnitRs)
+                              : selectedMealRoutineView === "shared"
+                                ? rupeesFromInt(sharedMealUnitRs)
+                                : rupeesFromInt(deliveryOrderUnitRs)}
+                          </p>
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          {selectedMealRoutineView === "delivery"
+                            ? `Convenient, but it pushes the cap fastest and adds ${formatRs(foodRoutine.savings_if_replace_two_deliveries ?? 0)} back if two deliveries are replaced.`
+                            : selectedMealRoutineView === "shared"
+                              ? "Good when the group is already ordering and you want the cap to stay lighter."
+                              : "Most predictable choice when you want food spending to stay steady."}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1">
+                          Pace {((foodRoutine.food_daily_pace ?? 0) > 0 ? formatRs(foodRoutine.food_daily_pace ?? 0) : "No logs")}
+                        </span>
+                        <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1">
+                          Cap {((foodRoutine.recommended_daily_food_cap ?? 0) > 0 ? formatRs(foodRoutine.recommended_daily_food_cap ?? 0) : "No cap")}
+                        </span>
+                        <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1">
+                          Delivery {foodRoutine.delivery?.count ?? 0}x
+                        </span>
+                        <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-pb-green">
+                          Save {formatRs(foodRoutine.savings_if_replace_two_deliveries ?? 0)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-raised">
+                        <div
+                          className="h-full rounded-full bg-pb-green/70 transition-all"
+                          style={{ width: `${Math.min(100, Math.max(20, routineMealUnitRs / Math.max(deliveryOrderUnitRs, 1) * 100))}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        <span>{rupeesFromInt(routineMealUnitRs)}</span>
+                        <span>{rupeesFromInt(deliveryOrderUnitRs)}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 border-t border-border/50 pt-3">
+                      <p className="text-xs font-semibold text-foreground">{foodRoutine.action?.title ?? "Keep food pace stable"}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {selectedMealRoutineView === "delivery"
+                          ? `Replacing two delivery meals frees ${formatRs(foodRoutine.savings_if_replace_two_deliveries ?? 0)} this cycle.`
+                          : selectedMealRoutineView === "shared"
+                            ? "Shared orders keep convenience while lowering daily pressure."
+                            : "Campus meals keep the cap steady and easier to trust."}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </Card>
             )}
 
-            {/* 🛫 DAILY SPEND CHECK — SURVIVAL COCKPIT */}
+            {/* Ã°Å¸â€ºÂ« DAILY SPEND CHECK Ã¢â‚¬â€ SURVIVAL COCKPIT */}
             <Card className="border border-border bg-surface p-4 sm:p-5 shadow-sm rounded-2xl relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/30 via-pb-amber/30 to-pb-green/30" />
 
               <div className="flex flex-col lg:flex-row gap-5 items-stretch">
 
-                {/* ── Left: Controls ── */}
+                {/* Ã¢â€â‚¬Ã¢â€â‚¬ Left: Controls Ã¢â€â‚¬Ã¢â€â‚¬ */}
                 <div className="flex-1 space-y-4">
 
                   <div className="space-y-3">
@@ -1592,8 +1649,8 @@ From PocketBuddy Runway.`;
                           step="10"
                           value={activeSimulatedSpend}
                           onChange={(e) => setSimulatedDailySpend(parseInt(e.target.value, 10))}
-                          onMouseUp={() => toast.info(`Simulated at ${formatRs(activeSimulatedSpend * 100)}/day → ${simulatedDays} days runway`)}
-                          onTouchEnd={() => toast.info(`Simulated at ${formatRs(activeSimulatedSpend * 100)}/day → ${simulatedDays} days runway`)}
+                          onMouseUp={() => toast.info(`Simulated at ${formatRs(activeSimulatedSpend * 100)}/day -> ${simulatedDays} days runway`)}
+                          onTouchEnd={() => toast.info(`Simulated at ${formatRs(activeSimulatedSpend * 100)}/day -> ${simulatedDays} days runway`)}
                           className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-gradient-to-r from-pb-green via-pb-amber to-pb-red accent-primary focus:outline-none"
                         />
                         <div className="flex justify-between font-mono text-[10px] font-semibold text-muted-foreground">
@@ -1679,7 +1736,7 @@ From PocketBuddy Runway.`;
                     </div>
                     <div className="bg-muted/35 border border-border/40 p-1 rounded-xl grid grid-cols-3 gap-1">
                       {[
-                        { key: "normal" as const, label: "Current Pace", amount: noSpendHistory ? "—" : `${formatRs((defaultPace || safeDailyRs) * 100)}` },
+                        { key: "normal" as const, label: "Current Pace", amount: noSpendHistory ? "Ã¢â‚¬â€" : `${formatRs((defaultPace || safeDailyRs) * 100)}` },
                         { key: "glide" as const, label: "Stretch", amount: safeDailyIsZero ? "Pause" : `${formatRs(stretchModeDailyRs * 100)}` },
                         { key: "turbulence" as const, label: "Emergency", amount: safeDailyIsZero ? "Pause" : `${formatRs(emergencyModeDailyRs * 100)}` }
                       ].map((mode) => (
@@ -1811,130 +1868,140 @@ From PocketBuddy Runway.`;
                   </div>
                 </div>
 
-                {/* ── Right: Cockpit Gauge ── */}
-                <div className="hidden lg:flex w-full flex-col justify-between gap-4 rounded-xl border border-border/60 bg-background/55 p-4 lg:w-72">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Runway simulator</span>
-                      <Badge variant="outline" className={`text-[9px] font-bold uppercase py-0.5 ${
-                        flightProtocol === "normal" ? "border-primary/30 bg-primary/10 text-primary" :
-                        flightProtocol === "glide" ? "border-pb-amber/30 bg-pb-amber/10 text-pb-amber" :
-                        "border-pb-red/30 bg-pb-red/10 text-pb-red"
-                      }`}>
-                        {flightProtocol === "normal" ? "Normal" : flightProtocol === "glide" ? "Stretch" : "Emergency"}
-                      </Badge>
-                    </div>
-
-                    {/* SVG Circular Gauge */}
-                    <div className="flex justify-center py-1.5">
-                      <div className="relative h-24 w-24">
-                        <svg className="h-full w-full -rotate-90">
-                          <circle cx="56" cy="56" r={radius} className="fill-none stroke-muted-foreground/10" strokeWidth="6" />
-                          <circle
-                            cx="56" cy="56" r={radius}
-                            className={`${strokeColor} fill-none transition-all duration-700`}
-                            strokeWidth="6"
-                            strokeDasharray={circumference}
-                            strokeDashoffset={strokeDashoffset}
-                            strokeLinecap="round"
-                            style={{ filter: gaugeFilter }}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                          <span className="text-2xl font-semibold tracking-tight text-foreground tnum">
-                            {safeDailyIsZero ? "0" : simulatedDays}
-                          </span>
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">days left</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Status indicator */}
-                    <div className="pt-3.5 border-t border-border/40">
-                      <div className="flex items-center gap-2">
-                        <div className={`h-2.5 w-2.5 rounded-full ${isSimulatedSafe ? "bg-pb-green" : "bg-pb-red"}`} />
-                        <span className="text-xs font-semibold text-foreground">
-                          {isSimulatedSafe ? "Reaches reset safely" : "Deficit detected"}
-                        </span>
-                      </div>
-                      <p className="mt-1.5 pl-4.5 text-[11px] leading-relaxed text-muted-foreground">
-                        {isSimulatedSafe
-                          ? `Survives the next ${daysLeftInCycle} days on this plan.`
-                          : safeDailyIsZero
-                            ? "All discretionary balance consumed."
-                            : `Runs out ${Math.max(0, daysLeftInCycle - simulatedDays)} days early. Cycle gap: ${formatRs(simulatedGapPaise)}.`}
-                      </p>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="space-y-2 border-y border-border/40 py-3 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Flexible cash</span>
-                        <span className="font-bold text-foreground tnum">{formatRs(remainingDiscretionary)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Simulated rate</span>
-                        <span className="font-bold text-primary tnum">{safeDailyIsZero ? "₹0" : `${formatRs(activeSimulatedSpend * 100)}/day`}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Reset in</span>
-                        <span className="font-bold text-foreground tnum">{daysLeftInCycle} days</span>
-                      </div>
-                    </div>
-
-                    {!isSimulatedSafe && actualAskHomeAmount > 0 && (
-                      <div className="p-1 space-y-1 text-xs">
-                        <p className="text-muted-foreground">
-                          Actual ask-home buffer: <span className="text-primary font-bold tnum">{formatRs(actualAskHomeAmount)}</span>
-                        </p>
-                      </div>
-                    )}
+                {/* Ã¢â€â‚¬Ã¢â€â‚¬ Right: Cockpit Gauge Ã¢â€â‚¬Ã¢â€â‚¬ */}
+                <div className="hidden lg:flex w-full flex-col gap-3 rounded-xl border border-border/60 bg-background/55 p-4 lg:w-72">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Runway simulator</span>
+                    <Badge variant="outline" className={`text-[9px] font-bold uppercase py-0.5 ${
+                      flightProtocol === "normal" ? "border-primary/30 bg-primary/10 text-primary" :
+                      flightProtocol === "glide" ? "border-pb-amber/30 bg-pb-amber/10 text-pb-amber" :
+                      "border-pb-red/30 bg-pb-red/10 text-pb-red"
+                    }`}>
+                      {flightProtocol === "normal" ? "Normal" : flightProtocol === "glide" ? "Stretch" : "Emergency"}
+                    </Badge>
                   </div>
 
-              </div>
+                  <div className="rounded-2xl border border-border/60 bg-surface/70 p-4">
+                    <div className="flex items-end justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Projected runway</p>
+                        <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground tnum">
+                          {safeDailyIsZero ? "0" : simulatedDays}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {isSimulatedSafe ? "days to reset" : "days before shortfall"}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Daily target</p>
+                        <p className="mt-1 text-sm font-semibold text-primary tnum">
+                          {safeDailyIsZero ? "Pause" : `${formatRs(activeSimulatedSpend * 100)}/day`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="relative h-2 overflow-hidden rounded-full bg-surface-raised">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${isSimulatedSafe ? "bg-pb-green" : "bg-pb-red"}`}
+                          style={{ width: `${Math.max(6, gaugePercentage)}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                        <span>0d</span>
+                        <span>Reset</span>
+                        <span>{daysLeftInCycle}d</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-start gap-2 rounded-xl border border-border/40 bg-background/70 p-3">
+                      <div className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${isSimulatedSafe ? "bg-pb-green" : "bg-pb-red"}`} />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-foreground">
+                          {isSimulatedSafe ? "Reaches reset safely" : "Deficit detected"}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                          {isSimulatedSafe
+                            ? `Survives the next ${daysLeftInCycle} days on this plan.`
+                            : safeDailyIsZero
+                              ? "All discretionary balance consumed."
+                              : `Runs out ${Math.max(0, daysLeftInCycle - simulatedDays)} days early. Cycle gap: ${formatRs(simulatedGapPaise)}.`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Flexible cash</span>
+                      <span className="font-bold text-foreground tnum">{formatRs(remainingDiscretionary)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Simulated rate</span>
+                      <span className="font-bold text-primary tnum">{safeDailyIsZero ? "₹0" : `${formatRs(activeSimulatedSpend * 100)}/day`}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Reset in</span>
+                      <span className="font-bold text-foreground tnum">{daysLeftInCycle} days</span>
+                    </div>
+                  </div>
+
+                  {!isSimulatedSafe && actualAskHomeAmount > 0 && (
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                      Actual ask-home buffer: <span className="font-bold text-primary tnum">{formatRs(actualAskHomeAmount)}</span>
+                    </div>
+                  )}
+                </div>
 
               </div>
             </Card>
 
-            {/* 💡 RUNWAY SURVIVAL NUDGES */}
-            <Card className="p-4 sm:p-5 border border-border bg-card/25 space-y-4 mt-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/40 pb-3">
+            {/* Ã°Å¸â€™Â¡ RUNWAY SURVIVAL NUDGES */}
+            <Card className="mt-6 border border-border bg-card/25 p-4 sm:p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-0.5">
                   <p className={sectionEyebrowClass}>Runway actions</p>
-                  <h3 className={sectionTitleClass}>Pick one lever to move the forecast</h3>
-                  <p className={sectionBodyClass}>Each option maps to a real setting or habit.</p>
+                  <h3 className={sectionTitleClass}>Choose one lever and see the effect</h3>
+                  <p className={sectionBodyClass}>Tap a lever to preview the effect without extra clutter.</p>
                 </div>
+                <span className="w-fit rounded-full border border-border bg-surface px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  {secondaryRunwayActions.length} actions
+                </span>
               </div>
 
-              <div className="mt-4 grid gap-2 md:grid-cols-3">
-                {secondaryRunwayActions.map((action) => {
+              <div className="mt-4 border-y border-border/50 divide-y divide-border/50">
+                {secondaryRunwayActions.map((action, index) => {
                   const active = selectedActionId === action.id;
-                  const actionTone = action.severity === "high"
-                    ? "border-pb-red/20 bg-pb-red/5 text-pb-red"
-                    : action.severity === "medium"
-                      ? "border-pb-amber/20 bg-pb-amber/5 text-pb-amber"
-                      : "border-border/70 bg-background text-muted-foreground";
+                  const accent =
+                    action.severity === "high"
+                      ? "bg-pb-red"
+                      : action.severity === "medium"
+                        ? "bg-pb-amber"
+                        : "bg-border";
+                  const severityLabel = action.severity === "high" ? "Critical" : action.severity === "medium" ? "Recommended" : "Optional";
                   return (
                     <button
                       key={action.id}
                       type="button"
                       onClick={() => setSelectedActionId(action.id)}
-                      className={`group rounded-2xl border p-3 text-left transition-all ${active ? "border-primary/30 bg-primary/5 shadow-sm" : "border-border/60 bg-background/60 hover:border-border hover:bg-background"}`}
+                      className={`flex w-full items-start gap-3 px-3 py-3 text-left transition-colors ${active ? "bg-surface/75" : "hover:bg-surface/50"} ${index === 0 ? "rounded-t-2xl" : ""} ${index === secondaryRunwayActions.length - 1 ? "rounded-b-2xl" : ""}`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${actionTone}`}>
-                          {action.severity === "high" ? "Critical" : action.severity === "medium" ? "Recommended" : "Optional"}
-                        </span>
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                          {active ? "Selected" : "Tap to open"}
-                        </span>
+                      <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${accent}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold tracking-tight text-foreground">{action.label}</p>
+                          <span className="rounded-full border border-border/60 bg-background px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            {severityLabel}
+                          </span>
+                          {active && (
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{action.detail}</p>
                       </div>
-                      <p className="mt-2 text-sm font-semibold tracking-tight text-foreground line-clamp-2">
-                        {action.label}
-                      </p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground line-clamp-2">
-                        {action.detail}
-                      </p>
+                      <ChevronRight className={`mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${active ? "rotate-90 text-primary" : "text-muted-foreground/70"}`} />
                     </button>
                   );
                 })}
@@ -1952,146 +2019,134 @@ From PocketBuddy Runway.`;
                   selectedRunwayAction.id === "action-3" ? "Adjust food cap" :
                   "View settings";
                 return (
-                  <div className="mt-4 rounded-2xl border border-border/60 bg-background/55 p-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={sectionEyebrowClass}>Selected step</span>
-                          <Badge variant="outline" className={`text-[9px] uppercase font-semibold px-2 py-0.5 rounded ${
-                            selectedRunwayAction.severity === "high" ? "border-pb-red/20 text-pb-red bg-pb-red/5" :
-                            selectedRunwayAction.severity === "medium" ? "border-pb-amber/20 text-pb-amber bg-pb-amber/5" :
-                            "border-border text-muted-foreground bg-muted/10"
-                          }`}>
-                            {selectedRunwayAction.severity === "high" ? "Critical priority" : selectedRunwayAction.severity === "medium" ? "Recommended" : "Optional"}
-                          </Badge>
-                        </div>
-                        <h4 className={sectionTitleClass}>{selectedRunwayAction.label}</h4>
-                        <p className={sectionBodyClass}>{selectedRunwayAction.detail}</p>
-                      </div>
-                      {actionPath && (
-                        <div className="shrink-0">
-                          <Link to={actionPath} className="inline-flex h-9 items-center rounded-lg border border-border/80 bg-background px-3.5 text-[10px] font-semibold uppercase tracking-wider text-foreground hover:bg-surface hover:text-primary transition-all duration-200 shadow-sm cursor-pointer">
-                            {actionButtonText}
-                          </Link>
-                        </div>
-                      )}
+                  <div className="mt-4 flex flex-col gap-3 border-t border-border/50 pt-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Selected step</p>
+                      <h4 className="mt-1 text-sm font-semibold tracking-tight text-foreground">{selectedRunwayAction.label}</h4>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{selectedRunwayAction.detail}</p>
                     </div>
+                    {actionPath && (
+                      <Link
+                        to={actionPath}
+                        className="inline-flex h-9 items-center rounded-full border border-border/80 bg-background px-3.5 text-[10px] font-semibold uppercase tracking-wider text-foreground transition-all duration-200 hover:bg-surface hover:text-primary"
+                      >
+                        {actionButtonText}
+                      </Link>
+                    )}
                   </div>
                 );
               })()}
             </Card>
 
 
-            {/* Runway Progress Card */}
-            <Card className="p-4 sm:p-5 border border-border bg-card/25">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <Card className="border border-border bg-card/25 p-4 sm:p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-1">
                   <p className={sectionEyebrowClass}>Allowance cycle</p>
-                  <h3 className={sectionTitleClass}>Where the cycle stands right now</h3>
-                  <p className={sectionBodyClass}>Reset date, spending already used, and the cash still available.</p>
+                  <h3 className={sectionTitleClass}>Cycle progress and runway split</h3>
+                  <p className={sectionBodyClass}>See how much of the cycle is used, what is fixed, and what still stays flexible.</p>
                 </div>
                 <Badge variant="outline" className="w-fit border-border bg-surface text-[10px] uppercase tracking-wider text-muted-foreground">
                   {forecast.current_cycle.days_left} days left
                 </Badge>
               </div>
-              <div className="mt-4 rounded-2xl border border-border/60 bg-background/55 p-4">
-                <div className="relative">
-                  <div className="absolute left-4 right-4 top-[26px] hidden h-px bg-border/50 sm:block" />
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="relative min-w-0 pl-8 sm:pl-0">
-                      <div className="absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full bg-primary sm:left-[calc(50%-0.3125rem)]" />
-                      <p className={sectionEyebrowClass}>Started</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground">
-                        {new Date(forecast.current_cycle.start).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">Funding: {formatRs(forecast.current_cycle.available_funding)}</p>
-                    </div>
-                    <div className="relative min-w-0 pl-8 sm:pl-0">
-                      <div className="absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full bg-pb-amber sm:left-[calc(50%-0.3125rem)]" />
-                      <p className={sectionEyebrowClass}>Used so far</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground tnum">{formatRs(forecast.current_cycle.spent)}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">{allowanceProgressPct}% of cycle funding spent</p>
-                    </div>
-                    <div className="relative min-w-0 pl-8 sm:pl-0">
-                      <div className="absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full bg-pb-green sm:left-[calc(50%-0.3125rem)]" />
-                      <p className={sectionEyebrowClass}>Resets</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground">
-                        {new Date(forecast.current_cycle.end).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">Balance: {formatRs(remainingBalance)}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 border-t border-border/50 pt-3">
-                  <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                    <span>Cycle progress</span>
-                    <span>{allowanceProgressPct}% used</span>
-                  </div>
-                  <Progress value={allowanceProgressPct} className="mt-2 h-1.5 bg-surface-raised" />
-                </div>
-              </div>
-            </Card>
 
-            {/* Committed vs Flexible Spend visualizer */}
-            <Card className="p-4 sm:p-5 border border-border bg-card/25">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1">
-                  <p className={sectionEyebrowClass}>Where the runway goes</p>
-                  <h3 className={sectionTitleClass}>Reserved vs flexible spend</h3>
-                  <p className={sectionBodyClass}>Protected costs stay fixed. The rest is flexible.</p>
-                </div>
-                <Badge variant="outline" className="w-fit text-[10px] md:text-xs uppercase font-semibold border-border bg-surface-raised px-2 py-0.5 tracking-wider">
-                  Cycle split
-                </Badge>
-              </div>
-              <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-border/60 bg-background/55 p-4 sm:p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Cycle split</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground">Reserved and flexible cash share the same allowance.</p>
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-border/60 bg-background/55 p-4">
+                    <div className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      <span>Started {new Date(forecast.current_cycle.start).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                      <span>{allowanceProgressPct}% used</span>
+                      <span>Resets {new Date(forecast.current_cycle.end).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
                     </div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground tnum">
-                      {committedPct}% reserved / {flexiblePct}% flexible
+                    <div className="relative mt-4">
+                      <div className="h-3 overflow-hidden rounded-full bg-surface-raised">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-primary/90 via-pb-amber/80 to-pb-green/80 transition-all"
+                          style={{ width: `${allowanceProgressPct}%` }}
+                        />
+                      </div>
+                      <div className="relative mt-2 h-5">
+                        <span className="absolute left-0 top-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Start</span>
+                        <span
+                          className="absolute top-0 -translate-x-1/2 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary"
+                          style={{ left: `${Math.max(8, Math.min(92, allowanceProgressPct))}%` }}
+                        >
+                          Today
+                        </span>
+                        <span className="absolute right-0 top-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Reset</span>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                      The filled bar is the cycle already used. The remaining stretch is still available for student-controlled spending.
                     </p>
                   </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="min-w-0 rounded-xl border border-border/60 bg-background/55 p-3">
+                      <p className={sectionEyebrowClass}>Funding</p>
+                      <p className="mt-1 text-sm font-semibold tracking-tight text-foreground tnum">{formatRs(forecast.current_cycle.available_funding)}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Allowance at cycle start</p>
+                    </div>
+                    <div className="min-w-0 rounded-xl border border-border/60 bg-background/55 p-3">
+                      <p className={sectionEyebrowClass}>Spent</p>
+                      <p className="mt-1 text-sm font-semibold tracking-tight text-foreground tnum">{formatRs(forecast.current_cycle.spent)}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Already used this cycle</p>
+                    </div>
+                    <div className="min-w-0 rounded-xl border border-border/60 bg-background/55 p-3">
+                      <p className={sectionEyebrowClass}>Balance</p>
+                      <p className="mt-1 text-sm font-semibold tracking-tight text-foreground tnum">{formatRs(remainingBalance)}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Still available to spend</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border/60 bg-background/55 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Where the runway goes</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Reserved vs flexible</span>
+                  </div>
+
                   <div className="mt-4 h-3 overflow-hidden rounded-full bg-surface-raised">
                     <div className="flex h-full w-full">
                       <div className="bg-primary/80 transition-all" style={{ width: `${committedPct}%` }} />
                       <div className="bg-pb-amber/75 transition-all" style={{ width: `${flexiblePct}%` }} />
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border border-border/60 bg-surface/55 p-3">
-                      <p className={sectionEyebrowClass}>Cycle funding</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground tnum">{formatRs(forecast.current_cycle.available_funding)}</p>
-                      <p className={sectionBodyClass}>Allowance available at cycle start.</p>
+
+                  <div className="mt-3 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <span>Reserved {committedPct}%</span>
+                    <span>Flexible {flexiblePct}%</span>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">Reserved costs</p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Subscriptions, meal routine, exam buffer, and pending pool settlements.</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold tnum text-foreground">{formatRs(reservedTotal)}</p>
                     </div>
-                    <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
-                      <p className={sectionEyebrowClass}>Reserved costs</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground tnum">{formatRs(forecast.commitments.total)}</p>
-                      <p className={sectionBodyClass}>Protected before daily spending is calculated.</p>
-                    </div>
-                    <div className="rounded-xl border border-pb-amber/15 bg-pb-amber/5 p-3">
-                      <p className={sectionEyebrowClass}>Flexible cash left</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground tnum">{formatRs(remainingDiscretionary)}</p>
-                      <p className={sectionBodyClass}>This pool drives runway pace and the next safe/day limit.</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">Flexible cash left</p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">This is what still drives the safe/day limit.</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold tnum text-primary">{formatRs(remainingDiscretionary)}</p>
                     </div>
                   </div>
-                </div>
 
-                <p className="text-[11px] text-muted-foreground leading-relaxed border-t border-border/50 pt-4">
-                  Reserved costs include subscriptions, meal routine, exam buffer, and pending pool settlements. Flexible spend is anything that can move with student choices.
-                </p>
+                  <div className="mt-4 border-t border-border/50 pt-3 text-xs leading-relaxed text-muted-foreground">
+                    Reserved costs stay fixed. Flexible cash is the part the student can still steer.
+                  </div>
+                </div>
               </div>
             </Card>
-
-
 
           </div>
         )}
 
-        {/* ── Tab: Commitments ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Tab: Commitments Ã¢â€â‚¬Ã¢â€â‚¬ */}
         {activeTab === "commitments" && (
           <div className="space-y-6">
             <Card className="p-5 sm:p-6 border border-border bg-card/25">
@@ -2191,7 +2246,7 @@ From PocketBuddy Runway.`;
           </div>
         )}
 
-        {/* ── Tab: Horizons ── */}
+        {/* Ã¢â€â‚¬Ã¢â€â‚¬ Tab: Horizons Ã¢â€â‚¬Ã¢â€â‚¬ */}
         {activeTab === "horizons" && (
           <div className="space-y-6">
             {/* Charts Container */}
@@ -2322,7 +2377,7 @@ From PocketBuddy Runway.`;
 
 
       </div>
-      {/* 📋 FORECAST INPUTS MODAL */}
+      {/* Ã°Å¸â€œâ€¹ FORECAST INPUTS MODAL */}
       <Dialog open={showForecastInputs} onOpenChange={setShowForecastInputs}>
         <DialogContent className="max-w-md bg-background border border-border text-foreground">
           <DialogHeader>
@@ -2363,7 +2418,7 @@ From PocketBuddy Runway.`;
         </DialogContent>
       </Dialog>
 
-      {/* 📖 RUNWAY FLIGHT MANUAL GUIDE MODAL */}
+      {/* Ã°Å¸â€œâ€“ RUNWAY FLIGHT MANUAL GUIDE MODAL */}
       <Dialog open={showGuideModal} onOpenChange={setShowGuideModal}>
         <DialogContent className="max-w-lg bg-background border border-border text-foreground">
           <DialogHeader>
@@ -2410,3 +2465,6 @@ From PocketBuddy Runway.`;
     </AppShell>
   );
 }
+
+
+

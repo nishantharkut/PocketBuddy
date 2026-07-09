@@ -48,6 +48,7 @@ EXTERNAL_FOOD_APP_TERMS = (
 RUPEE_RE = re.compile(r"(?:rs\.?|inr|\u20b9)\s*([0-9][0-9,]*(?:\.[0-9]+)?)", re.IGNORECASE)
 PERCENT_RE = re.compile(r"\b([0-9]+(?:\.[0-9]+)?)\s*(?:%|percent)\b", re.IGNORECASE)
 TIME_RE = re.compile(r"\b([0-9]+(?:\.[0-9]+)?)\s*(?:days?|hours?|hrs?|h)\b", re.IGNORECASE)
+PLAIN_NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_/-])([0-9][0-9,]*(?:\.[0-9]+)?)(?![A-Za-z0-9_/-])")
 
 
 class GroundingError(ValueError):
@@ -95,6 +96,7 @@ def validate_grounded_advice(
     allowed_rupee_values: Iterable[float | int] = (),
     allowed_percent_values: Iterable[float | int] = (),
     allowed_time_values: Iterable[float | int] = (),
+    allowed_plain_values: Iterable[float | int] | None = None,
     allowed_entities: Iterable[str] = (),
     require_entity: bool = False,
     forbidden_terms: Iterable[str] = (),
@@ -127,6 +129,14 @@ def validate_grounded_advice(
         kind="time",
         tolerance_floor=1.0,
     )
+    if allowed_plain_values is not None:
+        _assert_numbers_grounded(
+            _plain_number_values(cleaned),
+            allowed_plain_values,
+            kind="plain",
+            tolerance_floor=0.0,
+            relative_tolerance=0.0,
+        )
 
     entity_values = [entity.strip().lower() for entity in allowed_entities if str(entity).strip()]
     if require_entity and entity_values and not any(entity in lower for entity in entity_values):
@@ -141,6 +151,7 @@ def _assert_numbers_grounded(
     *,
     kind: str,
     tolerance_floor: float,
+    relative_tolerance: float = 0.015,
 ) -> None:
     allowed = [float(value) for value in allowed_values if _is_finite_number(value)]
     unsupported: list[str] = []
@@ -148,7 +159,10 @@ def _assert_numbers_grounded(
         value = _parse_number(raw_value)
         if value is None:
             continue
-        if not allowed or not any(_close_number(value, candidate, tolerance_floor) for candidate in allowed):
+        if not allowed or not any(
+            _close_number(value, candidate, tolerance_floor, relative_tolerance)
+            for candidate in allowed
+        ):
             unsupported.append(raw_value)
 
     if unsupported:
@@ -170,6 +184,24 @@ def _is_finite_number(value: Any) -> bool:
     return number == number and number not in (float("inf"), float("-inf"))
 
 
-def _close_number(value: float, candidate: float, tolerance_floor: float) -> bool:
-    tolerance = max(tolerance_floor, abs(candidate) * 0.015)
+def _close_number(value: float, candidate: float, tolerance_floor: float, relative_tolerance: float) -> bool:
+    tolerance = max(tolerance_floor, abs(candidate) * relative_tolerance)
     return abs(value - candidate) <= tolerance
+
+
+def _plain_number_values(text: str) -> list[str]:
+    ignored_spans = [
+        match.span()
+        for pattern in (RUPEE_RE, PERCENT_RE, TIME_RE)
+        for match in pattern.finditer(text)
+    ]
+    values: list[str] = []
+    for match in PLAIN_NUMBER_RE.finditer(text):
+        if any(_spans_overlap(match.span(), span) for span in ignored_spans):
+            continue
+        values.append(match.group(1))
+    return values
+
+
+def _spans_overlap(a: tuple[int, int], b: tuple[int, int]) -> bool:
+    return a[0] < b[1] and b[0] < a[1]

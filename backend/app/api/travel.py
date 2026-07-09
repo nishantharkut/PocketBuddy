@@ -11,6 +11,11 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
+from app.services.ai_guardrails import (
+    GroundingError,
+    ai_response_metadata,
+    validate_grounded_advice,
+)
 from app.services.bedrock import generate_json
 from app.services.travel_geo import (
     build_geo_cache_key,
@@ -1559,10 +1564,93 @@ COACH_IRRELEVANT_TERMS = (
     "pairing token",
 )
 
+TRAVEL_COACH_FORBIDDEN_TERMS = (
+    "live traffic",
+    "real-time traffic",
+    "real time traffic",
+    "ola",
+    "uber",
+    "rapido",
+    "cctv",
+    "police verified",
+    "guaranteed pickup",
+    "guaranteed drop",
+)
+
 
 def _is_irrelevant_coach_output(*values: Any) -> bool:
     combined = " ".join(str(value or "") for value in values).lower()
     return any(term in combined for term in COACH_IRRELEVANT_TERMS)
+
+
+def _travel_coach_facts_used(
+    *,
+    route_name: str,
+    mode: str,
+    min_fare: float,
+    max_fare: float,
+    median_fare: float,
+    fare_anchor: float,
+    fare_anchor_label: str,
+    report_count: int,
+    travel_time_context: str,
+    app_quote: Optional[float],
+) -> list[str]:
+    facts = [
+        f"route={route_name}",
+        f"mode={mode}",
+        f"fare_range_rs={round(float(min_fare))}-{round(float(max_fare))}",
+        f"median_fare_rs={round(float(median_fare))}",
+        f"fare_anchor_rs={round(float(fare_anchor))}",
+        f"fare_anchor_label={fare_anchor_label}",
+        f"report_count={report_count}",
+        f"travel_time={travel_time_context}",
+    ]
+    if app_quote is not None:
+        facts.append(f"app_quote_rs={round(float(app_quote))}")
+    return facts
+
+
+def _travel_coach_fallback_response(
+    fallback_response: dict[str, Any],
+    *,
+    facts_used: list[str],
+    fallback_reason: str,
+    bedrock_error: Optional[str] = None,
+) -> dict[str, Any]:
+    response = {
+        **fallback_response,
+        "source": "local_fallback",
+        **ai_response_metadata(
+            source="local_fallback",
+            facts_used=facts_used,
+            fallback_reason=fallback_reason,
+        ),
+    }
+    if bedrock_error:
+        response["bedrock_error"] = bedrock_error
+    return response
+
+
+def _travel_safety_advice(route: Optional[dict[str, Any]], time_context: str) -> str:
+    if not route:
+        return "Use a busy pickup point, confirm the vehicle, and share your trip details if you feel rushed."
+
+    night_note = str(route.get("safety_score_night") or "").strip()
+    day_note = str(route.get("safety_score_day") or "").strip()
+
+    if time_context == "late_night":
+        if len(night_note.split()) >= 4:
+            return night_note
+        return "Late night: prefer a pre-booked ride, avoid unknown shared autos, and share your trip details before leaving."
+
+    if time_context == "evening" and len(night_note.split()) >= 4:
+        return night_note
+
+    if len(day_note.split()) >= 4:
+        return day_note
+
+    return "Use a busy pickup point, confirm the vehicle, and share your trip details if you feel rushed."
 
 
 def _normalize_ai_coach_response(
@@ -1574,27 +1662,78 @@ def _normalize_ai_coach_response(
     fare_anchor_source: str,
     fare_anchor_label: str,
     report_count: int,
+    min_fare: float,
+    max_fare: float,
+    median_fare: float,
+    route_name: str,
+    mode: str,
+    travel_time_context: str,
+    app_quote: Optional[float],
+    facts_used: list[str],
 ) -> dict[str, Any]:
     script = _coerce_ai_text(result.get("script"), fallback_response["script"])
     tactics = _coerce_ai_tactics(result.get("tactics"), fallback_response["tactics"])
     safety = _coerce_ai_text(result.get("safety"), fallback_response["safety"])
 
     if _is_irrelevant_coach_output(script, " ".join(tactics), safety):
-        return {
-            **fallback_response,
-            "source": "route_script",
-            "surge_factor": surge_factor,
-            "community_median": fare_anchor if fare_anchor_source == "student_reports" else None,
-            "fare_anchor": fare_anchor,
-            "fare_anchor_source": fare_anchor_source,
-            "fare_anchor_label": fare_anchor_label,
-            "report_count": report_count,
-        }
+        return _travel_coach_fallback_response(
+            fallback_response,
+            facts_used=facts_used,
+            fallback_reason="irrelevant_output",
+            bedrock_error="irrelevant_output",
+        )
+
+    allowed_rupee_values = [min_fare, max_fare, median_fare, fare_anchor]
+    if app_quote is not None:
+        allowed_rupee_values.append(app_quote)
+    allowed_entities = [route_name, mode, fare_anchor_label, _travel_time_label(travel_time_context)]
+
+    try:
+        validated_script = validate_grounded_advice(
+            script,
+            allowed_rupee_values=allowed_rupee_values,
+            allowed_entities=allowed_entities,
+            forbidden_terms=TRAVEL_COACH_FORBIDDEN_TERMS,
+            max_chars=320,
+            max_sentences=3,
+        )
+
+        if len(tactics) < 3:
+            raise GroundingError("insufficient tactics")
+
+        validated_tactics = [
+            validate_grounded_advice(
+                tactic,
+                allowed_rupee_values=allowed_rupee_values,
+                allowed_entities=allowed_entities,
+                forbidden_terms=TRAVEL_COACH_FORBIDDEN_TERMS,
+                max_chars=200,
+                max_sentences=2,
+            )
+            for tactic in tactics[:3]
+        ]
+
+        validated_safety = validate_grounded_advice(
+            safety,
+            allowed_rupee_values=allowed_rupee_values,
+            allowed_entities=allowed_entities,
+            forbidden_terms=TRAVEL_COACH_FORBIDDEN_TERMS,
+            max_chars=180,
+            max_sentences=2,
+        )
+    except GroundingError as exc:
+        logger.warning("Travel AI coach response was ungrounded; using local fallback: %s", exc)
+        return _travel_coach_fallback_response(
+            fallback_response,
+            facts_used=facts_used,
+            fallback_reason="ungrounded_response",
+            bedrock_error="ungrounded_response",
+        )
 
     return {
-        "script": script,
-        "tactics": tactics,
-        "safety": safety,
+        "script": validated_script,
+        "tactics": validated_tactics,
+        "safety": validated_safety,
         "source": "bedrock",
         "surge_factor": surge_factor,
         "community_median": fare_anchor if fare_anchor_source == "student_reports" else None,
@@ -1602,6 +1741,7 @@ def _normalize_ai_coach_response(
         "fare_anchor_source": fare_anchor_source,
         "fare_anchor_label": fare_anchor_label,
         "report_count": report_count,
+        **ai_response_metadata(source="bedrock", facts_used=facts_used),
     }
 
 
@@ -1824,18 +1964,33 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
             f"Walk 100 meters away from main exit gates to hire passing running autos rather than stationary ones.",
             f"Refer to standard rates: Bhaiya, regular campus rate is between Rs {min_fare}-Rs {max_fare}."
         ],
-        "safety": route.get("safety_score_night", "Avoid shared/unknown routes late at night; prefer pre-booked rides.") if route else "Always prefer pre-booked rides late at night.",
+        "safety": _travel_safety_advice(route, normalized_time_context),
         "surge_factor": surge_factor,
         "community_median": community_median,
         "fare_anchor": fare_anchor,
         "fare_anchor_source": fare_anchor_source,
         "fare_anchor_label": fare_anchor_label,
         "report_count": report_count,
-        "source": "local_fallback"
     }
+    facts_used = _travel_coach_facts_used(
+        route_name=route_name,
+        mode=req.mode,
+        min_fare=min_fare,
+        max_fare=max_fare,
+        median_fare=median_fare,
+        fare_anchor=fare_anchor,
+        fare_anchor_label=fare_anchor_label,
+        report_count=report_count,
+        travel_time_context=normalized_time_context,
+        app_quote=req.app_quote,
+    )
 
     if not settings.BEDROCK_ENABLED:
-        return fallback_response
+        return _travel_coach_fallback_response(
+            fallback_response,
+            facts_used=facts_used,
+            fallback_reason="bedrock_disabled",
+        )
 
     try:
         prompt = build_travel_ai_prompt(
@@ -1865,11 +2020,24 @@ async def get_ai_negotiation_coach(req: AiCoachReq, user_id: str = Depends(get_c
             fare_anchor_source=fare_anchor_source,
             fare_anchor_label=fare_anchor_label,
             report_count=report_count,
+            min_fare=min_fare,
+            max_fare=max_fare,
+            median_fare=median_fare,
+            route_name=route_name,
+            mode=req.mode,
+            travel_time_context=normalized_time_context,
+            app_quote=req.app_quote,
+            facts_used=facts_used,
         )
 
     except Exception as exc:
         logger.warning("Bedrock AI coach failed: %s", exc)
-        return {**fallback_response, "bedrock_error": str(exc)}
+        return _travel_coach_fallback_response(
+            fallback_response,
+            facts_used=facts_used,
+            fallback_reason="bedrock_unavailable",
+            bedrock_error=str(exc),
+        )
 
 
 

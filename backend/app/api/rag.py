@@ -90,10 +90,15 @@ def _doc_amount_paise(item: dict | None) -> int:
 
 def _doc_datetime(value) -> datetime.datetime | None:
     if isinstance(value, datetime.datetime):
-        return value.replace(tzinfo=None)
+        if value.tzinfo is not None:
+            return value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        return value
     if isinstance(value, str):
         try:
-            return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+            parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                return parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+            return parsed
         except ValueError:
             return None
     return None
@@ -341,7 +346,7 @@ async def get_campus_intel(user_id: str = Depends(get_current_user)):
     txns = await cursor.to_list(length=500)
     spend_7 = sum(_doc_amount_paise(t) for t in txns if _is_debit_transaction(t) and (_doc_datetime(t.get("created_at")) or now) >= since_7) / 100
     cycle_spend = sum(_doc_amount_paise(t) for t in txns if _is_debit_transaction(t) and cycle_start <= (_doc_datetime(t.get("created_at")) or now) < cycle_end) / 100
-    food_txns = [t for t in txns if t.get("category") == "food"]
+    food_txns = [t for t in txns if t.get("category") == "food" and _is_debit_transaction(t)]
     last_food_hours = 0
     if food_txns:
         last_food = max(food_txns, key=lambda t: t.get("created_at", datetime.datetime.min))
@@ -446,6 +451,7 @@ Return ONLY valid JSON:
                 allowed_rupee_values=_rounded_rupees(spend_7, remaining, safe_daily, weekly_daily_pace, upcoming_commitments, safe_budget_paise / 100)
                 + _trusted_food_rupees(ranked_foods[:5]),
                 allowed_time_values=[7, days_left, last_food_hours, upcoming_commitment_count],
+                allowed_plain_values=[upcoming_commitment_count],
                 allowed_entities=_trusted_food_entities(ranked_foods[:5]),
                 forbidden_terms=EXTERNAL_FOOD_APP_TERMS,
                 max_chars=80,
@@ -456,6 +462,7 @@ Return ONLY valid JSON:
                 allowed_rupee_values=_rounded_rupees(spend_7, remaining, safe_daily, weekly_daily_pace, upcoming_commitments, safe_budget_paise / 100)
                 + _trusted_food_rupees(ranked_foods[:5]),
                 allowed_time_values=[7, days_left, last_food_hours, upcoming_commitment_count],
+                allowed_plain_values=[upcoming_commitment_count],
                 allowed_entities=_trusted_food_entities(ranked_foods[:5]),
                 require_entity=focus == "routine" and last_food_hours > 10 and bool(ranked_foods),
                 forbidden_terms=EXTERNAL_FOOD_APP_TERMS,
@@ -467,6 +474,7 @@ Return ONLY valid JSON:
                 allowed_rupee_values=_rounded_rupees(spend_7, remaining, safe_daily, weekly_daily_pace, upcoming_commitments, safe_budget_paise / 100)
                 + _trusted_food_rupees(ranked_foods[:5]),
                 allowed_time_values=[7, days_left, last_food_hours, upcoming_commitment_count],
+                allowed_plain_values=[upcoming_commitment_count],
                 allowed_entities=_trusted_food_entities(ranked_foods[:5]),
                 forbidden_terms=EXTERNAL_FOOD_APP_TERMS,
                 max_chars=180,
@@ -477,6 +485,7 @@ Return ONLY valid JSON:
                 allowed_rupee_values=_rounded_rupees(spend_7, remaining, safe_daily, weekly_daily_pace, upcoming_commitments, safe_budget_paise / 100)
                 + _trusted_food_rupees(ranked_foods[:5]),
                 allowed_time_values=[7, days_left, last_food_hours, upcoming_commitment_count],
+                allowed_plain_values=[upcoming_commitment_count],
                 allowed_entities=_trusted_food_entities(ranked_foods[:5]),
                 forbidden_terms=EXTERNAL_FOOD_APP_TERMS,
                 max_chars=360,

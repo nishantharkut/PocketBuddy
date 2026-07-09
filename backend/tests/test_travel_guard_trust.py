@@ -6,6 +6,8 @@ os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017/pocketbuddy_test")
 
 from app.api.travel import (  # noqa: E402
+    _normalize_ai_coach_response,
+    _travel_safety_advice,
     build_fare_explanation,
     build_ride_pool_safety_context,
     build_travel_report_candidate,
@@ -147,6 +149,110 @@ class TravelGuardTrustTests(unittest.TestCase):
         self.assertIn("Do not imply live Ola, Uber, Rapido", prompt)
         self.assertIn("Selected travel timing", prompt)
         self.assertIn("Output ONLY valid JSON", prompt)
+
+    def test_travel_ai_coach_falls_back_when_bedrock_invents_fare_numbers(self):
+        fallback_response = {
+            "script": "Bhaiya, ABV-IIITM Gate 1 chalo na. Regular student rate Rs 165 hai.",
+            "tactics": [
+                "Compare the quote with the Rs 165 anchor before agreeing.",
+                "Walk 100 meters away from the station stand before negotiating.",
+                "Stay within the Rs 140 to Rs 180 campus range.",
+            ],
+            "safety": "Use a busy pickup point, confirm the vehicle, and share your trip details if you feel rushed.",
+            "surge_factor": 1.0,
+            "community_median": 165,
+            "fare_anchor": 165,
+            "fare_anchor_source": "student_reports",
+            "fare_anchor_label": "5 distinct student reports",
+            "report_count": 5,
+        }
+
+        response = _normalize_ai_coach_response(
+            {
+                "script": "Bhaiya, Rs 320 final kar lo.",
+                "tactics": [
+                    "Use the live Uber fare as the real benchmark.",
+                    "Tell the driver student reports say Rs 320 is normal.",
+                    "Accept anything under Rs 300 at night.",
+                ],
+                "safety": "The CCTV coverage keeps this route guaranteed safe.",
+            },
+            fallback_response,
+            surge_factor=1.0,
+            fare_anchor=165,
+            fare_anchor_source="student_reports",
+            fare_anchor_label="5 distinct student reports",
+            report_count=5,
+            min_fare=140,
+            max_fare=180,
+            median_fare=160,
+            route_name="Gwalior Railway Station to ABV-IIITM",
+            mode="Auto",
+            travel_time_context="evening",
+            app_quote=None,
+            facts_used=["route=Gwalior Railway Station to ABV-IIITM", "fare_anchor_rs=165"],
+        )
+
+        self.assertEqual(response["source"], "local_fallback")
+        self.assertEqual(response["script"], fallback_response["script"])
+        self.assertEqual(response["bedrock_error"], "ungrounded_response")
+        self.assertTrue(response["grounding"]["fallback_used"])
+
+    def test_travel_ai_coach_keeps_grounded_backend_numbers(self):
+        fallback_response = {
+            "script": "fallback script",
+            "tactics": ["fallback one", "fallback two", "fallback three"],
+            "safety": "fallback safety",
+            "surge_factor": 1.18,
+            "community_median": 165,
+            "fare_anchor": 165,
+            "fare_anchor_source": "student_reports",
+            "fare_anchor_label": "5 distinct student reports",
+            "report_count": 5,
+        }
+
+        response = _normalize_ai_coach_response(
+            {
+                "script": "Bhaiya, regular student rate Rs 165 hai. Rs 165 final?",
+                "tactics": [
+                    "Compare any app quote with Rs 165 before agreeing.",
+                    "If the quote stays above Rs 180, step away from the stand and ask the next driver.",
+                    "Use the Rs 140 to Rs 180 campus range as the counter-anchor.",
+                ],
+                "safety": "Use a busy pickup point and share your trip details before leaving.",
+            },
+            fallback_response,
+            surge_factor=1.18,
+            fare_anchor=165,
+            fare_anchor_source="student_reports",
+            fare_anchor_label="5 distinct student reports",
+            report_count=5,
+            min_fare=140,
+            max_fare=180,
+            median_fare=160,
+            route_name="Gwalior Railway Station to ABV-IIITM",
+            mode="Auto",
+            travel_time_context="evening",
+            app_quote=195,
+            facts_used=["route=Gwalior Railway Station to ABV-IIITM", "fare_anchor_rs=165"],
+        )
+
+        self.assertEqual(response["source"], "bedrock")
+        self.assertEqual(len(response["tactics"]), 3)
+        self.assertIn("Rs 165", response["script"])
+        self.assertEqual(response["grounding"]["status"], "grounded")
+
+    def test_travel_safety_advice_stays_actionable_when_day_score_is_only_a_label(self):
+        advice = _travel_safety_advice(
+            {
+                "safety_score_day": "High Safety",
+                "safety_score_night": "Avoid shared routes after 9:00 PM. Prefer pre-booked cabs.",
+            },
+            "afternoon",
+        )
+
+        self.assertIn("busy pickup point", advice.lower())
+        self.assertNotEqual(advice, "High Safety")
 
     def test_travel_time_context_normalizes_user_selected_periods(self):
         self.assertEqual(_normalize_travel_time_context("Morning"), "morning")

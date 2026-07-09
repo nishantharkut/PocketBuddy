@@ -34,6 +34,23 @@ class AiGuardrailTests(unittest.TestCase):
                 forbidden_terms=["zepto"],
             )
 
+    def test_allows_grounded_plain_numbers_when_enabled(self):
+        text = validate_grounded_advice(
+            "Rs 600 is scheduled across 3 commitments.",
+            allowed_rupee_values=[600],
+            allowed_plain_values=[3],
+        )
+
+        self.assertIn("3 commitments", text)
+
+    def test_rejects_ungrounded_plain_numbers_when_enabled(self):
+        with self.assertRaises(GroundingError):
+            validate_grounded_advice(
+                "Rs 600 is scheduled across 4 commitments.",
+                allowed_rupee_values=[600],
+                allowed_plain_values=[3],
+            )
+
     def test_rejects_medical_overclaims(self):
         with self.assertRaises(GroundingError):
             validate_grounded_advice(

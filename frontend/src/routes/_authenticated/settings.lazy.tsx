@@ -93,6 +93,8 @@ function SettingsPage() {
   const [hostel, setHostel] = useState("");
   const [wing, setWing] = useState("");
   const [room, setRoom] = useState("");
+  const [residenceType, setResidenceType] = useState("hostel");
+  const [mealRoutine, setMealRoutine] = useState("hostel_mess");
   const [examStart, setExamStart] = useState("");
   const [examEnd, setExamEnd] = useState("");
   const [mess, setMess] = useState(false);
@@ -112,6 +114,8 @@ function SettingsPage() {
     setHostel(profile.hostel_block ?? "");
     setWing(profile.wing_label ?? "");
     setRoom(profile.room_number ?? "");
+    setResidenceType(profile.residence_type ?? "hostel");
+    setMealRoutine(profile.meal_routine ?? (profile.mess_enrolled ? "hostel_mess" : "mixed"));
     setExamStart(profile.exam_start_date ?? "");
     setExamEnd(profile.exam_end_date ?? "");
     setMess(profile.mess_enrolled ?? false);
@@ -134,6 +138,8 @@ function SettingsPage() {
           hostel_block: hostel,
           wing_label: wing,
           room_number: room,
+          residence_type: residenceType,
+          meal_routine: mealRoutine,
           exam_start_date: examStart || null,
           exam_end_date: examEnd || null,
           mess_enrolled: mess,
@@ -403,6 +409,50 @@ function SettingsPage() {
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+            <SettingsField label="Living Setup" noBorderRight>
+              <Select
+                value={residenceType}
+                onValueChange={(value) => {
+                  setResidenceType(value);
+                  if (value === "hostel") setMealRoutine("hostel_mess");
+                  if (value === "pg") setMealRoutine("pg_cooking");
+                  if (value === "day_scholar") setMealRoutine("day_scholar");
+                }}
+              >
+                <SelectTrigger style={inputStyle}>
+                  <SelectValue placeholder="Select setup" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hostel">Hostel / dorm</SelectItem>
+                  <SelectItem value="pg">PG / rented room</SelectItem>
+                  <SelectItem value="day_scholar">Day scholar / commute</SelectItem>
+                  <SelectItem value="mixed">Mixed routine</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsField>
+            <SettingsField label="Meal Routine">
+              <Select value={mealRoutine} onValueChange={setMealRoutine}>
+                <SelectTrigger style={inputStyle}>
+                  <SelectValue placeholder="Select routine" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hostel_mess">Hostel mess / campus meals</SelectItem>
+                  <SelectItem value="pg_cooking">PG cooking / groceries</SelectItem>
+                  <SelectItem value="day_scholar">Day scholar meals</SelectItem>
+                  <SelectItem value="mixed">Mixed routine</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsField>
+          </div>
+
+          <div
+            style={{
+              height: "1px",
+              background: "var(--border)",
+            }}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
             <SettingsField label="Exam Start" noBorderRight>
               <Input
                 type="date"
@@ -476,7 +526,13 @@ function SettingsPage() {
                 Include mess fees in spending calculations
               </p>
             </div>
-            <Switch checked={mess} onCheckedChange={setMess} />
+            <Switch
+              checked={mess}
+              onCheckedChange={(value) => {
+                setMess(value);
+                if (value) setMealRoutine("hostel_mess");
+              }}
+            />
           </div>
 
           {mess && (

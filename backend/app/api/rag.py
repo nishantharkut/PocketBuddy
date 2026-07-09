@@ -19,6 +19,7 @@ from app.services.ai_guardrails import (
 from app.services.bedrock import generate_json, generate_text
 from app.services.runway import build_runway_forecast, cycle_bounds, derive_pool_obligations
 from app.services.subscriptions import detect_recurring_subscriptions
+from app.services.wellness import current_meal_gap_hours, meal_signal_events
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -338,20 +339,30 @@ async def get_campus_intel(user_id: str = Depends(get_current_user)):
 
     profile = await db.profiles.find_one({"_id": user_id})
 
-    # Basic spending stats
     now = datetime.datetime.utcnow()
     since_7 = now - datetime.timedelta(days=7)
     cycle_start, cycle_end = cycle_bounds(int((profile or {}).get("cycle_start_day") or 1), now)
     cursor = db.transactions.find({"user_id": user_id, "created_at": {"$gte": min(since_7, cycle_start)}})
     txns = await cursor.to_list(length=500)
-    spend_7 = sum(_doc_amount_paise(t) for t in txns if _is_debit_transaction(t) and (_doc_datetime(t.get("created_at")) or now) >= since_7) / 100
-    cycle_spend = sum(_doc_amount_paise(t) for t in txns if _is_debit_transaction(t) and cycle_start <= (_doc_datetime(t.get("created_at")) or now) < cycle_end) / 100
-    food_txns = [t for t in txns if t.get("category") == "food" and _is_debit_transaction(t)]
-    last_food_hours = 0
-    if food_txns:
-        last_food = max(food_txns, key=lambda t: t.get("created_at", datetime.datetime.min))
-        last_food_at = _doc_datetime(last_food.get("created_at")) or now
-        last_food_hours = (now - last_food_at).total_seconds() / 3600
+    debit_txns = [t for t in txns if _is_debit_transaction(t)]
+    spend_7 = sum(
+        _doc_amount_paise(t)
+        for t in debit_txns
+        if (_doc_datetime(t.get("created_at")) or now) >= since_7
+    ) / 100
+    cycle_spend = sum(
+        _doc_amount_paise(t)
+        for t in debit_txns
+        if cycle_start <= (_doc_datetime(t.get("created_at")) or now) < cycle_end
+    ) / 100
+    food_txns = [t for t in debit_txns if t.get("category") == "food"]
+    checkins = await db.checkin_logs.find({
+        "user_id": user_id,
+        "created_at": {"$gte": since_7},
+    }).sort("created_at", -1).to_list(length=500)
+    meal_events = meal_signal_events(food_txns, checkins)
+    last_food_hours = current_meal_gap_hours(now, meal_events, default=0.0)
+    last_food_source = meal_events[-1]["source"] if meal_events else None
 
     allowance = ((profile or {}).get("monthly_allowance", 0) or 0) / 100
     remaining = max(0, allowance - cycle_spend)
@@ -376,7 +387,7 @@ async def get_campus_intel(user_id: str = Depends(get_current_user)):
         f"cycle_days_left={days_left}",
         f"safe_daily_spend_rs={safe_daily:.0f}",
         f"upcoming_commitments_7d_rs={upcoming_commitments:.0f}",
-        f"last_food_transaction_hours={last_food_hours:.1f}",
+        f"last_food_signal_hours={last_food_hours:.1f}",
     ]
     fallback_reason = "bedrock_disabled" if not settings.BEDROCK_ENABLED else "bedrock_unavailable"
 
@@ -442,28 +453,36 @@ Return ONLY valid JSON:
 {{"focus":"runway|spend|commitments|routine|steady","headline":"under 6 words","next_action":"one concise action sentence","why":"one concise reason sentence","summary":"one sentence combining the action and reason"}}
 """
 
+            allowed_rupees = _rounded_rupees(
+                spend_7,
+                remaining,
+                safe_daily,
+                weekly_daily_pace,
+                upcoming_commitments,
+                safe_budget_paise / 100,
+            ) + _trusted_food_rupees(ranked_foods[:5])
+            allowed_times = [7, 30, days_left, round(last_food_hours, 1)]
+            allowed_entities = _trusted_food_entities(ranked_foods[:5])
             result = generate_json(prompt, max_tokens=160, temperature=0.15)
             focus = str(result.get("focus") or fallback_insight["focus"]).strip().lower()
             if focus not in {"runway", "spend", "commitments", "routine", "steady"}:
                 focus = fallback_insight["focus"]
             headline = validate_grounded_advice(
                 result.get("headline"),
-                allowed_rupee_values=_rounded_rupees(spend_7, remaining, safe_daily, weekly_daily_pace, upcoming_commitments, safe_budget_paise / 100)
-                + _trusted_food_rupees(ranked_foods[:5]),
-                allowed_time_values=[7, days_left, last_food_hours, upcoming_commitment_count],
+                allowed_rupee_values=allowed_rupees,
+                allowed_time_values=allowed_times,
                 allowed_plain_values=[upcoming_commitment_count],
-                allowed_entities=_trusted_food_entities(ranked_foods[:5]),
+                allowed_entities=allowed_entities,
                 forbidden_terms=EXTERNAL_FOOD_APP_TERMS,
                 max_chars=80,
                 max_sentences=1,
             )
             next_action = validate_grounded_advice(
                 result.get("next_action"),
-                allowed_rupee_values=_rounded_rupees(spend_7, remaining, safe_daily, weekly_daily_pace, upcoming_commitments, safe_budget_paise / 100)
-                + _trusted_food_rupees(ranked_foods[:5]),
-                allowed_time_values=[7, days_left, last_food_hours, upcoming_commitment_count],
+                allowed_rupee_values=allowed_rupees,
+                allowed_time_values=allowed_times,
                 allowed_plain_values=[upcoming_commitment_count],
-                allowed_entities=_trusted_food_entities(ranked_foods[:5]),
+                allowed_entities=allowed_entities,
                 require_entity=focus == "routine" and last_food_hours > 10 and bool(ranked_foods),
                 forbidden_terms=EXTERNAL_FOOD_APP_TERMS,
                 max_chars=180,
@@ -471,22 +490,20 @@ Return ONLY valid JSON:
             )
             why = validate_grounded_advice(
                 result.get("why"),
-                allowed_rupee_values=_rounded_rupees(spend_7, remaining, safe_daily, weekly_daily_pace, upcoming_commitments, safe_budget_paise / 100)
-                + _trusted_food_rupees(ranked_foods[:5]),
-                allowed_time_values=[7, days_left, last_food_hours, upcoming_commitment_count],
+                allowed_rupee_values=allowed_rupees,
+                allowed_time_values=allowed_times,
                 allowed_plain_values=[upcoming_commitment_count],
-                allowed_entities=_trusted_food_entities(ranked_foods[:5]),
+                allowed_entities=allowed_entities,
                 forbidden_terms=EXTERNAL_FOOD_APP_TERMS,
                 max_chars=180,
                 max_sentences=1,
             )
             summary = validate_grounded_advice(
                 result.get("summary"),
-                allowed_rupee_values=_rounded_rupees(spend_7, remaining, safe_daily, weekly_daily_pace, upcoming_commitments, safe_budget_paise / 100)
-                + _trusted_food_rupees(ranked_foods[:5]),
-                allowed_time_values=[7, days_left, last_food_hours, upcoming_commitment_count],
+                allowed_rupee_values=allowed_rupees,
+                allowed_time_values=allowed_times,
                 allowed_plain_values=[upcoming_commitment_count],
-                allowed_entities=_trusted_food_entities(ranked_foods[:5]),
+                allowed_entities=allowed_entities,
                 forbidden_terms=EXTERNAL_FOOD_APP_TERMS,
                 max_chars=360,
                 max_sentences=2,
@@ -508,6 +525,7 @@ Return ONLY valid JSON:
                     "upcoming_commitments": upcoming_commitments,
                     "safe_food_budget": round(safe_budget_paise / 100),
                     "last_food_hours": round(last_food_hours, 1),
+                    "last_food_signal_source": last_food_source,
                     **ai_response_metadata(source="bedrock", facts_used=facts_used),
                 }
         except GroundingError as exc:
@@ -527,6 +545,7 @@ Return ONLY valid JSON:
         "upcoming_commitments": upcoming_commitments,
         "safe_food_budget": round(safe_budget_paise / 100),
         "last_food_hours": round(last_food_hours, 1),
+        "last_food_signal_source": last_food_source,
         **ai_response_metadata(source="local_fallback", facts_used=facts_used, fallback_reason=fallback_reason),
     }
 
@@ -556,10 +575,19 @@ async def get_runway_intel(user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"_id": user_id}) or {}
     full_name = str(user.get("full_name") or "").strip()
     pool_ids: set[str] = set()
+    user_item_query: dict = {"added_by_user_id": user_id}
     if full_name:
         name_regex = re.compile(f"^{re.escape(full_name)}$", re.IGNORECASE)
-        user_items = await db.cart_pool_items.find({"added_by_name": name_regex}).to_list(length=1000)
-        pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
+        user_item_query = {
+            "$or": [
+                {"added_by_user_id": user_id},
+                {"added_by_user_id": {"$exists": False}, "added_by_name": name_regex},
+                {"added_by_user_id": None, "added_by_name": name_regex},
+                {"added_by_user_id": "", "added_by_name": name_regex},
+            ]
+        }
+    user_items = await db.cart_pool_items.find(user_item_query).to_list(length=1000)
+    pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
 
     hosted = await db.cart_pools.find(
         {"host_id": user_id, "status": {"$in": ["open", "closed", "completed"]}}
@@ -606,11 +634,17 @@ async def get_runway_intel(user_id: str = Depends(get_current_user)):
     next_action_title = str(next_action.get("title") or "Keep runway stable")
     next_action_detail = str(next_action.get("detail") or "Keep discretionary spend inside the safe daily limit.")
     decision_summary = str(decision_engine.get("summary") or "")
+    pace_source = str((forecast.get("projection") or {}).get("pace_source") or "")
+    stress_band = (forecast.get("projection") or {}).get("stress_band") or {}
+    expected_days = int((stress_band.get("expected") or {}).get("days_until_broke") or broke_days)
+    stress_days = int((stress_band.get("stress") or {}).get("days_until_broke") or broke_days)
     days_before_cycle_end = max(0, days_left - broke_days)
     shortfall_percent = round(shortfall_prob * 100)
     facts_used = [
         f"cycle_days_left={days_left}",
         f"days_until_broke={broke_days}",
+        f"expected_runway_days={expected_days}",
+        f"stress_runway_days={stress_days}",
         f"shortfall_probability_percent={shortfall_percent}",
         f"safe_daily_spend_rs={safe_daily}",
         f"projected_daily_spend_rs={projected_daily}",
@@ -621,10 +655,24 @@ async def get_runway_intel(user_id: str = Depends(get_current_user)):
     fallback_reason = "bedrock_disabled" if not settings.BEDROCK_ENABLED else "bedrock_unavailable"
 
     # Build local fallback
-    if status == "shortfall":
+    if status == "setup_required":
         fallback_summary = (
-            f"Based on your current spending pace, you will run out of allowance in {broke_days} days "
-            f"({days_left - broke_days} days before the cycle ends). "
+            "Runway needs your allowance or an allowance credit before it can produce a trusted daily limit. "
+            "Add funding in Settings or sync transactions first; no spending recommendation is shown yet."
+        )
+    elif next_action.get("type") == "pause_flexible":
+        fallback_summary = (
+            "There is no safe discretionary amount left after known spending and commitments. "
+            "Pause flexible spending until reset, or add funding before making non-essential payments."
+        )
+    elif pace_source == "no_recent_history":
+        fallback_summary = (
+            f"Use Rs {safe_daily:,}/day only as a temporary cap because there is not enough recent spend history yet. "
+            "Sync or add a few real payments before relying on pace-based suggestions."
+        )
+    elif status == "shortfall":
+        fallback_summary = (
+            f"Expected runway is {expected_days} days, with a stress case of {stress_days} days. "
             f"Ask home for Rs {ask_amount:,} and follow this next action: {next_action_detail}"
         )
     elif status == "watch" or shortfall_prob >= 0.35:
@@ -641,23 +689,24 @@ async def get_runway_intel(user_id: str = Depends(get_current_user)):
     # Try Bedrock
     if settings.BEDROCK_ENABLED:
         try:
-            prompt = f"""You are PocketBuddy, a student budget advisor for college students.
+            prompt = f"""You are PocketBuddy, a campus affordability explainer for college students.
 Here is the student's runway forecast details:
 - Cycle days left: {days_left} days
 - Safe daily spend limit: Rs {safe_daily}
 - Current daily spend pace (EWMA): Rs {projected_daily}
 - Forecast status: {str(status or "steady").upper()}
 - Shortfall probability: {shortfall_prob * 100:.0f}%
-- Days until broke: {broke_days} (out of {days_left} days left)
+- Expected runway: {expected_days} days
+- Stress-case runway: {stress_days} days
 - Ask home amount needed: Rs {ask_amount}
 - Upcoming commitments total: Rs {commitments_total}
 - Meal routine: {food_label}
 - Food pace: Rs {food_pace}/day
 - Suggested food cap: Rs {food_cap}/day
 - Decision engine summary: {decision_summary}
-- Next best action: {next_action_title} — {next_action_detail}
+- Next best action: {next_action_title} - {next_action_detail}
 
-Generate exactly 2 concise, personalized, and action-oriented sentences. Be direct, reference the specific numbers, and suggest concrete actions that match their meal routine. Do not invent phone numbers, contacts, merchant names, or guarantees. No emojis. No preamble."""
+Generate exactly 2 concise, personalized, and action-oriented sentences. Explain only the deterministic values above. Do not calculate new amounts. Do not invent amounts, dates, probabilities, contacts, merchant names, guarantees, or extra actions. No emojis. No preamble."""
 
             text = validate_grounded_advice(
                 generate_text(prompt, max_tokens=150, temperature=0.2),
@@ -671,7 +720,7 @@ Generate exactly 2 concise, personalized, and action-oriented sentences. Be dire
                     food_cap,
                 ),
                 allowed_percent_values=[shortfall_percent],
-                allowed_time_values=[days_left, broke_days, days_before_cycle_end],
+                allowed_time_values=[days_left, broke_days, expected_days, stress_days, days_before_cycle_end],
                 max_chars=420,
             )
             if text:

@@ -142,6 +142,8 @@ function Onboarding() {
 
   // Step 2
   const [mess, setMess] = useState(true);
+  const [residenceType, setResidenceType] = useState("hostel");
+  const [mealRoutine, setMealRoutine] = useState("hostel_mess");
   const [meals, setMeals] = useState<{ breakfast: boolean; lunch: boolean; dinner: boolean }>({
     breakfast: false,
     lunch: true,
@@ -204,6 +206,9 @@ function Onboarding() {
         if (data.wing_label) setWing(data.wing_label);
         if (data.room_number) setRoom(data.room_number);
         if (data.phone) setPhone(data.phone);
+        if (data.residence_type) setResidenceType(data.residence_type);
+        if (data.meal_routine) setMealRoutine(data.meal_routine);
+        if (typeof data.mess_enrolled === "boolean") setMess(data.mess_enrolled);
       })
       .catch((err) => console.error("Onboarding profile load error:", err));
   }, [user]);
@@ -279,6 +284,8 @@ function Onboarding() {
       await updateProfile({
         data: {
           mess_enrolled: mess,
+          residence_type: residenceType,
+          meal_routine: mealRoutine,
           meal_schedule: meals,
           upi_apps_used: upiApps.map((a) => a.toLowerCase().replace(/\s+/g, "")),
           exam_start_date: examStart || null,
@@ -517,21 +524,28 @@ function Onboarding() {
             <div className="mb-2">
               <h2 className="text-[20px] font-black tracking-tight text-foreground uppercase">Your Daily Routine</h2>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Helps us spot study stress and meal-skipping patterns.
+                Helps PocketBuddy keep meal and runway nudges practical during busy weeks.
               </p>
             </div>
 
             <Field label="Enrolled in Hostel Mess?">
               <div id="toggle-ob-mess" className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => setMess(true)}
+                  onClick={() => {
+                    setMess(true);
+                    setResidenceType("hostel");
+                    setMealRoutine("hostel_mess");
+                  }}
                   className={`rounded-md border p-3.5 text-left text-xs transition-all cursor-pointer ${mess ? "border-primary bg-primary/5 font-semibold text-foreground" : "border-border bg-surface-raised/40 text-muted-foreground hover:border-white/10"}`}
                 >
                   <p className="font-bold">Yes</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Mess enrolled</p>
                 </button>
                 <button
-                  onClick={() => setMess(false)}
+                  onClick={() => {
+                    setMess(false);
+                    if (mealRoutine === "hostel_mess") setMealRoutine("mixed");
+                  }}
                   className={`rounded-md border p-3.5 text-left text-xs transition-all cursor-pointer ${!mess ? "border-primary bg-primary/5 font-semibold text-foreground" : "border-border bg-surface-raised/40 text-muted-foreground hover:border-white/10"}`}
                 >
                   <p className="font-bold">No</p>
@@ -539,6 +553,53 @@ function Onboarding() {
                 </button>
               </div>
             </Field>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Living Setup">
+                <Select
+                  value={residenceType}
+                  onValueChange={(value) => {
+                    setResidenceType(value);
+                    if (value === "hostel") {
+                      setMess(true);
+                      setMealRoutine("hostel_mess");
+                    }
+                    if (value === "pg") {
+                      setMess(false);
+                      setMealRoutine("pg_cooking");
+                    }
+                    if (value === "day_scholar") {
+                      setMess(false);
+                      setMealRoutine("day_scholar");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-10 text-xs">
+                    <SelectValue placeholder="Select setup" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hostel">Hostel / dorm</SelectItem>
+                    <SelectItem value="pg">PG / rented room</SelectItem>
+                    <SelectItem value="day_scholar">Day scholar / commute</SelectItem>
+                    <SelectItem value="mixed">Mixed routine</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label="Meal Routine">
+                <Select value={mealRoutine} onValueChange={setMealRoutine}>
+                  <SelectTrigger className="h-10 text-xs">
+                    <SelectValue placeholder="Select routine" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hostel_mess">Hostel mess / campus meals</SelectItem>
+                    <SelectItem value="pg_cooking">PG cooking / groceries</SelectItem>
+                    <SelectItem value="day_scholar">Day scholar meals</SelectItem>
+                    <SelectItem value="mixed">Mixed routine</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
 
             {mess && (
               <Field label="Meals You Typically Eat">
@@ -581,7 +642,7 @@ function Onboarding() {
                 </div>
               </div>
               <p className="mt-1.5 text-[10px] text-zinc-500 pl-1 leading-normal">
-                We will monitor your schedule during this stressful period.
+                Exam dates only adjust meal check-ins and safe-spend reminders.
               </p>
             </div>
 

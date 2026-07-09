@@ -16,6 +16,8 @@ class ProfileUpdateReq(BaseModel):
     hostel_block: Optional[str] = None
     wing_label: Optional[str] = None
     room_number: Optional[str] = None
+    residence_type: Optional[Literal["hostel", "pg", "day_scholar", "mixed"]] = None
+    meal_routine: Optional[Literal["hostel_mess", "pg_cooking", "day_scholar", "mixed"]] = None
     exam_start_date: Optional[str] = None
     exam_end_date: Optional[str] = None
     mess_enrolled: Optional[bool] = None

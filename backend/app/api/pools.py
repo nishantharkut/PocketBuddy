@@ -5,7 +5,7 @@ import datetime
 import re
 from typing import Optional
 from app.core.database import get_db
-from app.core.security import get_current_user, map_doc, map_docs
+from app.core.security import get_current_user, get_optional_current_user, map_doc, map_docs
 
 router = APIRouter()
 
@@ -16,6 +16,11 @@ MAX_ITEM_PRICE_PAISE = 500_000
 MAX_NAME_CHARS = 80
 MAX_DESCRIPTION_CHARS = 200
 MAX_URL_CHARS = 2048
+MAX_ITEM_QUANTITY = 50
+PAYMENT_AMOUNT_TOLERANCE_PAISE = 500
+PAYMENT_OVERDUE_HOURS = 24
+PAYMENT_ESCALATED_HOURS = 48
+PAYMENT_ACTIVE_STATUSES = {"pending", "needs_review", "verified"}
 
 class PoolReq(BaseModel):
     wing_label: str
@@ -51,13 +56,20 @@ class PoolItemReq(BaseModel):
     added_by_name: str
     item_description: str
     estimated_price: int
+    quantity: int = 1
+    unit_price: Optional[int] = None
     product_url: Optional[str] = None
 
 class PoolItemUpdateReq(BaseModel):
     is_purchased: Optional[bool] = None
     estimated_price: Optional[int] = None
+    quantity: Optional[int] = None
+    unit_price: Optional[int] = None
     item_description: Optional[str] = None
     product_url: Optional[str] = None
+    cart_status: Optional[str] = None
+    substitute_note: Optional[str] = None
+    cart_status_reason: Optional[str] = None
 
 
 def utcnow() -> datetime.datetime:
@@ -79,8 +91,220 @@ def clean_text(value: Optional[str], field_name: str, max_chars: int = MAX_NAME_
     return cleaned
 
 
+def clean_optional_text(value: Optional[str], field_name: str, max_chars: int = MAX_DESCRIPTION_CHARS) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = " ".join(value.strip().split())
+    if not cleaned:
+        return None
+    if len(cleaned) > max_chars:
+        raise HTTPException(status_code=400, detail=f"{field_name} is too long")
+    return cleaned
+
+
 def name_key(value: Optional[str]) -> str:
     return " ".join((value or "").strip().split()).casefold()
+
+
+def parse_datetime(value) -> Optional[datetime.datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime.datetime):
+        return to_utc_naive(value)
+    try:
+        return to_utc_naive(datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00")))
+    except (TypeError, ValueError):
+        return None
+
+
+def hours_since(value, now: Optional[datetime.datetime] = None) -> Optional[float]:
+    parsed = parse_datetime(value)
+    if not parsed:
+        return None
+    return max(0.0, ((now or utcnow()) - parsed).total_seconds() / 3600.0)
+
+
+def is_host_name(pool: dict, participant_name: Optional[str]) -> bool:
+    participant_key = name_key(participant_name)
+    return participant_key in {"you", "host"} or participant_key == name_key(pool.get("created_by_name"))
+
+
+def build_host_android_status(host_profile: Optional[dict]) -> dict:
+    if not host_profile or not host_profile.get("companion_paired"):
+        return {
+            "state": "not_paired",
+            "label": "Manual verification",
+            "detail": "Host has not paired the Android connector, so incoming split credits cannot auto-verify.",
+            "can_auto_verify": False,
+        }
+
+    if host_profile.get("companion_sync_enabled") is False:
+        return {
+            "state": "paused",
+            "label": "Auto-verification paused",
+            "detail": "Host Android connector is paired but sync is paused.",
+            "can_auto_verify": False,
+        }
+
+    last_sync_hours = hours_since(host_profile.get("companion_last_sync"))
+    if last_sync_hours is None:
+        return {
+            "state": "paired_waiting",
+            "label": "Waiting for first sync",
+            "detail": "Host Android connector is paired, but no payment alert has synced yet.",
+            "can_auto_verify": False,
+        }
+
+    if last_sync_hours > 24:
+        return {
+            "state": "stale",
+            "label": "Sync stale",
+            "detail": "Host Android connector has not synced in the last 24 hours.",
+            "can_auto_verify": False,
+            "last_sync_hours": round(last_sync_hours, 1),
+        }
+
+    return {
+        "state": "active",
+        "label": "Auto-verification ready",
+        "detail": "Host Android connector is active and can match incoming split credits.",
+        "can_auto_verify": True,
+        "last_sync_hours": round(last_sync_hours, 1),
+    }
+
+
+def build_payment_state(
+    pool: dict,
+    participant_name: str,
+    payment: Optional[dict],
+    expected_amount: int,
+    now: Optional[datetime.datetime] = None,
+) -> dict:
+    now = now or utcnow()
+    if is_host_name(pool, participant_name):
+        return {
+            "status": "host",
+            "label": "Host share",
+            "tone": "success",
+            "detail": "Host share is settled by the checkout payment.",
+            "is_overdue": False,
+            "overdue_hours": 0,
+        }
+
+    completed_at = parse_datetime(pool.get("completed_at"))
+    elapsed_hours = max(0.0, (now - completed_at).total_seconds() / 3600.0) if completed_at else 0.0
+    status = (payment or {}).get("status") or "unpaid"
+
+    if status == "verified":
+        source = (payment or {}).get("verification_source") or (payment or {}).get("settlement_mode") or "host_verified"
+        if source == "auto_host_credit":
+            detail = "Matched to an incoming host credit from Android sync."
+        elif source == "host_manual_review":
+            detail = "Host manually confirmed the incoming credit."
+        elif source == "host_settle_in_kind" or (payment or {}).get("settlement_mode") == "settle_in_kind":
+            detail = "Host settled this split outside cash transfer."
+        else:
+            detail = "Payment has been verified."
+        return {
+            "status": "verified",
+            "label": "Verified",
+            "tone": "success",
+            "detail": detail,
+            "is_overdue": False,
+            "overdue_hours": 0,
+        }
+
+    if status == "pending":
+        return {
+            "status": "pending",
+            "label": "UTR pending",
+            "tone": "warning",
+            "detail": "Roommate submitted a UTR; waiting for host credit match or host review.",
+            "is_overdue": elapsed_hours >= PAYMENT_OVERDUE_HOURS,
+            "overdue_hours": round(elapsed_hours, 1) if elapsed_hours >= PAYMENT_OVERDUE_HOURS else 0,
+        }
+
+    if status == "needs_review":
+        return {
+            "status": "needs_review",
+            "label": "Needs review",
+            "tone": "warning",
+            "detail": (payment or {}).get("review_reason") or "A possible payment matched, but PocketBuddy needs host confirmation before trusting it.",
+            "is_overdue": elapsed_hours >= PAYMENT_OVERDUE_HOURS,
+            "overdue_hours": round(elapsed_hours, 1) if elapsed_hours >= PAYMENT_OVERDUE_HOURS else 0,
+        }
+
+    if status == "rejected":
+        return {
+            "status": "rejected",
+            "label": "Rejected",
+            "tone": "danger",
+            "detail": (payment or {}).get("rejection_reason") or "Host rejected this reference because no matching credit was found.",
+            "is_overdue": True,
+            "overdue_hours": round(elapsed_hours, 1),
+        }
+
+    label = "Overdue" if elapsed_hours >= PAYMENT_OVERDUE_HOURS else "Unpaid"
+    detail = (
+        f"No payment recorded for this Rs {expected_amount / 100:.2f} split after checkout."
+        if elapsed_hours >= PAYMENT_OVERDUE_HOURS
+        else f"Waiting for Rs {expected_amount / 100:.2f} split settlement."
+    )
+    return {
+        "status": "unpaid",
+        "label": label,
+        "tone": "danger" if elapsed_hours >= PAYMENT_ESCALATED_HOURS else "warning",
+        "detail": detail,
+        "is_overdue": elapsed_hours >= PAYMENT_OVERDUE_HOURS,
+        "overdue_hours": round(elapsed_hours, 1) if elapsed_hours >= PAYMENT_OVERDUE_HOURS else 0,
+    }
+
+
+def build_settlement_summary(split_breakdown: dict, host_android_status: dict) -> dict:
+    roommate_rows = [
+        row for row in split_breakdown.values()
+        if row.get("payment_status") != "host"
+    ]
+    counts = {
+        "total_roommates": len(roommate_rows),
+        "verified": 0,
+        "pending": 0,
+        "needs_review": 0,
+        "rejected": 0,
+        "unpaid": 0,
+        "overdue": 0,
+    }
+    outstanding_total = 0
+    review_total = 0
+
+    for row in roommate_rows:
+        status = row.get("payment_status") or "unpaid"
+        if status not in counts:
+            status = "unpaid"
+        counts[status] += 1
+        if row.get("is_overdue"):
+            counts["overdue"] += 1
+        if status != "verified":
+            outstanding_total += int(row.get("total") or 0)
+        if status in {"pending", "needs_review", "rejected"}:
+            review_total += int(row.get("total") or 0)
+
+    if counts["needs_review"] or counts["pending"]:
+        next_action = "Review submitted UTRs against host credits."
+    elif counts["overdue"]:
+        next_action = "Nudge overdue roommates or settle in kind after confirming with them."
+    elif outstanding_total:
+        next_action = "Collect unpaid splits from roommates."
+    else:
+        next_action = "All roommate splits are settled."
+
+    return {
+        **counts,
+        "outstanding_total": outstanding_total,
+        "review_total": review_total,
+        "next_action": next_action,
+        "host_android_status": host_android_status,
+    }
 
 
 def validate_paise_amount(
@@ -124,6 +348,46 @@ def validate_product_url(value: Optional[str]) -> Optional[str]:
     if len(url) > MAX_URL_CHARS or any(ch.isspace() for ch in url):
         raise HTTPException(status_code=400, detail="Invalid product URL")
     return url
+
+
+def validate_item_quantity(value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise HTTPException(status_code=400, detail="Quantity must be an integer")
+    if value < 1 or value > MAX_ITEM_QUANTITY:
+        raise HTTPException(status_code=400, detail=f"Quantity must be between 1 and {MAX_ITEM_QUANTITY}")
+    return value
+
+
+def validate_cart_status(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    status = value.strip().lower()
+    allowed = {"pending", "added", "substituted", "unavailable", "skipped"}
+    if status not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid cart status")
+    return status
+
+
+def default_cart_status_reason(status: Optional[str]) -> Optional[str]:
+    if status == "added":
+        return "Host added this product to the cart."
+    if status == "substituted":
+        return "Host added a substitute for this product."
+    if status == "unavailable":
+        return "This product was unavailable in the app."
+    if status == "skipped":
+        return "Host skipped this item before checkout."
+    if status == "pending":
+        return "Host moved this item back to the active cart."
+    return None
+
+
+def item_edit_reason(is_host: bool, is_host_item: bool) -> Optional[str]:
+    if is_host and not is_host_item:
+        return "Host updated this request. Review the latest quantity, price, or link before checkout."
+    if not is_host:
+        return "Roommate updated this request. Host should review the latest details."
+    return None
 
 
 def parse_expires_at(value: str) -> datetime.datetime:
@@ -176,6 +440,7 @@ async def get_roommate_reliability(db, wing_label: str) -> dict:
                 "total_pools": 0,
                 "verified_pools": 0,
                 "pending_pools": 0,
+                "late_pools": 0,
                 "total_repayment_time_sec": 0.0,
             })
             stats["total_pools"] += 1
@@ -185,12 +450,14 @@ async def get_roommate_reliability(db, wing_label: str) -> dict:
             
             if pm and pm.get("status") == "verified":
                 stats["verified_pools"] += 1
-                pay_time_str = pm.get("submitted_at") or pm.get("verified_at")
+                pay_time_str = pm.get("verified_at") or pm.get("submitted_at")
                 if pay_time_str:
                     try:
                         pay_time = datetime.datetime.fromisoformat(pay_time_str.replace("Z", "+00:00")).replace(tzinfo=None)
                         diff_sec = max(0.0, (pay_time - completed_at).total_seconds())
                         stats["total_repayment_time_sec"] += diff_sec
+                        if diff_sec > PAYMENT_OVERDUE_HOURS * 3600:
+                            stats["late_pools"] += 1
                     except:
                         pass
             else:
@@ -218,7 +485,7 @@ async def get_roommate_reliability(db, wing_label: str) -> dict:
             pm = next((p for p in payments if name_key(p["name"]) == r_key), None)
             
             if pm and pm.get("status") == "verified":
-                pay_time_str = pm.get("submitted_at") or pm.get("verified_at")
+                pay_time_str = pm.get("verified_at") or pm.get("submitted_at")
                 if pay_time_str:
                     try:
                         pay_time = datetime.datetime.fromisoformat(pay_time_str.replace("Z", "+00:00")).replace(tzinfo=None)
@@ -250,21 +517,31 @@ async def get_roommate_reliability(db, wing_label: str) -> dict:
         if avg_score >= 95:
             label = "Instant payer"
             color = "green"
+            explanation = "Usually settles within an hour after checkout."
         elif avg_score >= 85:
             label = "Pays in hours"
             color = "blue"
+            explanation = "Usually settles the same day after checkout."
         elif avg_score >= 70:
             label = "Usually next day"
             color = "yellow"
+            explanation = "Has paid before, but may need a reminder."
         else:
             label = "Needs reminder"
             color = "red"
+            explanation = "Often remains unpaid or takes more than a day to settle."
             
         reliability[stats["name"]] = {
             "name": stats["name"],
             "score": avg_score,
             "label": label,
             "color": color,
+            "explanation": explanation,
+            "signals": {
+                "completed_splits": stats["verified_pools"],
+                "unsettled_splits": stats["pending_pools"],
+                "late_splits": stats["late_pools"],
+            },
             "total_pools": total_pools,
             "pending_pools": stats["pending_pools"],
             "avg_repayment_time_hours": round((stats["total_repayment_time_sec"] / stats["verified_pools"] / 3600.0) if stats["verified_pools"] > 0 else 0.0, 1)
@@ -273,14 +550,155 @@ async def get_roommate_reliability(db, wing_label: str) -> dict:
     return reliability
 
 
+def public_host_android_status() -> dict:
+    return {
+        "state": "private",
+        "label": "Host verification private",
+        "detail": "Host device sync status is visible only to the pool host.",
+        "can_auto_verify": False,
+    }
+
+
+def pool_participant_key_set(items: list[dict], user_id: Optional[str]) -> set[str]:
+    if not user_id:
+        return set()
+    return {
+        name_key(item.get("added_by_name"))
+        for item in items
+        if item.get("added_by_user_id") == user_id and item.get("added_by_name")
+    }
+
+
+async def resolve_pool_participant_user(db, pool: dict, items: list[dict], participant_name: str) -> Optional[dict]:
+    participant_key = name_key(participant_name)
+    user_ids = {
+        item.get("added_by_user_id")
+        for item in items
+        if name_key(item.get("added_by_name")) == participant_key and item.get("added_by_user_id")
+    }
+    if len(user_ids) == 1:
+        return await db.users.find_one({"_id": next(iter(user_ids))})
+
+    wing_label = pool.get("wing_label")
+    if not wing_label:
+        return None
+
+    profiles_cursor = db.profiles.find({"wing_label": wing_label})
+    profiles = await profiles_cursor.to_list(length=100)
+    wing_user_ids = [profile.get("_id") for profile in profiles if profile.get("_id")]
+    if not wing_user_ids:
+        return None
+
+    users_cursor = db.users.find({"_id": {"$in": wing_user_ids}})
+    users = await users_cursor.to_list(length=100)
+    exact_matches = [
+        user for user in users
+        if name_key(user.get("full_name")) == participant_key
+    ]
+    return exact_matches[0] if len(exact_matches) == 1 else None
+
+
+def sanitize_split_row(row: dict, *, can_view_contact: bool, can_view_settlement: bool) -> dict:
+    safe_row = dict(row)
+    if not can_view_contact:
+        safe_row["email"] = ""
+    if not can_view_settlement:
+        safe_row["utr"] = ""
+        safe_row["settlement_mode"] = None
+        safe_row["confidence"] = None
+        safe_row["verification_source"] = None
+        safe_row["review_reason"] = None
+        safe_row["matched_amount"] = None
+    return safe_row
+
+
+def sanitize_payment_list(pool: dict, viewer_participant_keys: set[str], is_host_viewer: bool) -> list[dict]:
+    payments = pool.get("payments") or []
+    if is_host_viewer:
+        return payments
+    if not viewer_participant_keys:
+        return []
+    return [
+        payment for payment in payments
+        if name_key(payment.get("name")) in viewer_participant_keys
+    ]
+
+
+def sanitize_pool_item_for_viewer(item: dict, current_user_id: Optional[str], host_id: Optional[str]) -> dict:
+    safe_item = dict(item)
+    can_view_internal = bool(
+        current_user_id
+        and (
+            current_user_id == host_id
+            or current_user_id == item.get("added_by_user_id")
+        )
+    )
+    if not can_view_internal:
+        for field in ("added_by_user_id", "item_updated_by", "cart_status_updated_by"):
+            safe_item.pop(field, None)
+    return safe_item
+
+
+async def resolve_payment_claim_roommate_name(
+    db,
+    pool: dict,
+    items: list[dict],
+    user_id: Optional[str],
+    requested_roommate_name: str,
+) -> str:
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Log in before submitting a payment reference")
+    if pool.get("host_id") == user_id:
+        raise HTTPException(status_code=400, detail="Host should verify payments from the collection queue")
+
+    active_items = [item for item in items if item.get("is_purchased", True)]
+    requested_key = name_key(requested_roommate_name)
+    participant_names = [item.get("added_by_name") for item in active_items if item.get("added_by_name")]
+    exact_requested_name = next(
+        (name for name in participant_names if name_key(name) == requested_key),
+        None,
+    )
+    if not exact_requested_name:
+        raise HTTPException(status_code=400, detail="Roommate is not part of this pool")
+    if is_host_name(pool, exact_requested_name):
+        raise HTTPException(status_code=400, detail="Host share does not need roommate payment confirmation")
+
+    owned_names = [
+        item.get("added_by_name")
+        for item in active_items
+        if item.get("added_by_user_id") == user_id and item.get("added_by_name")
+    ]
+    if owned_names:
+        exact_owned_name = next(
+            (name for name in owned_names if name_key(name) == requested_key),
+            None,
+        )
+        if exact_owned_name:
+            return exact_owned_name
+        raise HTTPException(status_code=403, detail="You can submit a payment reference only for your own split")
+
+    user_doc = await db.users.find_one({"_id": user_id})
+    user_name_key = name_key((user_doc or {}).get("full_name"))
+    if user_name_key and user_name_key == requested_key:
+        return exact_requested_name
+
+    raise HTTPException(status_code=403, detail="You can submit a payment reference only for your own split")
+
+
 async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = None) -> dict:
     pool_id = p["_id"] if "_id" in p else p.get("id")
     host_id = p.get("host_id")
+    is_host_viewer = bool(current_user_id and host_id and current_user_id == host_id)
     host_user = await db.users.find_one({"_id": host_id}) if host_id else None
-    p["host_phone"] = host_user.get("phone_number", "") if host_user else ""
+    host_profile = await db.profiles.find_one({"_id": host_id}) if host_id else None
+    host_android_status = build_host_android_status(host_profile)
+    p["host_android_status"] = host_android_status
     
     items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
     items = await items_cursor.to_list(length=200)
+    viewer_participant_keys = pool_participant_key_set(items, current_user_id)
+    can_view_host_contact = is_host_viewer or bool(viewer_participant_keys)
+    p["host_phone"] = host_user.get("phone_number", "") if host_user and can_view_host_contact else ""
     
     grouped = {}
     for item in items:
@@ -297,24 +715,41 @@ async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = Non
         
         for name in active_participants:
             p_items_total = sum(it["estimated_price"] for it in grouped[name] if it.get("is_purchased", True))
-            payment = next((pay for pay in p.get("payments", []) if pay["name"].lower() == name.lower()), None)
+            payment = next((pay for pay in p.get("payments", []) if name_key(pay.get("name")) == name_key(name)), None)
             is_host = (name.lower() == "you" or name_key(name) == name_key(p.get("created_by_name")))
+            expected_total = p_items_total + overhead_share
+            payment_state = build_payment_state(p, name, payment, expected_total)
             
-            usr = await db.users.find_one({"full_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}})
+            usr = await resolve_pool_participant_user(db, p, grouped[name], name)
             r_email = usr.get("email", "") if usr else ""
+            can_view_own_settlement = name_key(name) in viewer_participant_keys
             
-            split_breakdown[name] = {
+            row = {
                 "name": name,
                 "email": r_email,
                 "items_total": p_items_total,
                 "share": overhead_share,
-                "total": p_items_total + overhead_share,
+                "total": expected_total,
                 "paid": True if is_host else (payment["status"] == "verified" if payment else False),
-                "payment_status": "host" if is_host else (payment["status"] if payment else "unpaid"),
+                "payment_status": payment_state["status"],
+                "payment_label": payment_state["label"],
+                "payment_tone": payment_state["tone"],
+                "payment_detail": payment_state["detail"],
+                "is_overdue": payment_state["is_overdue"],
+                "overdue_hours": payment_state["overdue_hours"],
                 "utr": payment["utr"] if payment else "",
                 "settlement_mode": payment.get("settlement_mode") if payment else None,
-                "confidence": payment.get("confidence") if payment else None
+                "confidence": payment.get("confidence") if payment else None,
+                "verification_source": payment.get("verification_source") if payment else None,
+                "review_reason": payment.get("review_reason") if payment else None,
+                "expected_amount": payment.get("expected_amount", expected_total) if payment else expected_total,
+                "matched_amount": payment.get("matched_amount") if payment else None,
             }
+            split_breakdown[name] = sanitize_split_row(
+                row,
+                can_view_contact=is_host_viewer,
+                can_view_settlement=is_host_viewer or can_view_own_settlement,
+            )
     else:
         num_people = len(participants)
         delivery_per_person = int(p.get("delivery_fee", 0) / num_people) if num_people > 0 else p.get("delivery_fee", 0)
@@ -323,10 +758,10 @@ async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = Non
             p_items_total = sum(it["estimated_price"] for it in grouped[name])
             is_host = (name.lower() == "you" or name_key(name) == name_key(p.get("created_by_name")))
             
-            usr = await db.users.find_one({"full_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}})
+            usr = await resolve_pool_participant_user(db, p, grouped[name], name)
             r_email = usr.get("email", "") if usr else ""
             
-            split_breakdown[name] = {
+            row = {
                 "name": name,
                 "email": r_email,
                 "items_total": p_items_total,
@@ -336,15 +771,40 @@ async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = Non
                 "payment_status": "host" if is_host else "unpaid",
                 "utr": ""
             }
+            split_breakdown[name] = sanitize_split_row(
+                row,
+                can_view_contact=is_host_viewer,
+                can_view_settlement=is_host_viewer or name_key(name) in viewer_participant_keys,
+            )
             
     p["split_breakdown"] = split_breakdown
     
-    reliability_map = await get_roommate_reliability(db, p.get("wing_label", ""))
-    p["reliability_scores"] = {name: reliability_map.get(name, {"score": 90, "label": "New roommate", "color": "blue"}) for name in participants}
+    if is_host_viewer:
+        reliability_map = await get_roommate_reliability(db, p.get("wing_label", ""))
+        p["reliability_scores"] = {
+            name: reliability_map.get(name, {
+                "score": 60,
+                "label": "New roommate",
+                "color": "blue",
+                "explanation": "No completed split history yet; this is a neutral starting score.",
+                "signals": {
+                    "completed_splits": 0,
+                    "unsettled_splits": 0,
+                    "late_splits": 0,
+                },
+            })
+            for name in participants
+        }
+        p["settlement_summary"] = build_settlement_summary(split_breakdown, host_android_status)
+    else:
+        p["host_android_status"] = public_host_android_status()
+        p["reliability_scores"] = {}
+        p["settlement_summary"] = {}
+    p["payments"] = sanitize_payment_list(p, viewer_participant_keys, is_host_viewer)
     
     wing_label = p.get("wing_label")
     wing_members = []
-    if wing_label:
+    if wing_label and is_host_viewer:
         profiles_cursor = db.profiles.find({"wing_label": wing_label})
         profiles = await profiles_cursor.to_list(length=100)
         uids = [prof["_id"] for prof in profiles]
@@ -553,7 +1013,7 @@ async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user
 
 
 @router.get("/{pool_id}")
-async def get_pool(pool_id: str):
+async def get_pool(pool_id: str, user_id: Optional[str] = Depends(get_optional_current_user)):
     db = get_db()
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
@@ -566,7 +1026,7 @@ async def get_pool(pool_id: str):
     for k, v in list(pool.items()):
         pool[k] = _serialize_value(v)
         
-    pool = await enrich_pool_document(db, pool)
+    pool = await enrich_pool_document(db, pool, user_id)
     return pool
 
 @router.put("/{pool_id}")
@@ -575,6 +1035,7 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    pool = await expire_pool_if_needed(db, pool)
 
     # Security Guard: Only host can finalize checkout or cancel
     if pool.get("host_id") != user_id:
@@ -588,6 +1049,8 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
         updates["status"] = updates["status"].strip().lower()
         if updates["status"] not in ALLOWED_POOL_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid pool status")
+        if updates["status"] in {"completed", "cancelled"} and pool.get("status") != "open":
+            raise HTTPException(status_code=400, detail="Only open pools can be finalized or cancelled")
     if "upi_id" in updates:
         updates["upi_id"] = validate_upi_id(updates["upi_id"])
     if "final_overhead" in updates:
@@ -600,6 +1063,16 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
         )
     if "created_by_name" in updates:
         updates["created_by_name"] = clean_text(updates["created_by_name"], "Host name")
+    if "checkout_notes" in updates:
+        updates["checkout_notes"] = clean_optional_text(updates["checkout_notes"], "Checkout notes", max_chars=MAX_DESCRIPTION_CHARS)
+    if "cancellation_reason" in updates:
+        updates["cancellation_reason"] = clean_text(
+            updates["cancellation_reason"], "Cancellation reason", max_chars=MAX_DESCRIPTION_CHARS
+        )
+    if updates.get("status") == "cancelled" and not updates.get("cancellation_reason"):
+        raise HTTPException(status_code=400, detail="Cancellation reason is required")
+    if updates.get("status") == "completed" and not (updates.get("upi_id") or pool.get("upi_id")):
+        raise HTTPException(status_code=400, detail="Host UPI address is required for manual split collection")
 
     # Check if transitioning to 'completed' to auto-log host split transaction
     if updates.get("status") == "completed" and pool.get("status") != "completed":
@@ -650,11 +1123,11 @@ async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(g
         from app.core.security import _serialize_value
         for k, v in list(updated_pool.items()):
             updated_pool[k] = _serialize_value(v)
-        updated_pool = await enrich_pool_document(db, updated_pool)
+        updated_pool = await enrich_pool_document(db, updated_pool, user_id)
     return updated_pool
 
 @router.post("/{pool_id}/payment-confirm")
-async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
+async def payment_confirm(pool_id: str, req: PaymentConfirmReq, user_id: Optional[str] = Depends(get_optional_current_user)):
     db = get_db()
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
@@ -669,21 +1142,71 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
 
     items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
     items = await items_cursor.to_list(length=500)
-    participant_keys = {name_key(item.get("added_by_name")) for item in items if item.get("is_purchased", True)}
-    if participant_keys and name_key(roommate_name) not in participant_keys:
-        raise HTTPException(status_code=400, detail="Roommate is not part of this pool")
-
-    # Resolve exact casing of the roommate's name from active pool items to avoid case mismatches in db query
-    exact_roommate_name = next(
-        (item["added_by_name"] for item in items if name_key(item.get("added_by_name")) == name_key(roommate_name)),
-        roommate_name
+    exact_roommate_name = await resolve_payment_claim_roommate_name(
+        db,
+        pool,
+        items,
+        user_id,
+        roommate_name,
     )
+
+    payments = pool.get("payments", [])
+    existing_roommate_payment = next(
+        (
+            payment for payment in payments
+            if name_key(payment.get("name")) == name_key(exact_roommate_name)
+        ),
+        None,
+    )
+    if existing_roommate_payment and existing_roommate_payment.get("status") == "verified":
+        raise HTTPException(status_code=409, detail="This split is already settled")
+
+    same_pool_duplicate = next(
+        (
+            payment for payment in payments
+            if payment.get("utr") == utr
+            and name_key(payment.get("name")) != name_key(exact_roommate_name)
+            and payment.get("status") in PAYMENT_ACTIVE_STATUSES
+        ),
+        None,
+    )
+    if same_pool_duplicate:
+        raise HTTPException(status_code=409, detail="This UTR is already attached to another roommate split")
+
+    duplicate_pool = await db.cart_pools.find_one({
+        "_id": {"$ne": pool_id},
+        "host_id": pool.get("host_id"),
+        "payments": {
+            "$elemMatch": {
+                "utr": utr,
+                "status": {"$in": list(PAYMENT_ACTIVE_STATUSES)}
+            }
+        }
+    })
+    if duplicate_pool:
+        raise HTTPException(status_code=409, detail="This UTR was already used in another pool settlement")
+
+    active_participants = [item for item in items if item.get("is_purchased", True)]
+    active_count = len({name_key(item.get("added_by_name")) for item in active_participants})
+    net_overhead = (pool.get("final_overhead") or 0) - (pool.get("final_discount") or 0)
+    overhead_share = int(net_overhead / active_count) if active_count > 0 else 0
+    roommate_items_total = sum(
+        item["estimated_price"]
+        for item in active_participants
+        if name_key(item.get("added_by_name")) == name_key(exact_roommate_name)
+    )
+    expected_amount = roommate_items_total + overhead_share
 
     payment_entry = {
         "name": exact_roommate_name,
         "utr": utr,
         "status": "pending",
-        "submitted_at": utcnow().isoformat()
+        "submitted_at": utcnow().isoformat(),
+        "expected_amount": expected_amount,
+        "amount_tolerance": PAYMENT_AMOUNT_TOLERANCE_PAISE,
+        "confidence": "manual_claim",
+        "verification_source": "manual_utr",
+        "review_reason": "Manual UTR submitted; waiting for a matching host credit or host review.",
     }
 
     # Remove any existing payment record for this roommate
@@ -704,7 +1227,7 @@ async def payment_confirm(pool_id: str, req: PaymentConfirmReq):
         from app.core.security import _serialize_value
         for k, v in list(updated.items()):
             updated[k] = _serialize_value(v)
-        updated = await enrich_pool_document(db, updated)
+        updated = await enrich_pool_document(db, updated, user_id)
     return updated
 
 @router.post("/{pool_id}/payment-verify")
@@ -734,6 +1257,8 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
     if action in ("verify", "settle_in_kind"):
         status = "verified"
         settlement_mode = "settle_in_kind" if action == "settle_in_kind" else "manual"
+        verification_source = "host_settle_in_kind" if action == "settle_in_kind" else "host_manual_review"
+        confidence = "host_confirmed"
         
         # Check if roommate already has a payment log
         has_payment = any(name_key(p["name"]) == name_key(exact_roommate_name) for p in payments)
@@ -744,7 +1269,10 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
                 {"$set": {
                     "payments.$.status": status,
                     "payments.$.verified_at": utcnow().isoformat(),
-                    "payments.$.settlement_mode": settlement_mode
+                    "payments.$.settlement_mode": settlement_mode,
+                    "payments.$.verification_source": verification_source,
+                    "payments.$.confidence": confidence,
+                    "payments.$.review_reason": None,
                 }}
             )
             if result.matched_count == 0:
@@ -756,7 +1284,9 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
                 "status": status,
                 "submitted_at": utcnow().isoformat(),
                 "verified_at": utcnow().isoformat(),
-                "settlement_mode": settlement_mode
+                "settlement_mode": settlement_mode,
+                "verification_source": verification_source,
+                "confidence": confidence,
             }
             await db.cart_pools.update_one(
                 {"_id": pool_id},
@@ -765,10 +1295,17 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
             
     elif action == "reject":
         result = await db.cart_pools.update_one(
-            {"_id": pool_id},
-            {"$pull": {"payments": {"name": exact_roommate_name}}}
+            {"_id": pool_id, "payments.name": exact_roommate_name},
+            {"$set": {
+                "payments.$.status": "rejected",
+                "payments.$.rejected_at": utcnow().isoformat(),
+                "payments.$.verification_source": "host_rejected",
+                "payments.$.confidence": "rejected",
+                "payments.$.rejection_reason": "Host did not find a matching incoming credit for this reference.",
+                "payments.$.review_reason": "Rejected by host; roommate should recheck the UTR or pay again.",
+            }}
         )
-        if result.modified_count == 0:
+        if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Payment confirmation not found")
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
@@ -779,15 +1316,22 @@ async def payment_verify(pool_id: str, req: PaymentVerifyReq, user_id: str = Dep
         from app.core.security import _serialize_value
         for k, v in list(updated.items()):
             updated[k] = _serialize_value(v)
-        updated = await enrich_pool_document(db, updated)
+        updated = await enrich_pool_document(db, updated, user_id)
     return updated
 
 @router.get("/{pool_id}/items")
-async def get_pool_items(pool_id: str):
+async def get_pool_items(pool_id: str, user_id: Optional[str] = Depends(get_optional_current_user)):
     db = get_db()
+    pool = await db.cart_pools.find_one({"_id": pool_id})
+    if not pool:
+        raise HTTPException(status_code=404, detail="Pool not found")
     cursor = db.cart_pool_items.find({"pool_id": pool_id}).sort("created_at", 1)
     items = await cursor.to_list(length=500)
-    return map_docs(items)
+    safe_items = [
+        sanitize_pool_item_for_viewer(item, user_id, pool.get("host_id"))
+        for item in items
+    ]
+    return map_docs(safe_items)
 
 async def match_wing_roommate(db, pool: dict, input_name: str) -> str:
     cleaned = clean_text(input_name, "Roommate name")
@@ -811,7 +1355,7 @@ async def match_wing_roommate(db, pool: dict, input_name: str) -> str:
     return cleaned
 
 @router.post("/{pool_id}/items")
-async def insert_pool_item(pool_id: str, req: PoolItemReq):
+async def insert_pool_item(pool_id: str, req: PoolItemReq, user_id: str = Depends(get_current_user)):
     db = get_db()
 
     # Verify pool exists and is open
@@ -827,20 +1371,32 @@ async def insert_pool_item(pool_id: str, req: PoolItemReq):
     # Robustness Limit Validation
     if req.estimated_price <= 0 or req.estimated_price > MAX_ITEM_PRICE_PAISE:
          raise HTTPException(status_code=400, detail="Estimated price must be between ₹1 and ₹5,000")
+    quantity = validate_item_quantity(req.quantity)
+    unit_price = req.unit_price if req.unit_price is not None else int(round(req.estimated_price / quantity))
+    validate_paise_amount(unit_price, "Unit price", MAX_ITEM_PRICE_PAISE)
+    line_total = unit_price * quantity
+    validate_paise_amount(line_total, "Estimated price", MAX_ITEM_PRICE_PAISE)
+
+    user_doc = await db.users.find_one({"_id": user_id})
+    item_owner_name = user_doc.get("full_name") if user_doc and user_doc.get("full_name") else req.added_by_name
 
     # Match against registered wing roommates to avoid name collisions/typos
-    matched_name = await match_wing_roommate(db, pool, req.added_by_name)
+    matched_name = await match_wing_roommate(db, pool, item_owner_name)
 
     item_id = str(uuid.uuid4())
 
     new_item = {
         "_id": item_id,
         "pool_id": pool_id,
+        "added_by_user_id": user_id,
         "added_by_name": matched_name,
         "item_description": clean_text(req.item_description, "Item description", max_chars=MAX_DESCRIPTION_CHARS),
-        "estimated_price": req.estimated_price,
+        "estimated_price": line_total,
+        "quantity": quantity,
+        "unit_price": unit_price,
         "product_url": validate_product_url(req.product_url),
         "is_purchased": True,
+        "cart_status": "pending",
         "created_at": utcnow()
     }
 
@@ -848,7 +1404,7 @@ async def insert_pool_item(pool_id: str, req: PoolItemReq):
     return map_doc(new_item)
 
 @router.delete("/{pool_id}/items/{item_id}")
-async def delete_pool_item(pool_id: str, item_id: str):
+async def delete_pool_item(pool_id: str, item_id: str, user_id: str = Depends(get_current_user)):
     db = get_db()
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
@@ -857,13 +1413,41 @@ async def delete_pool_item(pool_id: str, item_id: str):
     if pool.get("status") != "open":
         raise HTTPException(status_code=400, detail="This pool is no longer editable.")
 
+    item = await db.cart_pool_items.find_one({"_id": item_id, "pool_id": pool_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    user_doc = await db.users.find_one({"_id": user_id})
+    user_name = user_doc.get("full_name") if user_doc else ""
+    is_host = pool.get("host_id") == user_id
+    is_owner = item.get("added_by_user_id") == user_id or name_key(user_name) == name_key(item.get("added_by_name"))
+    host_aliases = {name_key(pool.get("created_by_name")), name_key(user_name), "host", "you"}
+    is_host_item = is_host and name_key(item.get("added_by_name")) in host_aliases
+
+    if not is_host and not is_owner:
+        raise HTTPException(status_code=403, detail="Only the item owner or host can remove this item")
+
+    if is_host and not is_host_item:
+        now = utcnow()
+        await db.cart_pool_items.update_one(
+            {"_id": item_id, "pool_id": pool_id},
+            {"$set": {
+                "is_purchased": False,
+                "cart_status": "skipped",
+                "cart_status_reason": "Host removed this item from the cart.",
+                "cart_status_updated_at": now,
+                "cart_status_updated_by": "host",
+            }},
+        )
+        return {"success": True, "mode": "skipped"}
+
     res = await db.cart_pool_items.delete_one({"_id": item_id, "pool_id": pool_id})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
     return {"success": True}
 
 @router.patch("/{pool_id}/items/{item_id}")
-async def update_pool_item(pool_id: str, item_id: str, req: PoolItemUpdateReq):
+async def update_pool_item(pool_id: str, item_id: str, req: PoolItemUpdateReq, user_id: str = Depends(get_current_user)):
     db = get_db()
 
     pool = await db.cart_pools.find_one({"_id": pool_id})
@@ -875,16 +1459,37 @@ async def update_pool_item(pool_id: str, item_id: str, req: PoolItemUpdateReq):
 
     if req.estimated_price is not None and (req.estimated_price <= 0 or req.estimated_price > MAX_ITEM_PRICE_PAISE):
          raise HTTPException(status_code=400, detail="Estimated price must be between ₹1 and ₹5,000")
+    if req.quantity is not None:
+        validate_item_quantity(req.quantity)
+    if req.unit_price is not None:
+        validate_paise_amount(req.unit_price, "Unit price", MAX_ITEM_PRICE_PAISE)
 
     item = await db.cart_pool_items.find_one({"_id": item_id, "pool_id": pool_id})
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
+    user_doc = await db.users.find_one({"_id": user_id})
+    user_name = user_doc.get("full_name") if user_doc else ""
+    is_host = pool.get("host_id") == user_id
+    is_owner = item.get("added_by_user_id") == user_id or name_key(user_name) == name_key(item.get("added_by_name"))
+    host_aliases = {name_key(pool.get("created_by_name")), name_key(user_name), "host", "you"}
+    is_host_item = is_host and name_key(item.get("added_by_name")) in host_aliases
+
     # Build updates dict, handling booleans (False is a valid value, not None)
+    requested_keys = set(req.model_dump(exclude_unset=True).keys())
     updates = {}
+    nullable_update_fields = {"product_url", "substitute_note", "cart_status_reason"}
     for k, v in req.model_dump(exclude_unset=True).items():
-        if isinstance(v, bool) or v is not None:
+        if isinstance(v, bool) or v is not None or k in nullable_update_fields:
             updates[k] = v
+
+    host_only_fields = {"is_purchased", "cart_status", "cart_status_reason", "substitute_note"}
+    owner_edit_fields = {"estimated_price", "quantity", "unit_price", "item_description", "product_url"}
+    material_item_fields = owner_edit_fields.intersection(requested_keys)
+    if host_only_fields.intersection(updates.keys()) and not is_host:
+        raise HTTPException(status_code=403, detail="Only the pool host can update cart status")
+    if owner_edit_fields.intersection(updates.keys()) and not (is_host or is_owner):
+        raise HTTPException(status_code=403, detail="Only the item owner or host can edit this item")
 
     if "item_description" in updates:
         updates["item_description"] = clean_text(
@@ -892,6 +1497,51 @@ async def update_pool_item(pool_id: str, item_id: str, req: PoolItemUpdateReq):
         )
     if "product_url" in updates:
         updates["product_url"] = validate_product_url(updates["product_url"])
+    if "quantity" in updates:
+        updates["quantity"] = validate_item_quantity(updates["quantity"])
+    if "unit_price" in updates:
+        updates["unit_price"] = validate_paise_amount(updates["unit_price"], "Unit price", MAX_ITEM_PRICE_PAISE)
+    if "quantity" in updates or "unit_price" in updates:
+        effective_quantity = validate_item_quantity(updates.get("quantity", item.get("quantity", 1)))
+        effective_unit_price = updates.get("unit_price", item.get("unit_price"))
+        if not effective_unit_price:
+            effective_unit_price = int(round(item.get("estimated_price", 0) / effective_quantity))
+        effective_unit_price = validate_paise_amount(effective_unit_price, "Unit price", MAX_ITEM_PRICE_PAISE)
+        updates["quantity"] = effective_quantity
+        updates["unit_price"] = effective_unit_price
+        updates["estimated_price"] = validate_paise_amount(
+            effective_unit_price * effective_quantity,
+            "Estimated price",
+            MAX_ITEM_PRICE_PAISE,
+        )
+    if "cart_status" in updates:
+        updates["cart_status"] = validate_cart_status(updates["cart_status"])
+    if "substitute_note" in updates:
+        updates["substitute_note"] = clean_optional_text(updates["substitute_note"], "Substitute note", max_chars=MAX_DESCRIPTION_CHARS)
+    if "cart_status_reason" in updates:
+        updates["cart_status_reason"] = clean_optional_text(
+            updates["cart_status_reason"], "Cart status reason", max_chars=MAX_DESCRIPTION_CHARS
+        )
+
+    if material_item_fields and "cart_status" not in requested_keys and "is_purchased" not in requested_keys:
+        updates["is_purchased"] = True
+        updates["cart_status"] = "pending"
+        updates["cart_status_reason"] = None
+
+    if material_item_fields:
+        now = utcnow()
+        updates["item_updated_at"] = now
+        updates["item_updated_by"] = "host" if is_host else "roommate"
+        updates["item_update_reason"] = item_edit_reason(is_host, is_host_item)
+
+    if "is_purchased" in updates and "cart_status" not in updates:
+        updates["cart_status"] = "pending" if updates["is_purchased"] else "skipped"
+
+    if "cart_status" in updates:
+        updates["cart_status_updated_at"] = utcnow()
+        updates["cart_status_updated_by"] = "host" if is_host else "roommate"
+        if not updates.get("cart_status_reason"):
+            updates["cart_status_reason"] = default_cart_status_reason(updates["cart_status"])
 
     if updates:
         await db.cart_pool_items.update_one({"_id": item_id, "pool_id": pool_id}, {"$set": updates})
@@ -908,16 +1558,20 @@ async def nudge_roommate_api(pool_id: str, req: NudgeReq, user_id: str = Depends
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    if pool.get("host_id") != user_id:
+        raise HTTPException(status_code=403, detail="Only the pool host can nudge roommates")
         
     roommate_name = req.roommate_name
     
-    usr = await db.users.find_one({"full_name": {"$regex": f"^{re.escape(roommate_name)}$", "$options": "i"}})
+    items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+    items = await items_cursor.to_list(length=500)
+    usr = await resolve_pool_participant_user(db, pool, items, roommate_name)
     if not usr or not usr.get("phone_number"):
         raise HTTPException(status_code=400, detail=f"No registered phone number found for {roommate_name}. Please nudge manually.")
         
     phone = usr["phone_number"]
     platform = pool.get("platform", "delivery").replace("_", " ").title()
-    p = await enrich_pool_document(db, pool)
+    p = await enrich_pool_document(db, pool, user_id)
     details = p.get("split_breakdown", {}).get(roommate_name)
     if not details or details.get("paid"):
          return {"success": False, "mode": "fallback", "message": f"{roommate_name} has already paid."}
@@ -1029,9 +1683,11 @@ async def cron_auto_nudge(user_id: str = Depends(get_current_user)):
         if elapsed_hours < interval_hours:
              continue
              
-        p = await enrich_pool_document(db, pool)
+        p = await enrich_pool_document(db, pool, user_id)
         platform = p.get("platform", "delivery").replace("_", " ").title()
         pool_url = f"{settings.FRONTEND_BASE_URL}/pool/{pool_id}"
+        items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+        items = await items_cursor.to_list(length=500)
         
         for rName, details in p.get("split_breakdown", {}).items():
             is_host = rName.lower() == "you" or name_key(rName) == name_key(p.get("created_by_name"))
@@ -1051,7 +1707,7 @@ async def cron_auto_nudge(user_id: str = Depends(get_current_user)):
                  except Exception:
                       pass
                       
-            usr = await db.users.find_one({"full_name": {"$regex": f"^{re.escape(rName)}$", "$options": "i"}})
+            usr = await resolve_pool_participant_user(db, pool, items, rName)
             if not usr or not usr.get("phone_number"):
                  continue
                  
@@ -1115,11 +1771,16 @@ async def create_amazon_checkout_session(
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    pool = await expire_pool_if_needed(db, pool)
         
     if pool.get("host_id") != user_id:
         raise HTTPException(status_code=403, detail="Only the pool host can initiate Amazon Pay checkout")
     if pool.get("status") != "open":
         raise HTTPException(status_code=400, detail="Amazon Pay sandbox checkout can only start while the pool is open")
+    final_overhead = validate_paise_amount(req.final_overhead, "Final overhead", MAX_FEE_PAISE, allow_zero=True)
+    final_discount = validate_paise_amount(req.final_discount, "Final discount", MAX_FEE_PAISE, allow_zero=True)
+    checkout_notes = clean_optional_text(req.checkout_notes, "Checkout notes", max_chars=MAX_DESCRIPTION_CHARS)
+    upi_id = validate_upi_id(req.upi_id)
         
     # Generate a local sandbox session ID in the same visual family as Amazon Pay.
     checkout_session_id = f"S01-{uuid.uuid4().hex[:14].upper()}"
@@ -1128,7 +1789,7 @@ async def create_amazon_checkout_session(
     items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
     items = await items_cursor.to_list(length=1000)
     items_total = sum(it.get("estimated_price", 0) for it in items if it.get("is_purchased", True))
-    net_total = max(0, items_total + req.final_overhead - req.final_discount)
+    net_total = max(0, items_total + final_overhead - final_discount)
     
     # Store a local sandbox session shaped like the Amazon Pay V2 contract.
     amazon_checkout = {
@@ -1144,10 +1805,10 @@ async def create_amazon_checkout_session(
                 "currencyCode": "INR"
             }
         },
-        "final_overhead": req.final_overhead,
-        "final_discount": req.final_discount,
-        "checkout_notes": req.checkout_notes,
-        "upi_id": req.upi_id,
+        "final_overhead": final_overhead,
+        "final_discount": final_discount,
+        "checkout_notes": checkout_notes,
+        "upi_id": upi_id,
         "created_at": utcnow()
     }
     
@@ -1172,6 +1833,7 @@ async def complete_amazon_checkout_session(
     pool = await db.cart_pools.find_one({"_id": pool_id})
     if not pool:
         raise HTTPException(status_code=404, detail="Pool not found")
+    pool = await expire_pool_if_needed(db, pool)
     if pool.get("host_id") != user_id:
         raise HTTPException(status_code=403, detail="Only the pool host can complete Amazon Pay checkout")
     if pool.get("status") != "open":
@@ -1247,7 +1909,7 @@ async def complete_amazon_checkout_session(
     from app.core.security import _serialize_value
     for k, v in list(updated.items()):
         updated[k] = _serialize_value(v)
-    return await enrich_pool_document(db, updated)
+    return await enrich_pool_document(db, updated, user_id)
 
 @router.post("/{pool_id}/amazon-charge-permission/roommate-reimburse")
 async def process_amazon_roommate_payment(
@@ -1264,12 +1926,15 @@ async def process_amazon_roommate_payment(
     if pool.get("host_id") == user_id:
         raise HTTPException(status_code=400, detail="Host cannot settle their own pool as a roommate")
         
-    # Record a roommate sandbox settlement. This does not charge a live payment rail.
-    exact_roommate_name = await match_wing_roommate(db, pool, req.roommate_name)
-    user_doc = await db.users.find_one({"_id": user_id})
-    user_name = name_key(user_doc.get("full_name")) if user_doc else ""
-    if not user_name or user_name != name_key(exact_roommate_name):
-        raise HTTPException(status_code=403, detail="You can settle only your own roommate split")
+    items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
+    items = await items_cursor.to_list(length=500)
+    exact_roommate_name = await resolve_payment_claim_roommate_name(
+        db,
+        pool,
+        items,
+        user_id,
+        req.roommate_name,
+    )
 
     enriched_pool = await enrich_pool_document(db, {**pool, "id": pool.get("_id")}, current_user_id=user_id)
     roommate_split = (enriched_pool.get("split_breakdown") or {}).get(exact_roommate_name)
@@ -1289,7 +1954,9 @@ async def process_amazon_roommate_payment(
         "submitted_at": utcnow().isoformat(),
         "verified_at": utcnow().isoformat(),
         "settlement_mode": "amazon_pay_sandbox",
-        "confidence": 1.0
+        "confidence": "sandbox_confirmed",
+        "verification_source": "amazon_pay_sandbox",
+        "expected_amount": expected_amount,
     }
     
     # Pull old payment record and push new one

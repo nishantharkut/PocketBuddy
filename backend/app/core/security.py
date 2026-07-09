@@ -14,6 +14,16 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> str:
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+def get_optional_current_user(authorization: Optional[str] = Header(None)) -> Optional[str]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        return payload.get("userId")
+    except jwt.PyJWTError:
+        return None
+
 def _serialize_value(v):
     """Ensure naive datetimes get a Z suffix so frontend interprets them as UTC."""
     if isinstance(v, _dt.datetime):

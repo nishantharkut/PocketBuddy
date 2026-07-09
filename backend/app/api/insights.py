@@ -3,6 +3,16 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.services.runway import build_runway_forecast, derive_pool_obligations
 from app.services.subscriptions import amount_paise_from_doc, detect_recurring_subscriptions
+from app.services.wellness import (
+    INDIA_STANDARD_TIME_OFFSET_MINUTES,
+    average_meal_gap_hours,
+    build_wellness_summary,
+    current_meal_gap_hours,
+    is_debit_transaction,
+    is_late_night_activity,
+    is_meal_checkin,
+    meal_signal_events,
+)
 import datetime
 import calendar
 import re
@@ -20,6 +30,15 @@ def _to_dict(doc):
             d[k] = v.isoformat()
     return d
 
+
+def _campus_timezone_offset_minutes(profile: dict | None) -> int:
+    if profile and profile.get("timezone_offset_minutes") is not None:
+        try:
+            return int(profile["timezone_offset_minutes"])
+        except (TypeError, ValueError):
+            pass
+    return INDIA_STANDARD_TIME_OFFSET_MINUTES
+
 @router.get("")
 async def get_insights(user_id: str = Depends(get_current_user)):
     db = get_db()
@@ -32,11 +51,16 @@ async def get_insights(user_id: str = Depends(get_current_user)):
 
     # Fetch profile for exam dates
     profile = await db.profiles.find_one({"_id": user_id})
+    campus_timezone_offset_minutes = _campus_timezone_offset_minutes(profile)
 
     now = datetime.datetime.utcnow()
 
     # ── Category breakdown (last 30 days) ─────────────────────────────────
     since_30 = now - datetime.timedelta(days=30)
+    checkins_30 = await db.checkin_logs.find({
+        "user_id": user_id,
+        "created_at": {"$gte": since_30},
+    }).sort("created_at", -1).to_list(length=500)
     cat_totals: dict[str, int] = {}
     for t in txns:
         if t.get("created_at", now) >= since_30:
@@ -63,27 +87,22 @@ async def get_insights(user_id: str = Depends(get_current_user)):
             "amount_paise": total,
         })
 
-    # ── Late-night spend (11pm – 4am) ──────────────────────────────────────
+    # ── After-hours payments (11PM-5AM, last 30 days) ─────────────────────
     late_txns = [
         t for t in txns
-        if t.get("created_at") and (
-            t["created_at"].hour >= 23 or t["created_at"].hour < 4
-        )
+        if t.get("created_at") and t.get("created_at", now) >= since_30 and is_late_night_activity(t["created_at"], campus_timezone_offset_minutes)
     ]
     late_night_total_paise = sum(t.get("amount", 0) for t in late_txns)
     late_night_txn_count = len(late_txns)
 
     # ── Food gap analysis ──────────────────────────────────────────────────
     food_txns = [t for t in txns if t.get("category") == "food"]
-    if food_txns:
-        last_food = food_txns[0]  # already sorted desc
-        food_gap_hours = (now - last_food["created_at"]).total_seconds() / 3600
-        # Average daily food spend
-        food_30 = [t for t in food_txns if t.get("created_at", now) >= since_30]
-        avg_daily_food = sum(t.get("amount", 0) for t in food_30) / 30
-    else:
-        food_gap_hours = 0.0
-        avg_daily_food = 0.0
+    food_30 = [t for t in food_txns if t.get("created_at", now) >= since_30]
+    meal_events_30 = meal_signal_events(food_30, checkins_30)
+    food_gap_hours = current_meal_gap_hours(now, meal_events_30, default=0.0)
+    last_food_source = meal_events_30[-1]["source"] if meal_events_30 else None
+    meal_checkin_count_30d = sum(1 for ck in checkins_30 if is_meal_checkin(ck))
+    avg_daily_food = sum(t.get("amount", 0) for t in food_30) / 30 if food_30 else 0.0
 
     # ── Spending velocity (avg of last 7 days vs prior 7 days) ────────────
     since_7 = now - datetime.timedelta(days=7)
@@ -97,7 +116,7 @@ async def get_insights(user_id: str = Depends(get_current_user)):
     if spend_7_prior > 0:
         velocity_pct = round((spend_7 - spend_7_prior) / spend_7_prior * 100)
 
-    # ── Exam stress signal ─────────────────────────────────────────────────
+    # ── Exam window signal ─────────────────────────────────────────────────
     in_exam_period = False
     exam_days_left = None
     if profile:
@@ -116,12 +135,12 @@ async def get_insights(user_id: str = Depends(get_current_user)):
     # ── Mess vs delivery ratio ─────────────────────────────────────────────
     delivery_keywords = ["blinkit", "zepto", "swiggy", "zomato", "instamart", "dunzo"]
     delivery_txns = [
-        t for t in food_txns
+        t for t in food_30
         if any(kw in (t.get("raw_merchant_string") or "").lower() for kw in delivery_keywords)
         or any(kw in (t.get("mapped_merchant_name") or "").lower() for kw in delivery_keywords)
     ]
     delivery_count = len(delivery_txns)
-    mess_count = max(0, len(food_txns) - delivery_count)
+    mess_count = max(0, len(food_30) - delivery_count) + meal_checkin_count_30d
     delivery_spend_paise = sum(t.get("amount", 0) for t in delivery_txns)
 
     # Calculate unpaid pool debts (committed spend runway impact)
@@ -171,6 +190,8 @@ async def get_insights(user_id: str = Depends(get_current_user)):
         "late_night": {
             "total_paise": late_night_total_paise,
             "txn_count": late_night_txn_count,
+            "window": "11PM-5AM",
+            "timezone": "Asia/Kolkata",
         },
         "food": {
             "gap_hours": round(food_gap_hours, 1),
@@ -178,6 +199,8 @@ async def get_insights(user_id: str = Depends(get_current_user)):
             "delivery_count_30d": delivery_count,
             "mess_count_30d": mess_count,
             "delivery_spend_paise": delivery_spend_paise,
+            "checkin_count_30d": meal_checkin_count_30d,
+            "last_signal_source": last_food_source,
         },
         "velocity": {
             "pct_change": velocity_pct,
@@ -243,8 +266,8 @@ async def get_wing_feed(user_id: str = Depends(get_current_user)):
         created_at = ck.get("created_at", now)
         mins_ago = int((now - created_at).total_seconds() / 60)
         response = ck.get("response", "ate")
-        if response == "ate":
-            text = "A student checked in — ate at campus mess"
+        if is_meal_checkin(ck):
+            text = "A student checked in - meal logged"
             icon = "🍽️"
         elif response == "travel_fare_report":
             text = ck.get("stress_note", "New travel fare report submitted")
@@ -253,9 +276,14 @@ async def get_wing_feed(user_id: str = Depends(get_current_user)):
             text = ck.get("stress_note", "Saved money on travel fare negotiation")
             icon = "💰"
         else:
-            text = "A student checked in — reported skipping a meal during exam period"
+            text = "A student checked in - meal was skipped or delayed"
             icon = "⚠️"
-            
+        if is_meal_checkin(ck):
+            source = str(ck.get("meal_source") or "meal").replace("_", " ")
+            text = f"A student checked in - {source} meal logged"
+        elif response not in {"travel_fare_report", "travel_savings"}:
+            text = "A student checked in - meal was skipped or delayed"
+
         events.append({
             "type": "checkin",
             "icon": icon,
@@ -298,15 +326,15 @@ def get_cycle_end(cycle_start: datetime.datetime) -> datetime.datetime:
     return cycle_start + datetime.timedelta(days=30)
 
 
-@router.get("/forecast")
-async def get_runway_forecast(user_id: str = Depends(get_current_user)):
-    """Return the deterministic Runway Engine V2 forecast for the current user."""
-    db = get_db()
-    now = datetime.datetime.utcnow()
-    profile = await db.profiles.find_one({"_id": user_id}) or {}
+async def _load_runway_forecast_for_user(
+    db,
+    *,
+    user_id: str,
+    now: datetime.datetime,
+    profile: dict | None = None,
+):
+    profile = profile or await db.profiles.find_one({"_id": user_id}) or {}
 
-    # Recurrence detection is server-owned and runs before the forecast reads
-    # active subscriptions. This keeps forecasts consistent across web clients.
     await detect_recurring_subscriptions(db, user_id)
 
     history_start = now - datetime.timedelta(days=120)
@@ -320,10 +348,19 @@ async def get_runway_forecast(user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"_id": user_id}) or {}
     full_name = str(user.get("full_name") or "").strip()
     pool_ids: set[str] = set()
+    user_item_query: dict = {"added_by_user_id": user_id}
     if full_name:
         name_regex = re.compile(f"^{re.escape(full_name)}$", re.IGNORECASE)
-        user_items = await db.cart_pool_items.find({"added_by_name": name_regex}).to_list(length=1000)
-        pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
+        user_item_query = {
+            "$or": [
+                {"added_by_user_id": user_id},
+                {"added_by_user_id": {"$exists": False}, "added_by_name": name_regex},
+                {"added_by_user_id": None, "added_by_name": name_regex},
+                {"added_by_user_id": "", "added_by_name": name_regex},
+            ]
+        }
+    user_items = await db.cart_pool_items.find(user_item_query).to_list(length=1000)
+    pool_ids.update(str(item.get("pool_id")) for item in user_items if item.get("pool_id"))
 
     hosted = await db.cart_pools.find(
         {"host_id": user_id, "status": {"$in": ["open", "closed", "completed"]}}
@@ -352,6 +389,20 @@ async def get_runway_forecast(user_id: str = Depends(get_current_user)):
     )
 
 
+@router.get("/forecast")
+async def get_runway_forecast(user_id: str = Depends(get_current_user)):
+    """Return the deterministic Runway Engine V2 forecast for the current user."""
+    db = get_db()
+    now = datetime.datetime.utcnow()
+    profile = await db.profiles.find_one({"_id": user_id}) or {}
+    return await _load_runway_forecast_for_user(
+        db,
+        user_id=user_id,
+        now=now,
+        profile=profile,
+    )
+
+
 @router.get("/wellness")
 async def get_wellness_insights(user_id: str = Depends(get_current_user)):
     db = get_db()
@@ -360,94 +411,49 @@ async def get_wellness_insights(user_id: str = Depends(get_current_user)):
     # Fetch last 60 days of transactions
     since = now - datetime.timedelta(days=60)
     cursor = db.transactions.find({"user_id": user_id, "created_at": {"$gte": since}}).sort("created_at", -1)
-    txns = await cursor.to_list(length=2000)
+    txns = [t for t in await cursor.to_list(length=2000) if is_debit_transaction(t)]
+    checkins = await db.checkin_logs.find({
+        "user_id": user_id,
+        "created_at": {"$gte": since},
+    }).sort("created_at", -1).to_list(length=1000)
 
     # Fetch user profile
     profile = await db.profiles.find_one({"_id": user_id})
     if not profile:
         profile = {}
 
-    # 1. Late-night activity (last 7 days, hours 0 to 4)
+    campus_timezone_offset_minutes = _campus_timezone_offset_minutes(profile)
+
+    # 1. Late-night payment activity (last 7 days, 11PM to 5AM campus time)
     since_7 = now - datetime.timedelta(days=7)
     late_txns_7d = [
         t for t in txns
-        if t.get("created_at") and t["created_at"] >= since_7 and (
-            0 <= t["created_at"].hour < 5
-        )
+        if t.get("created_at") and t["created_at"] >= since_7 and is_late_night_activity(t["created_at"], campus_timezone_offset_minutes)
     ]
-    late_night_spend_7d = len(late_txns_7d)
+    late_night_activity_7d = len(late_txns_7d)
 
     # 2. Meal regularity: avg_food_gap_hours_7d
     food_txns_7d = [
         t for t in txns
         if t.get("category") == "food" and t.get("created_at") and t["created_at"] >= since_7
     ]
-    food_txns_7d.sort(key=lambda t: t["created_at"])
-    
-    gaps_7d = []
-    if len(food_txns_7d) > 0:
-        for i in range(1, len(food_txns_7d)):
-            gap = (food_txns_7d[i]["created_at"] - food_txns_7d[i-1]["created_at"]).total_seconds() / 3600.0
-            gaps_7d.append(gap)
-        current_gap = (now - food_txns_7d[-1]["created_at"]).total_seconds() / 3600.0
-        gaps_7d.append(current_gap)
-        avg_food_gap_hours_7d = sum(gaps_7d) / len(gaps_7d)
-    else:
-        avg_food_gap_hours_7d = 168.0
+    checkins_7d = [
+        ck for ck in checkins
+        if ck.get("created_at") and ck["created_at"] >= since_7
+    ]
+    meal_events_7d = meal_signal_events(food_txns_7d, checkins_7d)
+    meal_checkins_7d = sum(1 for ck in checkins_7d if is_meal_checkin(ck))
+    current_food_gap_hours = current_meal_gap_hours(now, meal_events_7d, default=0.0) if meal_events_7d else None
+    avg_food_gap_hours_7d = average_meal_gap_hours(now, meal_events_7d, default=0.0) if meal_events_7d else None
 
-    # Calculate unpaid pool debts (committed spend runway impact)
-    unpaid_pool_debt_paise = 0
-    user_doc = await db.users.find_one({"_id": user_id})
-    full_name = user_doc.get("full_name", "") if user_doc else ""
-    if full_name and profile and profile.get("wing_label"):
-        wing_label = profile["wing_label"]
-        def local_name_key(v):
-            return " ".join((v or "").strip().split()).casefold()
-            
-        async for p in db.cart_pools.find({"wing_label": wing_label, "status": "completed", "host_id": {"$ne": user_id}}):
-            pool_id = p["_id"]
-            items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
-            items = await items_cursor.to_list(length=1000)
-            
-            participants = list(set(it["added_by_name"] for it in items if it.get("is_purchased", True)))
-            user_items = [it for it in items if it.get("is_purchased", True) and local_name_key(it["added_by_name"]) == local_name_key(full_name)]
-            if user_items:
-                payments = p.get("payments", [])
-                user_payment = next((pay for pay in payments if local_name_key(pay["name"]) == local_name_key(full_name)), None)
-                if not user_payment or user_payment.get("status") != "verified":
-                    p_items_total = sum(it["estimated_price"] for it in user_items)
-                    final_overhead = p.get("final_overhead", 0)
-                    final_discount = p.get("final_discount", 0)
-                    net_overhead = final_overhead - final_discount
-                    num_people = len(participants)
-                    overhead_share = int(net_overhead / num_people) if num_people > 0 else 0
-                    unpaid_pool_debt_paise += (p_items_total + overhead_share)
-
-    # 3. Financial runway & safe daily limit
-    cycle_start_day = profile.get("cycle_start_day") or 1
-    monthly_allowance = profile.get("monthly_allowance") or 1000000  # in paise
-    total_allowance_rs = monthly_allowance / 100
-
-    cycle_start = get_cycle_start(cycle_start_day, now)
-    cycle_end = get_cycle_end(cycle_start)
-
-    cycle_txns = [t for t in txns if t.get("created_at") and t["created_at"] >= cycle_start]
-    total_spent_rs = (sum(t.get("amount", 0) for t in cycle_txns) + unpaid_pool_debt_paise) / 100
-    remaining_rs = max(0.0, total_allowance_rs - total_spent_rs)
-
-    days_since_start = max(1, (now - cycle_start).days)
-    avg_daily_spend_rs = total_spent_rs / days_since_start
-    days_left = max(1, (cycle_end - now).days)
-
-    if avg_daily_spend_rs > 0:
-        runway_days = int(remaining_rs / avg_daily_spend_rs)
-    else:
-        runway_days = days_left
-
-    runway_days = min(runway_days, days_left + 5)
-    
-    # safe_daily_limit_rs
-    safe_daily_limit_rs = remaining_rs / days_left
+    runway_forecast = await _load_runway_forecast_for_user(
+        db,
+        user_id=user_id,
+        now=now,
+        profile=profile,
+    )
+    runway_days = int(runway_forecast.get("days") or 0)
+    safe_daily_limit_rs = float((runway_forecast.get("safeDailyPaise") or 0) / 100.0)
 
     # 4. Spending velocity
     spend_7_rs = sum(t.get("amount", 0) for t in txns if t.get("created_at") and t["created_at"] >= since_7) / 100.0
@@ -473,166 +479,37 @@ async def get_wellness_insights(user_id: str = Depends(get_current_user)):
             except Exception:
                 pass
 
-    # 6. Social signal from cart pools
-    user_doc = await db.users.find_one({"_id": user_id})
-    full_name = user_doc.get("full_name", "") if user_doc else ""
-    user_hosted_pools = await db.cart_pools.find({"host_id": user_id}).to_list(length=100)
-    participated_pool_ids = []
-    if full_name:
-        import re
-        name_regex = re.compile(f"^{re.escape(full_name)}$", re.IGNORECASE)
-        user_items = await db.cart_pool_items.find({"added_by_name": name_regex}).to_list(length=500)
-        participated_pool_ids = [item["pool_id"] for item in user_items]
-
-    all_pool_ids = list(set([p["_id"] for p in user_hosted_pools] + participated_pool_ids))
-    if all_pool_ids:
-        latest_pools = await db.cart_pools.find({"_id": {"$in": all_pool_ids}}).sort("created_at", -1).to_list(length=1)
-        if latest_pools:
-            last_pool_time = latest_pools[0].get("created_at")
-            days_since_last_pool = (now - last_pool_time).days
-        else:
-            days_since_last_pool = None
-    else:
-        days_since_last_pool = None
-
-    # Calculate Wellness Score
-    score = 100
-
-    # Sleep: late_night_spend_7d > 3 (-20), > 1 (-10)
-    if late_night_spend_7d > 3:
-        score -= 20
-    elif late_night_spend_7d > 1:
-        score -= 10
-
-    # Meal regularity: avg_food_gap_hours_7d > 10 (-20), > 6 (-10)
-    if avg_food_gap_hours_7d > 10:
-        score -= 20
-    elif avg_food_gap_hours_7d > 6:
-        score -= 10
-
-    # Runway: runway_days < 5 (-20), < 10 (-10)
-    if runway_days < 5:
-        score -= 20
-    elif runway_days < 10:
-        score -= 10
-
-    # Exam pressure: in_exam_window: -15
-    if in_exam_period:
-        score -= 15
-
-    # Spending control: spend_velocity > 1.4 (-15), > 1.2 (-8)
-    if spend_velocity > 1.4:
-        score -= 15
-    elif spend_velocity > 1.2:
-        score -= 8
-
-    # Social signal: days_since_last_pool > 7 (-10)
-    if days_since_last_pool is not None and days_since_last_pool > 7:
-        score -= 10
-
-    score = max(0, min(100, score))
-
-    # Determine status bucket and messages
-    if score >= 70:
-        status = "steady"
-        label = "Your routine looks steady"
-        message = "Your routine looks steady this week. Keep meals regular and stay within today's safe spend target."
-    elif score >= 50:
-        status = "watch"
-        label = "A few patterns need attention"
-        message = "A few patterns need attention: your food timing, spending pace, or exam pressure is starting to stack up. Pick one reset today: a proper meal, a low-spend window, or a short break."
-    else:
-        status = "stressed"
-        label = "Pattern suggests high stress"
-        message = "Your recent pattern suggests you may be stretched thin. You do not need to fix everything today; start with one meal and one planned spend decision, then check in again."
-
-    # Construct signals list
-    signals = []
-
-    # Food gap signal
-    food_gap_severity = "ok"
-    if avg_food_gap_hours_7d > 10:
-        food_gap_severity = "stressed"
-    elif avg_food_gap_hours_7d > 6:
-        food_gap_severity = "watch"
-    signals.append({
-        "key": "food_gap",
-        "label": "Avg Food gap",
-        "value": f"{avg_food_gap_hours_7d:.1f}h" if avg_food_gap_hours_7d < 168.0 else "—",
-        "severity": food_gap_severity,
-        "detail": "Long gaps between meals detected" if food_gap_severity != "ok" else "Regular meal timing"
-    })
-
-    # Runway signal
-    runway_severity = "ok"
-    if runway_days < 5:
-        runway_severity = "stressed"
-    elif runway_days < 10:
-        runway_severity = "watch"
-    signals.append({
-        "key": "runway",
-        "label": "Runway",
-        "value": f"{runway_days} days" if runway_days is not None else "—",
-        "severity": runway_severity,
-        "detail": "Allowance may not last the cycle" if runway_severity != "ok" else "Runway looks stable"
-    })
-
-    # Late night signal
-    late_night_severity = "ok"
-    if late_night_spend_7d > 3:
-        late_night_severity = "stressed"
-    elif late_night_spend_7d > 1:
-        late_night_severity = "watch"
-    signals.append({
-        "key": "late_night",
-        "label": "Late-night spending",
-        "value": f"{late_night_spend_7d} txns",
-        "severity": late_night_severity,
-        "detail": "Frequent late-night activity" if late_night_severity != "ok" else "Healthy nighttime routine"
-    })
-
-    # Velocity signal
-    velocity_severity = "ok"
-    if spend_velocity > 1.4:
-        velocity_severity = "stressed"
-    elif spend_velocity > 1.2:
-        velocity_severity = "watch"
-    signals.append({
-        "key": "velocity",
-        "label": "Spend velocity",
-        "value": f"{spend_velocity:.2f}x",
-        "severity": velocity_severity,
-        "detail": "Spending is accelerating rapidly" if velocity_severity == "stressed" else "Spending is slightly elevated" if velocity_severity == "watch" else "Spending velocity is stable"
-    })
-
-    # Exam signal
-    exam_severity = "stressed" if in_exam_period else "ok"
-    signals.append({
-        "key": "exam",
-        "label": "Exam period",
-        "value": "Active" if in_exam_period else "No",
-        "severity": exam_severity,
-        "detail": "Active exam schedule" if in_exam_period else "No exams active"
-    })
-
-    # Social signal from cart pools
-    pool_severity = "stressed" if (days_since_last_pool is not None and days_since_last_pool > 7) else "ok"
-    signals.append({
-        "key": "cart_pool",
-        "label": "Social index",
-        "value": f"{days_since_last_pool}d idle" if days_since_last_pool is not None else "None",
-        "severity": pool_severity,
-        "detail": "Low cart pool participation recently (possible social withdrawal)" if pool_severity == "stressed" else "Active in cart pools"
-    })
+    signal_basis = [
+        "food_payments",
+        "meal_checkins",
+        "runway_forecast",
+        "after_hours_payments",
+        "spend_velocity",
+        "exam_dates",
+    ]
+    summary = build_wellness_summary(
+        meal_events_count_7d=len(meal_events_7d),
+        current_food_gap_hours=current_food_gap_hours,
+        avg_food_gap_hours_7d=avg_food_gap_hours_7d,
+        late_night_activity_7d=late_night_activity_7d,
+        runway_days=runway_days,
+        safe_daily_limit_rs=safe_daily_limit_rs,
+        spend_velocity=spend_velocity,
+        in_exam_period=in_exam_period,
+    )
 
     return {
-        "score": score,
-        "status": status,
-        "label": label,
-        "message": message,
-        "signals": signals,
+        **summary,
         "generated_by": "local_rules",
-        "avg_food_gap_hours_7d": round(avg_food_gap_hours_7d, 1)
+        "signal_basis": signal_basis,
+        "avg_food_gap_hours_7d": round(avg_food_gap_hours_7d, 1) if avg_food_gap_hours_7d is not None else None,
+        "current_food_gap_hours": round(current_food_gap_hours, 1) if current_food_gap_hours is not None else None,
+        "meal_checkins_7d": meal_checkins_7d,
+        "meal_signals_7d": len(meal_events_7d),
+        "late_night_activity_count_7d": late_night_activity_7d,
+        "late_night_window": "11PM-5AM",
+        "late_night_timezone": "Asia/Kolkata",
+        "disclaimer": "Routine score uses payments, meal check-ins, runway, spend pace, and exam dates only; it is not medical advice.",
     }
 
 

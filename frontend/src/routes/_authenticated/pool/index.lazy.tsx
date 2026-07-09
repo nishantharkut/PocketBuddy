@@ -426,6 +426,16 @@ function PoolCard({ pool }: { pool: Pool }) {
                         <Clock className="h-4 w-4 shrink-0 text-blue-500" />
                         <span>Verifying your split of <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong> (UTR submitted)</span>
                       </div>
+                    ) : rSummary.myStatus === "needs_review" ? (
+                      <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/25 px-3 py-2 rounded-xl text-xs text-orange-400 font-bold shadow-sm shadow-black/25 animate-pulse">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-orange-400" />
+                        <span>Your split of <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong> needs host review</span>
+                      </div>
+                    ) : rSummary.myStatus === "rejected" ? (
+                      <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/25 px-3 py-2 rounded-xl text-xs text-rose-400 font-bold shadow-sm shadow-black/25">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                        <span>Your last UTR was rejected. Settle <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong> with host</span>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/25 px-3 py-2 rounded-xl text-xs text-rose-400 font-bold shadow-sm shadow-black/25">
                         <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
@@ -456,7 +466,15 @@ function PoolCard({ pool }: { pool: Pool }) {
                     } else if (status === "pending") {
                       dotColor = "bg-amber-500 animate-pulse";
                       textColor = "text-amber-400";
-                      label = "Verifying";
+                      label = "UTR pending";
+                    } else if (status === "needs_review") {
+                      dotColor = "bg-orange-500 animate-pulse";
+                      textColor = "text-orange-400";
+                      label = "Review";
+                    } else if (status === "rejected") {
+                      dotColor = "bg-rose-500";
+                      textColor = "text-rose-400";
+                      label = "Rejected";
                     }
 
                     return (

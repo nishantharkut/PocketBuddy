@@ -1,6 +1,7 @@
 import datetime
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017/pocketbuddy_test")
@@ -103,6 +104,76 @@ class TravelGeoProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[1], 24)
         self.assertEqual(result[6], "OSRM cached")
         self.assertTrue(result[7])
+
+    async def test_compute_route_prefers_tomtom_over_stale_osrm_cache_when_configured(self):
+        cache = FakeGeoCacheCollection()
+        db = FakeTravelDb(cache)
+        lat1, lon1 = 26.2514, 78.1685
+        lat2, lon2 = 26.2183, 78.1828
+        osrm_base_url = settings.osrm_route_url.rstrip("/")
+        key = build_geo_cache_key("osrm_route", osrm_base_url, lat1, lon1, lat2, lon2)
+        cache.docs[key] = {
+            "_id": key,
+            "payload": {
+                "distance_km": 8.4,
+                "duration_mins": 24,
+                "geometry": [[lat1, lon1], [lat2, lon2]],
+            },
+            "expires_at": utc_now() + datetime.timedelta(days=1),
+        }
+
+        class FakeTomTomResponse:
+            status_code = 200
+            text = ""
+
+            def json(self):
+                return {
+                    "routes": [
+                        {
+                            "summary": {
+                                "lengthInMeters": 12500,
+                                "travelTimeInSeconds": 1500,
+                                "trafficDelayInSeconds": 300,
+                            },
+                            "legs": [
+                                {
+                                    "points": [
+                                        {"latitude": lat1, "longitude": lon1},
+                                        {"latitude": lat2, "longitude": lon2},
+                                    ]
+                                }
+                            ],
+                        }
+                    ]
+                }
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def get(self, *args, **kwargs):
+                return FakeTomTomResponse()
+
+        old_key = settings.TOMTOM_API_KEY
+        try:
+            settings.TOMTOM_API_KEY = "test-tomtom-key"
+            with patch("app.api.travel.httpx.AsyncClient", FakeAsyncClient):
+                result = await compute_route(lat1, lon1, lat2, lon2, db=db)
+        finally:
+            settings.TOMTOM_API_KEY = old_key
+
+        self.assertEqual(result[0], 12.5)
+        self.assertEqual(result[1], 25)
+        self.assertEqual(result[4], True)
+        self.assertEqual(result[5], 5)
+        self.assertEqual(result[6], "TomTom Traffic")
+        self.assertFalse(result[7])
 
     def test_source_note_separates_demo_public_provider_from_production_option(self):
         note = travel_geo_source_note("https://nominatim.openstreetmap.org")

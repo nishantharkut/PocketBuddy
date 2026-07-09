@@ -21,9 +21,11 @@ class MenuScannerTests(unittest.TestCase):
     def test_demo_menu_text_is_venue_shaped(self):
         canteen_text = demo_menu_text_for_venue("BH-2 Night Canteen")
         cafe_text = demo_menu_text_for_venue("Nescafe")
+        main_text = demo_menu_text_for_venue("Main Canteen")
 
-        self.assertIn("Veg Thali", canteen_text)
-        self.assertIn("Masala Chai", cafe_text)
+        self.assertIn("Egg Paratha", canteen_text)
+        self.assertIn("Cold Coffee", cafe_text)
+        self.assertIn("Rajma Rice", main_text)
 
     def test_demo_menu_candidates_remain_pending_review(self):
         raw_text = demo_menu_text_for_venue("BH-2 Night Canteen")

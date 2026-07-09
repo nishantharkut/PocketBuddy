@@ -32,13 +32,19 @@ def demo_menu_text_for_venue(venue_name: str) -> str:
     candidates, never as trusted menu data.
     """
     venue = str(venue_name or "").lower()
-    if any(k in venue for k in ("tea", "chai", "nescafe", "coffee")):
-        return "Masala Chai 10\nGinger Tea 12\nSamosa 15\nKachori 15\nBun Maska 25"
-    if any(k in venue for k in ("canteen", "mess", "dining", "hostel", "bh2", "bh-2")):
-        return "Veg Thali 80\nSpecial Thali 120\nPaneer Butter Masala 110\nTandoori Roti 8\nJeera Rice 60"
+    if any(k in venue for k in ("bh2", "bh-2", "night", "late")):
+        return "Egg Paratha 45\nMasala Maggi 35\nAloo Paratha 40\nPaneer Roll 70\nTea 10\nCold Coffee 50"
+    if any(k in venue for k in ("nescafe", "coffee", "cafe", "library")):
+        return "Cold Coffee 55\nVeg Sandwich 45\nCheese Sandwich 60\nSamosa 15\nMasala Chai 15\nBrownie 40"
+    if any(k in venue for k in ("juice", "shake", "smoothie")):
+        return "Banana Shake 35\nOreo Shake 60\nLemon Soda 25\nPoha 25\nSprout Salad 45"
+    if any(k in venue for k in ("tea", "chai")):
+        return "Cutting Chai 10\nMasala Chai 15\nSamosa 15\nKachori 18\nBun Maska 25"
+    if any(k in venue for k in ("canteen", "mess", "dining", "hostel", "main")):
+        return "Veg Thali 70\nRajma Rice 60\nChole Rice 65\nPaneer Fried Rice 75\nCurd 20\nTea 10"
     if any(k in venue for k in ("dhaba", "punjabi")):
-        return "Aloo Paratha 40\nPaneer Paratha 60\nDal Makhani 90\nLassi 35"
-    return "Masala Maggi 30\nCheese Maggi 40\nVeg Sandwich 45\nCold Coffee 35"
+        return "Aloo Paratha 40\nPaneer Paratha 60\nDal Makhani 90\nButter Roti 12\nLassi 35"
+    return "Masala Maggi 35\nCheese Maggi 45\nVeg Burger 55\nFrench Fries 60\nLemon Soda 25"
 
 
 def upload_filetype_for_ocr(image_bytes: bytes) -> tuple[str, str]:

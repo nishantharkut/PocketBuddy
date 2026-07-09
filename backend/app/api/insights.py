@@ -724,6 +724,7 @@ async def get_stats(
     # ── Source breakdown ──────────────────────────────────────────────────
     companion_total = sum(t.get("amount", 0) for t in expense_txns if t.get("source", "").startswith("companion"))
     manual_total = sum(t.get("amount", 0) for t in expense_txns if t.get("source") == "manual")
+    statement_import_total = sum(t.get("amount", 0) for t in expense_txns if t.get("source") == "statement_import")
 
     # ── Top merchants (by total expense amount) ───────────────────────────
     merchant_totals: dict[str, int] = {}
@@ -824,6 +825,7 @@ async def get_stats(
         "source_breakdown": {
             "companion": companion_total,
             "manual": manual_total,
+            "statement_import": statement_import_total,
         },
         "top_merchants": top_merchants,
         "hourly_data": hourly_data,

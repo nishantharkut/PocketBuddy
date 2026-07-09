@@ -15,6 +15,7 @@ from app.api import (
     profile,
     rag,
     seed,
+    statement_import,
     subscriptions,
     transactions,
     webhook,
@@ -50,6 +51,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(transactions.router, prefix="/api/transactions", tags=["transactions"])
+app.include_router(statement_import.router, prefix="/api/statement-import", tags=["statement-import"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["subscriptions"])
 app.include_router(pools.router, prefix="/api/cart-pools", tags=["pools"])
 app.include_router(checkins.router, prefix="/api/checkins", tags=["checkins"])

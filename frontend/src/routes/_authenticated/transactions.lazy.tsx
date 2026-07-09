@@ -34,6 +34,9 @@ import {
   HeartPulse,
   Wifi,
   Package,
+  UploadCloud,
+  FileSpreadsheet,
+  Undo2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,7 +52,19 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { rupees } from "@/lib/format";
-import { getStats, getProfile, updateTransaction, getCatalog, addCatalogItem, submitParserCorrection } from "@/lib/api/db.functions";
+import {
+  getStats,
+  getProfile,
+  updateTransaction,
+  getCatalog,
+  addCatalogItem,
+  submitParserCorrection,
+  previewStatementImport,
+  commitStatementImport,
+  applyStatementVendorCategory,
+  getStatementImportBatches,
+  rollbackStatementImportBatch,
+} from "@/lib/api/db.functions";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -140,6 +155,12 @@ function transactionTrustBadges(txn: any): TrustBadge[] {
       tone: "warning",
       title: "Parsed with lower confidence. Confirm or correct this entry.",
     });
+  } else if (txn.needs_category_review) {
+    badges.push({
+      label: "Classify vendor",
+      tone: "warning",
+      title: "Repeated statement vendor. Answer once so future imports can classify it.",
+    });
   } else if (userReviewed) {
     badges.push({
       label: "Reviewed",
@@ -165,6 +186,12 @@ function transactionTrustBadges(txn: any): TrustBadge[] {
       label: "Manual",
       tone: "muted",
       title: "Entered by the user.",
+    });
+  } else if (source === "statement_import" || txn.data_origin === "bank_statement_upload") {
+    badges.push({
+      label: "Statement",
+      tone: "primary",
+      title: "Imported from a user-reviewed bank statement. Raw files and passwords are not stored.",
     });
   } else if (source) {
     badges.push({
@@ -204,6 +231,9 @@ function transactionTrustDetail(txn: any) {
   if (txn.data_origin === "android_on_device" || txn.privacy_mode === "on_device_only") {
     return "Raw alert text stayed on the phone.";
   }
+  if (txn.source === "statement_import" || txn.data_origin === "bank_statement_upload") {
+    return "Imported from a reviewed statement. Raw file and password were not stored.";
+  }
   if (txn.raw_payload_received === true || txn.data_origin === "legacy_android_raw_ingest") {
     return "Legacy alert was stored as masked preview only.";
   }
@@ -233,6 +263,7 @@ function transactionTrustPathSteps(txn: any): TrustPathStep[] {
     (isCompanion && txn.raw_payload_received === false);
   const legacyMasked = txn.raw_payload_received === true || txn.data_origin === "legacy_android_raw_ingest";
   const manual = source === "manual" || txn.data_origin === "user_entered";
+  const statementImport = source === "statement_import" || txn.data_origin === "bank_statement_upload";
 
   const firstStep: TrustPathStep = onDevice
     ? {
@@ -255,6 +286,13 @@ function transactionTrustPathSteps(txn: any): TrustPathStep[] {
             state: "neutral",
             icon: "phone",
           }
+        : statementImport
+          ? {
+              label: "Statement import",
+              detail: "Created from a user-reviewed bank statement row. The raw file and password were not stored.",
+              state: "complete",
+              icon: "bank",
+            }
         : {
             label: "PocketBuddy entry",
             detail: "Created inside the app from structured user activity.",
@@ -363,6 +401,7 @@ function TxnsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [editingTxn, setEditingTxn] = useState<any | null>(null);
+  const [statementImportOpen, setStatementImportOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
@@ -399,6 +438,13 @@ function TxnsPage() {
     queryKey: ["stats", user?.id, month, year],
     enabled: !!user,
     queryFn: () => getStats(month, year),
+    staleTime: 30_000,
+  });
+
+  const { data: statementBatches } = useQuery({
+    queryKey: ["statement-import-batches", user?.id],
+    enabled: !!user,
+    queryFn: getStatementImportBatches,
     staleTime: 30_000,
   });
 
@@ -550,12 +596,35 @@ function TxnsPage() {
   return (
     <AppShell>
       {/* Page Header */}
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex min-h-14 items-center justify-between gap-3 border-b border-border bg-background/85 backdrop-blur-md px-4 py-2 sm:px-6 md:px-10 lg:px-12">
         <div className="flex items-center gap-3 min-w-0">
           <MobileMenuButton />
           <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">
             {viewMode === "ledger" ? "Transactions" : "Stats & Analytics"}
           </h1>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => setStatementImportOpen(true)}
+            id="btn-open-statement-import"
+            title="Import bank statement"
+            aria-label="Import bank statement"
+            className="inline-flex h-9 w-9 items-center justify-center gap-2 rounded-full border border-border bg-surface text-foreground transition-all hover:bg-surface-raised sm:w-auto sm:px-3"
+          >
+            <UploadCloud className="h-4 w-4 text-primary" />
+            <span className="hidden text-[10px] font-black uppercase tracking-[0.08em] sm:inline md:text-xs">Import</span>
+          </button>
+          <button
+            onClick={exportCSV}
+            id="btn-export-csv"
+            title="Export CSV"
+            aria-label="Export CSV"
+            disabled={!stats?.daily_groups?.length}
+            className="inline-flex h-9 w-9 items-center justify-center gap-2 rounded-full border border-border bg-surface text-foreground transition-all hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-3"
+          >
+            <Download className="h-4 w-4 text-primary" />
+            <span className="hidden text-[10px] font-black uppercase tracking-[0.08em] sm:inline md:text-xs">Export</span>
+          </button>
         </div>
       </div>
 
@@ -571,16 +640,6 @@ function TxnsPage() {
             <h2 className="text-lg font-black font-display tracking-tight text-foreground">
               {viewMode === "ledger" && viewTab === "monthly" ? `${year}` : `${monthName} ${year}`}
             </h2>
-            {viewMode === "analytics" && (
-              <button
-                onClick={exportCSV}
-                id="btn-export-csv"
-                className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-surface px-3 text-[10px] md:text-xs font-black uppercase tracking-[0.08em] text-foreground transition-all hover:bg-surface-raised"
-              >
-                <Download className="h-4 w-4 text-primary" />
-                <span>Export CSV</span>
-              </button>
-            )}
           </div>
           <button onClick={nextMonth} id="btn-txn-next-month"
             className="flex items-center justify-center w-9 h-9 rounded-full bg-surface border border-border hover:bg-surface-raised transition-colors cursor-pointer">
@@ -748,7 +807,6 @@ function TxnsPage() {
                     stats={stats}
                     monthName={monthName}
                     year={year}
-                    onExport={exportCSV}
                   />
                 )}
               </div>
@@ -1199,6 +1257,19 @@ function TxnsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <StatementImportDialog
+        open={statementImportOpen}
+        onOpenChange={setStatementImportOpen}
+        batches={Array.isArray(statementBatches) ? statementBatches : []}
+        categories={categories}
+        onChanged={() => {
+          qc.invalidateQueries({ queryKey: ["stats", user?.id, month, year] });
+          qc.invalidateQueries({ queryKey: ["statement-import-batches", user?.id] });
+          qc.invalidateQueries({ queryKey: ["txns", user?.id] });
+          qc.invalidateQueries({ queryKey: ["runway"] });
+        }}
+      />
     </AppShell>
   );
 }
@@ -1495,16 +1566,17 @@ function MonthlyView({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   TOTAL VIEW — Budget, accounts summary, export
+   TOTAL VIEW — Budget and accounts summary
    ═══════════════════════════════════════════════════════════════════════ */
 function TotalView({
-  stats, monthName, year, onExport,
+  stats, monthName, year,
 }: {
-  stats: any; monthName: string; year: number; onExport: () => void;
+  stats: any; monthName: string; year: number;
 }) {
   const comparedPct = stats?.compared_expenses_pct ?? 0;
   const companion = stats?.source_breakdown?.companion ?? 0;
   const manual = stats?.source_breakdown?.manual ?? 0;
+  const statementImport = stats?.source_breakdown?.statement_import ?? 0;
   const totalExpenses = stats?.summary?.expenses ?? 0;
 
   return (
@@ -1535,6 +1607,10 @@ function TotalView({
             <span className="text-xs text-muted-foreground">Expenses (Manual)</span>
             <span className="text-xs font-black tnum text-foreground">{rupees(manual)}</span>
           </div>
+          <div className="flex items-center justify-between py-2 border-b border-border/30">
+            <span className="text-xs text-muted-foreground">Expenses (Statement imports)</span>
+            <span className="text-xs font-black tnum text-foreground">{rupees(statementImport)}</span>
+          </div>
           <div className="flex items-center justify-between py-2">
             <span className="text-xs font-bold text-foreground">Total Expenses</span>
             <span className="text-xs font-black tnum text-[#FF6B4A]">{rupees(totalExpenses)}</span>
@@ -1542,15 +1618,6 @@ function TotalView({
         </div>
       </div>
 
-      {/* Export Button */}
-      <button
-        onClick={onExport}
-        id="btn-export-txn-csv"
-        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-surface border border-border text-xs font-bold uppercase tracking-wider text-foreground hover:bg-surface-raised transition-all cursor-pointer"
-      >
-        <Download className="h-4 w-4" />
-        Export Data to CSV
-      </button>
     </div>
   );
 }
@@ -1568,6 +1635,410 @@ function month(name: string): string {
 /* ═══════════════════════════════════════════════════════════════════════
    EDIT TRANSACTION FORM
    ═══════════════════════════════════════════════════════════════════════ */
+type StatementPreviewRow = {
+  row_id: string;
+  posted_at: string;
+  description: string;
+  amount_paise: number;
+  direction: "debit" | "credit";
+  category: string;
+  confidence: "high" | "medium" | "low";
+  reference?: string | null;
+  balance_paise?: number | null;
+  duplicate_candidate?: boolean;
+  duplicate_reason?: string | null;
+  notes?: string[];
+};
+
+type StatementVendorPrompt = {
+  group_key: string;
+  display_name: string;
+  category: string;
+  count: number;
+  weekly_count?: number;
+  monthly_count?: number;
+  total_paise: number;
+  reason: string;
+};
+
+function StatementImportDialog({
+  open,
+  onOpenChange,
+  batches,
+  categories,
+  onChanged,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  batches: any[];
+  categories: { v: string; l: string }[];
+  onChanged: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [bankName, setBankName] = useState("");
+  const [accountLabel, setAccountLabel] = useState("");
+  const [password, setPassword] = useState("");
+  const [preview, setPreview] = useState<any | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [vendorPrompts, setVendorPrompts] = useState<StatementVendorPrompt[]>([]);
+  const [vendorChoices, setVendorChoices] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [applyingVendorKey, setApplyingVendorKey] = useState<string | null>(null);
+  const [rollingBackBatch, setRollingBackBatch] = useState<string | null>(null);
+
+  const rows: StatementPreviewRow[] = preview?.rows ?? [];
+  const selectedCount = rows.filter((row) => selectedRows.has(row.row_id)).length;
+  const duplicateCount = rows.filter((row) => row.duplicate_candidate).length;
+  const recentBatches = (batches ?? []).slice(0, 4);
+
+  function resetPreview() {
+    setPreview(null);
+    setSelectedRows(new Set());
+  }
+
+  async function handlePreview() {
+    if (!file) {
+      toast.error("Choose a statement file first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = new FormData();
+      data.append("file", file);
+      if (password.trim()) data.append("password", password.trim());
+      if (bankName.trim()) data.append("bank_name", bankName.trim());
+      const result = await previewStatementImport({ data });
+      const nextRows: StatementPreviewRow[] = result?.rows ?? [];
+      setPreview(result);
+      setSelectedRows(new Set(nextRows.filter((row) => !row.duplicate_candidate).map((row) => row.row_id)));
+      toast.success(`Previewed ${nextRows.length} statement rows.`);
+    } catch (err: any) {
+      toast.error(err.message || "Could not preview this statement.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleImport() {
+    if (!preview || selectedCount === 0) {
+      toast.error("Select at least one row to import.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await commitStatementImport({
+        data: {
+          file_name: preview.file_name || file?.name || "statement",
+          bank_name: bankName.trim() || preview.bank_name || undefined,
+          account_label: accountLabel.trim() || undefined,
+          skip_duplicates: true,
+          rows: rows.map((row) => ({
+            row_id: row.row_id,
+            posted_at: row.posted_at,
+            description: row.description,
+            amount_paise: row.amount_paise,
+            direction: row.direction,
+            category: row.category,
+            confidence: row.confidence,
+            reference: row.reference || undefined,
+            balance_paise: row.balance_paise ?? undefined,
+            selected: selectedRows.has(row.row_id),
+          })),
+        },
+      });
+      const prompts: StatementVendorPrompt[] = result.vendor_review_prompts ?? [];
+      setVendorPrompts(prompts);
+      setVendorChoices(Object.fromEntries(prompts.map((prompt) => [prompt.group_key, ""])));
+      toast.success(
+        prompts.length
+          ? `Imported ${result.inserted_count ?? 0} rows. ${prompts.length} repeated vendor${prompts.length > 1 ? "s need" : " needs"} one answer.`
+          : `Imported ${result.inserted_count ?? 0} rows. ${result.duplicate_count ?? 0} duplicate skipped.`
+      );
+      resetPreview();
+      setFile(null);
+      setPassword("");
+      onChanged();
+    } catch (err: any) {
+      toast.error(err.message || "Statement import failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleVendorCategory(prompt: StatementVendorPrompt) {
+    const category = vendorChoices[prompt.group_key];
+    if (!category || category === "other") {
+      toast.error("Choose a specific category for this vendor.");
+      return;
+    }
+    setApplyingVendorKey(prompt.group_key);
+    try {
+      const result = await applyStatementVendorCategory({
+        data: {
+          group_key: prompt.group_key,
+          category,
+          display_name: prompt.display_name,
+        },
+      });
+      toast.success(`Mapped ${result.updated_count ?? prompt.count} payments to ${category}.`);
+      setVendorPrompts((prev) => prev.filter((item) => item.group_key !== prompt.group_key));
+      onChanged();
+    } catch (err: any) {
+      toast.error(err.message || "Could not save this vendor mapping.");
+    } finally {
+      setApplyingVendorKey(null);
+    }
+  }
+
+  async function handleRollback(batchId: string) {
+    setRollingBackBatch(batchId);
+    try {
+      const result = await rollbackStatementImportBatch({ batchId });
+      toast.success(`Removed ${result.deleted_count ?? 0} imported rows.`);
+      onChanged();
+    } catch (err: any) {
+      toast.error(err.message || "Could not undo this import.");
+    } finally {
+      setRollingBackBatch(null);
+    }
+  }
+
+  function toggleRow(rowId: string) {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  }
+
+  function selectAllNonDuplicates() {
+    setSelectedRows(new Set(rows.filter((row) => !row.duplicate_candidate).map((row) => row.row_id)));
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      onOpenChange(nextOpen);
+      if (!nextOpen) {
+        resetPreview();
+        setVendorPrompts([]);
+        setVendorChoices({});
+      }
+    }}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto bg-background border border-border text-foreground sm:max-w-3xl" id="dialog-statement-import">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5 text-primary" />
+            Import bank statement
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+            <p className="text-xs font-semibold text-foreground">Use this when Android auto-sync is unavailable or you need to catch up older transactions.</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              CSV is most reliable. Text-based PDFs are supported; scanned PDFs are not. PocketBuddy stores only selected transaction rows, not the uploaded file or PDF password.
+            </p>
+          </div>
+
+          {vendorPrompts.length > 0 && (
+            <div className="space-y-3 rounded-xl border border-warning/30 bg-warning/5 p-3" id="statement-vendor-review-prompts">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-warning">Repeated vendors found</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  Answer once. PocketBuddy will use it for matching statement rows now and future imports.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {vendorPrompts.map((prompt) => (
+                  <div key={prompt.group_key} className="rounded-lg border border-border bg-background/80 p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-foreground">{prompt.display_name}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {prompt.count} payments - {rupees(prompt.total_paise)} total
+                          {prompt.weekly_count ? ` - ${prompt.weekly_count} in a week` : ""}
+                        </p>
+                      </div>
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[260px] sm:flex-row">
+                        <Select
+                          value={vendorChoices[prompt.group_key] || ""}
+                          onValueChange={(value) => setVendorChoices((prev) => ({ ...prev, [prompt.group_key]: value }))}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="What is it for?" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories
+                              .filter((category) => !["other", "income", "salary", "allowance", "refund"].includes(category.v))
+                              .map((category) => (
+                                <SelectItem key={category.v} value={category.v}>
+                                  {category.l}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          disabled={applyingVendorKey === prompt.group_key}
+                          onClick={() => handleVendorCategory(prompt)}
+                          className="h-9 shrink-0"
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Statement file</label>
+              <Input
+                id="input-statement-file"
+                type="file"
+                accept=".csv,.tsv,.txt,.pdf,text/csv,application/pdf"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  resetPreview();
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">PDF password</label>
+              <Input
+                id="input-statement-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Only if statement asks for it"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Bank name</label>
+              <Input
+                id="input-statement-bank"
+                value={bankName}
+                onChange={(event) => setBankName(event.target.value)}
+                placeholder="e.g. SBI, HDFC, ICICI"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Account label</label>
+              <Input
+                id="input-statement-account-label"
+                value={accountLabel}
+                onChange={(event) => setAccountLabel(event.target.value)}
+                placeholder="e.g. Salary account, hostel spends"
+              />
+            </div>
+          </div>
+
+          {!preview ? (
+            <Button id="btn-preview-statement" disabled={busy || !file} onClick={handlePreview} className="w-full">
+              <UploadCloud className="mr-2 h-4 w-4" />
+              Preview rows before import
+            </Button>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-foreground">{selectedCount} of {rows.length} rows selected</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {duplicateCount ? `${duplicateCount} duplicate candidate${duplicateCount > 1 ? "s" : ""} skipped by default.` : "No duplicate candidates detected."}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={selectAllNonDuplicates}>Select clean rows</Button>
+                  <Button variant="outline" size="sm" onClick={resetPreview}>Change file</Button>
+                </div>
+              </div>
+
+              <div className="max-h-[300px] overflow-y-auto rounded-xl border border-border divide-y divide-border">
+                {rows.map((row) => {
+                  const checked = selectedRows.has(row.row_id);
+                  return (
+                    <button
+                      key={row.row_id}
+                      type="button"
+                      onClick={() => toggleRow(row.row_id)}
+                      className={`w-full p-3 text-left transition-colors hover:bg-surface-raised/60 ${checked ? "bg-surface-raised/40" : "bg-background"}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-bold text-foreground truncate">{row.description}</span>
+                            <Badge variant="outline" className={getCatBadgeStyles(row.category)}>{row.category}</Badge>
+                            {row.duplicate_candidate && <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">Duplicate</Badge>}
+                            {row.confidence !== "high" && <Badge variant="outline" className="border-primary/25 bg-primary/10 text-primary">Review</Badge>}
+                          </div>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {new Date(row.posted_at).toLocaleDateString("en-IN")} - {row.direction === "credit" ? "Credit" : "Debit"}
+                            {row.reference ? ` - Ref ${row.reference}` : ""}
+                          </p>
+                          {row.duplicate_reason && <p className="mt-1 text-[11px] text-warning">Possible duplicate: {row.duplicate_reason}</p>}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className={`text-sm font-black tnum ${row.direction === "credit" ? "text-success" : "text-[#FF6B4A]"}`}>
+                            {row.direction === "credit" ? "+" : "-"}{rupees(row.amount_paise)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">{checked ? "Selected" : "Skipped"}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {recentBatches.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-border bg-surface/70 p-3">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Recent statement imports</p>
+              {recentBatches.map((batch) => (
+                <div key={batch.id || batch._id} className="flex items-center justify-between gap-3 rounded-lg bg-background/70 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-foreground">{batch.bank_name || batch.file_name || "Statement import"}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {batch.status || "completed"} - {batch.inserted_count ?? 0} rows
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={batch.status === "rolled_back" || rollingBackBatch === (batch.id || batch._id)}
+                    onClick={() => handleRollback(batch.id || batch._id)}
+                    className="shrink-0"
+                  >
+                    <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                    Undo
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          {preview ? (
+            <Button id="btn-import-statement-rows" disabled={busy || selectedCount === 0} onClick={handleImport} className="w-full">
+              Import selected rows
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full">
+              Close
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: string; l: string }[]; onClose: () => void }) {
   const [name, setName] = useState(txn.mapped_merchant_name ?? txn.raw_merchant_string);
   const [direction, setDirection] = useState<"debit" | "credit">(txn.direction === "credit" ? "credit" : "debit");
@@ -1596,7 +2067,17 @@ function EditTxnForm({ txn, categories, onClose }: { txn: any; categories: { v: 
         } catch {}
       }
 
-      if (txn.source !== "manual" || txn.needs_verification) {
+      const originalDirection = txn.direction === "credit" ? "credit" : "debit";
+      if (txn.source === "statement_import" && txn.statement_vendor_key && direction === originalDirection) {
+        await applyStatementVendorCategory({
+          data: {
+            group_key: txn.statement_vendor_key,
+            category: finalCategory,
+            display_name: name.trim(),
+          },
+        });
+        toast.success("Vendor answer saved for matching statement rows.");
+      } else if (txn.source !== "manual" || txn.needs_verification) {
         await submitParserCorrection({
           data: {
             transaction_id: txn.id,

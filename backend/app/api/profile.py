@@ -149,6 +149,8 @@ async def delete_account(user_id: str = Depends(get_current_user)):
     db = get_db()
     # Cascade delete all data for this user
     await db.transactions.delete_many({"user_id": user_id})
+    await db.statement_import_batches.delete_many({"user_id": user_id})
+    await db.merchant_category_mappings.delete_many({"user_id": user_id})
     await db.subscriptions.delete_many({"user_id": user_id})
     await db.companion_sync_log.delete_many({"user_id": user_id})
     await db.data_consents.delete_many({"user_id": user_id})

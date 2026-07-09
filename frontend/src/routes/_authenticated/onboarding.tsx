@@ -517,7 +517,7 @@ function Onboarding() {
             <div className="mb-2">
               <h2 className="text-[20px] font-black tracking-tight text-foreground uppercase">Your Daily Routine</h2>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Helps us spot study stress and meal-skipping patterns.
+                Helps PocketBuddy keep meal and runway nudges practical during busy weeks.
               </p>
             </div>
 
@@ -581,7 +581,7 @@ function Onboarding() {
                 </div>
               </div>
               <p className="mt-1.5 text-[10px] text-zinc-500 pl-1 leading-normal">
-                We will monitor your schedule during this stressful period.
+                Exam dates only adjust meal check-ins and safe-spend reminders.
               </p>
             </div>
 

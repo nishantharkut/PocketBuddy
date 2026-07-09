@@ -496,7 +496,10 @@ From PocketBuddy Runway.`;
       ? `In this scenario, the first deficit appears around ${projectionSignal.label}.`
       : `In this scenario, the long-range balance stays positive through ${projectionSignal.label}.`
     : "Scenario view will appear once horizon data is available.";
-  const [selectedActionId, setSelectedActionId] = useState("priority");
+  const sectionEyebrowClass = "text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500";
+  const sectionTitleClass = "text-sm font-semibold tracking-tight text-foreground sm:text-base";
+  const sectionBodyClass = "text-xs leading-relaxed text-muted-foreground sm:text-sm";
+  const [selectedActionId, setSelectedActionId] = useState("action-1");
   const runwayActions = useMemo(() => {
     if (!forecast) return [];
     const actionsList = [
@@ -554,6 +557,24 @@ From PocketBuddy Runway.`;
 
     return actionsList;
   }, [forecast, activeActionTitle, activeActionDetail, activeActionType, examBufferCommitmentTotal, foodRoutine, decisionEngine]);
+  const secondaryRunwayActions = runwayActions.filter((action) => action.id !== "priority");
+  const selectedRunwayAction = secondaryRunwayActions.find((action) => action.id === selectedActionId)
+    ?? secondaryRunwayActions[0]
+    ?? runwayActions[0]
+    ?? null;
+  const simulatorModeLabel = flightProtocol === "normal"
+    ? "Current mode"
+    : flightProtocol === "glide"
+      ? "Stretch mode"
+      : "Emergency mode";
+  const simulatorModeTone = flightProtocol === "normal"
+    ? "border-primary/20 bg-primary/5 text-primary"
+    : flightProtocol === "glide"
+      ? "border-pb-amber/20 bg-pb-amber/5 text-pb-amber"
+      : "border-pb-red/20 bg-pb-red/5 text-pb-red";
+  const simulatorRunwayBadge = safeDailyIsZero
+    ? "No flexible spend"
+    : `${simulatedDays} days runway`;
 
 
 
@@ -1590,43 +1611,42 @@ From PocketBuddy Runway.`;
             )}
 
             {/* 🛫 DAILY SPEND CHECK — SURVIVAL COCKPIT */}
-            <Card className="border border-border bg-surface p-5 sm:p-6 shadow-sm rounded-2xl relative overflow-hidden">
+            <Card className="border border-border bg-surface p-4 sm:p-5 shadow-sm rounded-2xl relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/30 via-pb-amber/30 to-pb-green/30" />
 
-              <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+              <div className="flex flex-col lg:flex-row gap-5 items-stretch">
 
                 {/* ── Left: Controls ── */}
-                <div className="flex-1 space-y-5">
+                <div className="flex-1 space-y-4">
 
-                  {/* Header */}
-                  <div className="flex items-center justify-between gap-4 border-b border-border/40 pb-3 mb-1 lg:border-none lg:pb-0 lg:mb-0">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <Compass className="h-5 w-5 text-primary shrink-0" />
-                        <h3 className="text-sm sm:text-base font-semibold tracking-tight text-foreground">Daily spend check</h3>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <p className={sectionEyebrowClass}>Daily spend check</p>
+                      <div className="flex items-start gap-2">
+                        <Compass className="mt-0.5 h-4.5 w-4.5 shrink-0 text-primary" />
+                        <h3 className={sectionTitleClass}>Test a daily target before you follow it</h3>
                       </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed hidden sm:block">
-                        Simulate scenarios and see how lifestyle changes extend your runway — without touching real data.
+                      <p className={sectionBodyClass}>
+                        Adjust the target, compare modes, and see whether the cycle still reaches reset.
                       </p>
                     </div>
-
-                    {/* Mobile Simulated Days Indicator (Visible only on mobile) */}
-                    <div className="lg:hidden shrink-0 flex items-center gap-2.5 border border-border/60 bg-background px-3 py-1.5 rounded-xl shadow-sm">
-                      <div className="text-right">
-                        <span className="block text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Simulated</span>
-                        <span className="block text-sm font-black text-foreground tnum leading-none mt-0.5">
-                          {safeDailyIsZero ? "0" : simulatedDays} days
-                        </span>
-                      </div>
-                      <div className={`h-2 w-2 rounded-full ${isSimulatedSafe ? "bg-pb-green" : "bg-pb-red"}`} />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="border-border bg-background/70 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Target: {safeDailyDisplay}/day
+                      </Badge>
+                      <Badge variant="outline" className="border-border bg-background/70 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {simulatorRunwayBadge}
+                      </Badge>
+                      <Badge variant="outline" className={`text-[10px] font-semibold uppercase tracking-wider ${simulatorModeTone}`}>
+                        {simulatorModeLabel}
+                      </Badge>
                     </div>
                   </div>
 
-                  {/* Slider */}
-                  <div className="p-1 space-y-3">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs font-semibold text-muted-foreground">Adjust Daily Spend</span>
-                      <span className="text-base font-bold text-primary tnum">
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Adjust daily spend</span>
+                      <span className="text-sm font-semibold text-primary tnum sm:text-base">
                         {safeDailyIsZero ? "Pause" : formatRs(activeSimulatedSpend * 100)}
                         {!safeDailyIsZero && <span className="text-xs font-medium text-muted-foreground"> /day</span>}
                       </span>
@@ -1644,16 +1664,15 @@ From PocketBuddy Runway.`;
                           onTouchEnd={() => toast.info(`Simulated at ${formatRs(activeSimulatedSpend * 100)}/day → ${simulatedDays} days runway`)}
                           className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-gradient-to-r from-pb-green via-pb-amber to-pb-red accent-primary focus:outline-none"
                         />
-                        <div className="flex justify-between font-mono text-[10px] text-muted-foreground font-semibold">
+                        <div className="flex justify-between font-mono text-[10px] font-semibold text-muted-foreground">
                           <span>{formatRs(simulatorMinSpend * 100)}</span>
                           <span className="text-center">Mid: {formatRs(Math.round(sliderMaxSpend * 50))}</span>
                           <span>{formatRs(sliderMaxSpend * 100)}</span>
                         </div>
 
-                        {/* Mobile-only Simulator status feedback */}
-                        <div className="flex items-start gap-2 pt-2.5 border-t border-border/30 lg:hidden text-xs">
+                        <div className="flex items-start gap-2 rounded-xl border border-border/50 bg-background/50 px-3 py-2 text-xs">
                           <div className={`h-2 w-2 rounded-full mt-1 shrink-0 ${isSimulatedSafe ? "bg-pb-green" : "bg-pb-red"}`} />
-                          <p className="text-xs text-muted-foreground leading-normal font-medium">
+                          <p className="text-xs font-medium leading-normal text-muted-foreground">
                             {isSimulatedSafe
                               ? `This target safely reaches your reset date.`
                               : safeDailyIsZero
@@ -1671,7 +1690,7 @@ From PocketBuddy Runway.`;
 
                   {/* Quick targets */}
                   <div className="space-y-2">
-                    <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Quick Targets</span>
+                    <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Quick targets</span>
                     <div className="flex flex-wrap gap-1.5">
                       {simulatorPresets.map((preset) => (
                         <button
@@ -1681,7 +1700,7 @@ From PocketBuddy Runway.`;
                             setSimulatedDailySpend(preset.value);
                             toast.info(`Target: ${preset.label} (${formatRs(preset.value * 100)}/day)`);
                           }}
-                          className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-all active:scale-95 cursor-pointer ${
+                          className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95 cursor-pointer ${
                             activeSimulatedSpend === preset.value
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-border/60 bg-background text-muted-foreground hover:bg-surface hover:text-foreground"
@@ -1694,7 +1713,7 @@ From PocketBuddy Runway.`;
                         <button
                           type="button"
                           onClick={() => { setSimulatedDailySpend(null); toast.info("Reset to actual pace."); }}
-                          className="rounded-lg border border-dashed border-border px-2.5 py-1 text-[11px] font-bold text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors cursor-pointer"
+                          className="rounded-lg border border-dashed border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors cursor-pointer"
                         >
                           {defaultPace > 0 ? `Reset (${formatRs(defaultPace * 100)}/day)` : "Reset"}
                         </button>
@@ -1705,7 +1724,7 @@ From PocketBuddy Runway.`;
                   {/* Mode cards */}
                   <div className="border-t border-border/40 pt-4 space-y-2.5">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Plan Intensity</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Plan intensity</span>
                       <TooltipProvider>
                         <UITooltip>
                           <TooltipTrigger asChild>
@@ -1726,7 +1745,7 @@ From PocketBuddy Runway.`;
                         </UITooltip>
                       </TooltipProvider>
                     </div>
-                    <div className="bg-muted/40 border border-border/40 p-1 rounded-xl grid grid-cols-3 gap-1">
+                    <div className="bg-muted/35 border border-border/40 p-1 rounded-xl grid grid-cols-3 gap-1">
                       {[
                         { key: "normal" as const, label: "Current Pace", amount: noSpendHistory ? "—" : `${formatRs((defaultPace || safeDailyRs) * 100)}` },
                         { key: "glide" as const, label: "Stretch", amount: safeDailyIsZero ? "Pause" : `${formatRs(stretchModeDailyRs * 100)}` },
@@ -1738,8 +1757,8 @@ From PocketBuddy Runway.`;
                           onClick={() => selectRunwayMode(mode.key)}
                           className={`py-2 px-1 text-center rounded-lg transition-all cursor-pointer ${
                             flightProtocol === mode.key
-                              ? "bg-background text-foreground shadow-sm border border-border/80 font-bold text-xs"
-                              : "text-muted-foreground hover:text-foreground text-xs font-semibold"
+                              ? "bg-background text-foreground shadow-sm border border-border/80 font-semibold text-xs"
+                              : "text-muted-foreground hover:text-foreground text-xs font-medium"
                           }`}
                         >
                           <span className="block truncate text-[10px] sm:text-xs">{mode.label}</span>
@@ -1764,8 +1783,8 @@ From PocketBuddy Runway.`;
 
                     {flightProtocol === "glide" && (
                       <div className="space-y-2.5">
-                        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          <span>Optional Stretch Levers</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Optional stretch levers</span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {[
@@ -1861,22 +1880,22 @@ From PocketBuddy Runway.`;
                 </div>
 
                 {/* ── Right: Cockpit Gauge ── */}
-                <div className="hidden lg:flex w-full flex-col justify-between gap-4 border-t border-border pt-5 lg:w-72 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Runway simulator</span>
+                <div className="hidden lg:flex w-full flex-col justify-between gap-4 rounded-xl border border-border/60 bg-background/55 p-4 lg:w-72">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Runway simulator</span>
                       <Badge variant="outline" className={`text-[9px] font-bold uppercase py-0.5 ${
                         flightProtocol === "normal" ? "border-primary/30 bg-primary/10 text-primary" :
                         flightProtocol === "glide" ? "border-pb-amber/30 bg-pb-amber/10 text-pb-amber" :
-                        "border-pb-red/30 bg-pb-red/10 text-pb-red animate-pulse"
+                        "border-pb-red/30 bg-pb-red/10 text-pb-red"
                       }`}>
                         {flightProtocol === "normal" ? "Normal" : flightProtocol === "glide" ? "Stretch" : "Emergency"}
                       </Badge>
                     </div>
 
                     {/* SVG Circular Gauge */}
-                    <div className="flex justify-center py-2">
-                      <div className="relative h-28 w-28">
+                    <div className="flex justify-center py-1.5">
+                      <div className="relative h-24 w-24">
                         <svg className="h-full w-full -rotate-90">
                           <circle cx="56" cy="56" r={radius} className="fill-none stroke-muted-foreground/10" strokeWidth="6" />
                           <circle
@@ -1890,7 +1909,7 @@ From PocketBuddy Runway.`;
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                          <span className="text-2xl font-black tracking-tight text-foreground tnum">
+                          <span className="text-2xl font-semibold tracking-tight text-foreground tnum">
                             {safeDailyIsZero ? "0" : simulatedDays}
                           </span>
                           <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">days left</span>
@@ -1902,11 +1921,11 @@ From PocketBuddy Runway.`;
                     <div className="pt-3.5 border-t border-border/40">
                       <div className="flex items-center gap-2">
                         <div className={`h-2.5 w-2.5 rounded-full ${isSimulatedSafe ? "bg-pb-green" : "bg-pb-red"}`} />
-                        <span className="text-xs font-bold text-foreground">
+                        <span className="text-xs font-semibold text-foreground">
                           {isSimulatedSafe ? "Reaches reset safely" : "Deficit detected"}
                         </span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed mt-1.5 pl-4.5">
+                      <p className="mt-1.5 pl-4.5 text-[11px] leading-relaxed text-muted-foreground">
                         {isSimulatedSafe
                           ? `Survives the next ${daysLeftInCycle} days on this plan.`
                           : safeDailyIsZero
@@ -1954,19 +1973,20 @@ From PocketBuddy Runway.`;
             </Card>
 
             {/* 💡 RUNWAY SURVIVAL NUDGES */}
-            <Card className="p-5 sm:p-6 border border-border bg-card/25 space-y-5 mt-6">
+            <Card className="p-4 sm:p-5 border border-border bg-card/25 space-y-4 mt-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/40 pb-3">
                 <div className="space-y-0.5">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Runway Actions</h3>
-                  <p className="text-[10px] text-muted-foreground font-medium">Configure settings and habits to stretch your cash runway.</p>
+                  <p className={sectionEyebrowClass}>Runway actions</p>
+                  <h3 className={sectionTitleClass}>Choose one lever to change the forecast</h3>
+                  <p className={sectionBodyClass}>Each option below maps to a real setting or habit, so the next step stays obvious.</p>
                 </div>
 
                 <Select value={selectedActionId} onValueChange={setSelectedActionId}>
-                  <SelectTrigger className="h-8.5 w-full sm:w-[240px] rounded-lg border-border/70 bg-background text-xs text-left focus:ring-1 focus:ring-primary/20">
+                  <SelectTrigger className="h-9 w-full sm:w-[260px] rounded-lg border-border/70 bg-background text-xs text-left focus:ring-1 focus:ring-primary/20">
                     <SelectValue placeholder="Select action step" />
                   </SelectTrigger>
                   <SelectContent className="bg-background border border-border text-foreground">
-                    {runwayActions.map((action) => (
+                    {secondaryRunwayActions.map((action) => (
                       <SelectItem key={action.id} value={action.id} className="text-xs font-semibold">
                         {action.label}
                       </SelectItem>
@@ -1977,48 +1997,43 @@ From PocketBuddy Runway.`;
 
               {/* Selected Action Content */}
               {(() => {
-                const selectedAction = runwayActions.find((a) => a.id === selectedActionId) || runwayActions[0];
-                if (!selectedAction) return null;
+                if (!selectedRunwayAction) return null;
 
                 const actionPath =
-                  selectedAction.id === "priority" && activeActionType === "slow_down" ? "/pool" :
-                  selectedAction.id === "action-2" && forecast.status === "shortfall" ? "/settings" : // Subscriptions
-                  selectedAction.id === "action-1" ? "/settings" : // Buffer / Reserve
-                  selectedAction.id === "action-3" ? "/settings" : // Food cap settings
+                  selectedRunwayAction.id === "action-2" && forecast.status === "shortfall" ? "/settings" :
+                  selectedRunwayAction.id === "action-1" ? "/settings" :
+                  selectedRunwayAction.id === "action-3" ? "/settings" :
                   null;
 
                 const actionButtonText =
-                  selectedAction.id === "priority" && activeActionType === "slow_down" ? "Open pool dues" :
-                  selectedAction.id === "action-2" && forecast.status === "shortfall" ? "Manage subscriptions" :
-                  selectedAction.id === "action-1" ? "Configure safety buffer" :
-                  selectedAction.id === "action-3" ? "Adjust food cap" :
+                  selectedRunwayAction.id === "action-2" && forecast.status === "shortfall" ? "Manage subscriptions" :
+                  selectedRunwayAction.id === "action-1" ? "Configure safety buffer" :
+                  selectedRunwayAction.id === "action-3" ? "Adjust food cap" :
                   "View settings";
 
                 return (
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 pt-1">
-                    <div className="space-y-4 flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                          Selected Step
-                        </span>
-                        <Badge variant="outline" className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded ${
-                          selectedAction.severity === "high" ? "border-pb-red/20 text-pb-red bg-pb-red/5" :
-                          selectedAction.severity === "medium" ? "border-pb-amber/20 text-pb-amber bg-pb-amber/5" :
+                  <div className="flex flex-col gap-4 pt-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={sectionEyebrowClass}>Selected step</span>
+                        <Badge variant="outline" className={`text-[9px] uppercase font-semibold px-2 py-0.5 rounded ${
+                          selectedRunwayAction.severity === "high" ? "border-pb-red/20 text-pb-red bg-pb-red/5" :
+                          selectedRunwayAction.severity === "medium" ? "border-pb-amber/20 text-pb-amber bg-pb-amber/5" :
                           "border-border text-muted-foreground bg-muted/10"
                         }`}>
-                          {selectedAction.severity === "high" ? "Critical Priority" : selectedAction.severity === "medium" ? "Recommended" : "Optional"}
+                          {selectedRunwayAction.severity === "high" ? "Critical priority" : selectedRunwayAction.severity === "medium" ? "Recommended" : "Optional"}
                         </Badge>
                       </div>
 
                       <div className="space-y-1">
-                        <h4 className="font-bold text-sm text-foreground">{selectedAction.label}</h4>
-                        <p className="text-xs text-muted-foreground leading-relaxed">{selectedAction.detail}</p>
+                        <h4 className={sectionTitleClass}>{selectedRunwayAction.label}</h4>
+                        <p className={sectionBodyClass}>{selectedRunwayAction.detail}</p>
                       </div>
                     </div>
 
                     {actionPath && (
                       <div className="shrink-0 sm:self-center">
-                        <Link to={actionPath} className="inline-flex h-8 items-center rounded-lg border border-border/80 bg-background px-3.5 text-[10px] font-bold uppercase tracking-wider text-foreground hover:bg-surface hover:text-primary transition-all duration-200 shadow-sm cursor-pointer">
+                        <Link to={actionPath} className="inline-flex h-8 items-center rounded-lg border border-border/80 bg-background px-3.5 text-[10px] font-semibold uppercase tracking-wider text-foreground hover:bg-surface hover:text-primary transition-all duration-200 shadow-sm cursor-pointer">
                           {actionButtonText}
                         </Link>
                       </div>
@@ -2030,31 +2045,32 @@ From PocketBuddy Runway.`;
 
 
             {/* Runway Progress Card */}
-            <Card className="p-5 sm:p-6 border border-border bg-card/25">
-              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Allowance cycle</h3>
-                  <p className="mt-1 text-xs text-zinc-500">Cycle timing and cash position at a glance.</p>
+            <Card className="p-4 sm:p-5 border border-border bg-card/25">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <p className={sectionEyebrowClass}>Allowance cycle</p>
+                  <h3 className={sectionTitleClass}>Where the cycle stands right now</h3>
+                  <p className={sectionBodyClass}>Reset date, spending already used, and the cash still available.</p>
                 </div>
                 <Badge variant="outline" className="w-fit border-border bg-surface text-[10px] uppercase tracking-wider text-muted-foreground">
                   {forecast.current_cycle.days_left} days left
                 </Badge>
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-border/60 bg-surface/50 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Started</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-border/60 bg-background/55 p-3">
+                  <p className={sectionEyebrowClass}>Started</p>
                   <p className="mt-1 text-sm font-semibold text-foreground">
                     {new Date(forecast.current_cycle.start).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                   </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">Funding: {formatRs(forecast.current_cycle.available_funding)}</p>
                 </div>
-                <div className="rounded-xl border border-border/60 bg-surface/50 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Used so far</p>
+                <div className="rounded-xl border border-border/60 bg-background/55 p-3">
+                  <p className={sectionEyebrowClass}>Used so far</p>
                   <p className="mt-1 text-sm font-semibold text-foreground tnum">{formatRs(forecast.current_cycle.spent)}</p>
                   <p className="mt-1 text-[11px] text-muted-foreground">{allowanceProgressPct}% of cycle funding spent</p>
                 </div>
-                <div className="rounded-xl border border-border/60 bg-surface/50 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Resets</p>
+                <div className="rounded-xl border border-border/60 bg-background/55 p-3">
+                  <p className={sectionEyebrowClass}>Resets</p>
                   <p className="mt-1 text-sm font-semibold text-foreground">
                     {new Date(forecast.current_cycle.end).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                   </p>
@@ -2064,20 +2080,21 @@ From PocketBuddy Runway.`;
             </Card>
 
             {/* Committed vs Flexible Spend visualizer */}
-            <Card className="p-5 sm:p-6 border border-border bg-card/25">
-              <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Where the runway goes</h3>
-                  <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
-                    This explains the forecast above; it is not a second recommendation.
+            <Card className="p-4 sm:p-5 border border-border bg-card/25">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <p className={sectionEyebrowClass}>Where the runway goes</p>
+                  <h3 className={sectionTitleClass}>Reserved vs flexible spend</h3>
+                  <p className={sectionBodyClass}>
+                    This view explains the forecast above; it is not a second recommendation.
                   </p>
                 </div>
-                <Badge variant="outline" className="w-fit text-[10px] md:text-xs uppercase font-bold border-border bg-surface-raised px-2 py-0.5">
+                <Badge variant="outline" className="w-fit text-[10px] md:text-xs uppercase font-semibold border-border bg-surface-raised px-2 py-0.5">
                   Reserved vs flexible
                 </Badge>
               </div>
-              <div className="space-y-5">
-                <div className="rounded-xl border border-border/70 bg-surface/50">
+              <div className="mt-4 space-y-4">
+                <div className="rounded-xl border border-border/60 bg-background/55">
                   {[
                     { label: "Cycle funding", value: forecast.current_cycle.available_funding, tone: "text-pb-green" },
                     { label: "Already spent", value: -forecast.current_cycle.spent, tone: "text-muted-foreground" },
@@ -2093,16 +2110,16 @@ From PocketBuddy Runway.`;
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Reserved share</p>
-                    <p className="mt-1 text-base font-semibold text-foreground tnum">{committedPct}%</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{formatRs(forecast.commitments.total)} protected before daily spend.</p>
+                    <p className={sectionEyebrowClass}>Reserved share</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground tnum">{committedPct}%</p>
+                    <p className={sectionBodyClass}>{formatRs(forecast.commitments.total)} protected before daily spend.</p>
                   </div>
                   <div className="rounded-xl border border-pb-amber/15 bg-pb-amber/5 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-pb-amber">Flexible forecast</p>
-                    <p className="mt-1 text-base font-semibold text-foreground tnum">{formatRs(forecast.projection.projected_discretionary)}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{flexiblePct}% of the remaining forecasted spend.</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-pb-amber">Flexible forecast</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground tnum">{formatRs(forecast.projection.projected_discretionary)}</p>
+                    <p className={sectionBodyClass}>{flexiblePct}% of the remaining forecasted spend.</p>
                   </div>
                 </div>
 
@@ -2129,16 +2146,16 @@ From PocketBuddy Runway.`;
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-border/50 pt-4">
+                <div className="grid grid-cols-1 gap-3 border-t border-border/50 pt-4 sm:grid-cols-2">
                   <div>
-                    <h4 className="text-[12px] font-bold text-primary uppercase tracking-wider mb-1.5">Reserved costs</h4>
-                    <p className="text-[11px] md:text-xs text-zinc-500 leading-relaxed">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Reserved costs</h4>
+                    <p className={sectionBodyClass}>
                       Subscriptions, meal routine, exam buffer, and pending pool settlements are protected before daily spending is calculated.
                     </p>
                   </div>
                   <div>
-                    <h4 className="text-[12px] font-bold text-pb-amber uppercase tracking-wider mb-1.5">Flexible forecast</h4>
-                    <p className="text-[11px] md:text-xs text-zinc-500 leading-relaxed">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-pb-amber">Flexible forecast</h4>
+                    <p className={sectionBodyClass}>
                       Snacks, travel, shopping, and other variable spends are projected from recent pace for the remaining cycle.
                     </p>
                   </div>
@@ -2255,13 +2272,12 @@ From PocketBuddy Runway.`;
         {activeTab === "horizons" && (
           <div className="space-y-6">
             {/* Charts Container */}
-            <Card className="p-5 sm:p-6 border border-border bg-card/25">
-              <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Projection takeaway</h3>
-                  <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
-                    {horizonTakeaway}
-                  </p>
+            <Card className="p-4 sm:p-5 border border-border bg-card/25">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <p className={sectionEyebrowClass}>Projections</p>
+                  <h3 className={sectionTitleClass}>How the runway behaves across longer horizons</h3>
+                  <p className={sectionBodyClass}>{horizonTakeaway}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end shrink-0">
                   {projectionSignal && (
@@ -2301,55 +2317,82 @@ From PocketBuddy Runway.`;
             </Card>
 
             {/* Scenario Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {forecast.horizons.map((h: any) => {
                 const isNegative = h.projected_balance < 0;
+                const balanceDelta = Number(h.projected_funding || 0) - Number(h.projected_spend || 0);
                 return (
-                  <Card key={h.key} className="p-5 border border-border bg-card/30 flex flex-col justify-between">
-                    <div>
-                      <div className="flex justify-between items-center mb-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">{h.label}</h4>
-                        <Badge variant="outline" className={`text-[9px] uppercase font-black ${
+                  <Card key={h.key} className="border border-border bg-card/30 p-4">
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className={sectionEyebrowClass}>{h.label}</p>
+                          <p className={`mt-1 text-xl font-semibold tnum ${isNegative ? "text-pb-red" : "text-pb-green"}`}>
+                            {formatRs(h.projected_balance)}
+                          </p>
+                          <p className={sectionBodyClass}>
+                            {isNegative
+                              ? "Projected balance falls below zero by the end of this horizon."
+                              : "Projected balance stays positive through this horizon."}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className={`text-[9px] uppercase font-semibold ${
                           isNegative ? "border-pb-red/30 text-pb-red bg-pb-red/5" : "border-pb-green/30 text-pb-green bg-pb-green/5"
                         }`}>
                           {isNegative ? "Deficit" : "Surplus"}
                         </Badge>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 border-b border-border/50 pb-3 mb-3 text-center">
-                        <div>
-                          <span className="text-[9px] md:text-xs text-zinc-500 uppercase tracking-wider block">Income</span>
-                          <span className="text-xs font-bold text-zinc-300">{formatRs(h.projected_funding)}</span>
+                      <div className="grid grid-cols-3 gap-3 border-y border-border/50 py-3">
+                        <div className="space-y-1">
+                          <p className={sectionEyebrowClass}>Funding</p>
+                          <p className="text-sm font-semibold text-foreground tnum">{formatRs(h.projected_funding)}</p>
                         </div>
-                        <div>
-                          <span className="text-[9px] md:text-xs text-zinc-500 uppercase tracking-wider block">Projected Spend</span>
-                          <span className="text-xs font-bold text-zinc-300">{formatRs(h.projected_spend)}</span>
+                        <div className="space-y-1">
+                          <p className={sectionEyebrowClass}>Expected spend</p>
+                          <p className="text-sm font-semibold text-foreground tnum">{formatRs(h.projected_spend)}</p>
                         </div>
-                        <div>
-                          <span className="text-[9px] md:text-xs text-zinc-500 uppercase tracking-wider block">End Balance</span>
-                          <span className={`text-xs font-bold ${isNegative ? "text-pb-red" : "text-pb-green"}`}>
-                            {formatRs(h.projected_balance)}
-                          </span>
+                        <div className="space-y-1 text-right">
+                          <p className={sectionEyebrowClass}>Net</p>
+                          <p className={`text-sm font-semibold tnum ${balanceDelta >= 0 ? "text-pb-green" : "text-pb-red"}`}>
+                            {balanceDelta >= 0 ? "+" : ""}{formatRs(balanceDelta)}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="text-[11px] md:text-xs text-zinc-500 leading-relaxed">
-                        <span className="font-semibold block text-zinc-400">Scenario range ({forecast.confidence.score}% model confidence):</span>
-                        {formatRs(h.balance_low)} to {formatRs(h.balance_high)}
-                        {h.basis && (
-                          <span className="mt-1 block text-[10px] text-muted-foreground">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className={sectionEyebrowClass}>Scenario range</p>
+                            <p className={sectionBodyClass}>Range at {forecast.confidence.score}% model confidence.</p>
+                          </div>
+                          <p className="shrink-0 text-sm font-semibold text-foreground tnum text-right">
+                            {formatRs(h.balance_low)} to {formatRs(h.balance_high)}
+                          </p>
+                        </div>
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className={sectionEyebrowClass}>{isNegative ? "Correction needed" : "End position"}</p>
+                            <p className={sectionBodyClass}>
+                              {isNegative
+                                ? "Add monthly funding or lower flexible spend before this horizon."
+                                : "Current pace still leaves a positive balance at the end of this horizon."}
+                            </p>
+                          </div>
+                          <p className={`shrink-0 text-sm font-semibold tnum text-right ${isNegative ? "text-pb-red" : "text-pb-green"}`}>
+                            {isNegative ? `${formatRs(h.monthly_shortfall)} / month` : formatRs(h.projected_balance)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {h.basis && (
+                        <div className="border-t border-border/40 pt-3">
+                          <p className="text-[10px] leading-relaxed text-muted-foreground">
                             Basis: {h.basis}
-                          </span>
-                        )}
-                      </div>
+                          </p>
+                        </div>
+                      )}
                     </div>
-
-                    {isNegative && (
-                      <div className="mt-4 pl-3.5 py-1 border-l-2 border-pb-red text-[11px] md:text-xs text-pb-red flex items-center justify-between font-semibold">
-                        <span>Expected monthly gap:</span>
-                        <span>{formatRs(h.monthly_shortfall)} / month</span>
-                      </div>
-                    )}
                   </Card>
                 );
               })}

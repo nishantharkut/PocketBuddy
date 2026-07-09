@@ -4,10 +4,11 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
 import { PlatformIcon } from "@/components/PlatformIcon";
+import { DashboardNotifications, type DashboardNotificationItem } from "@/components/DashboardNotifications";
 import {
   Plus, ChevronRight, AlertTriangle, Users, Utensils, ShoppingBag,
   Bus, Receipt, MoreHorizontal, Wallet, Timer, MapPin, Compass, TrendingDown, Calendar, ShieldCheck,
-  ChevronDown, ChevronUp, BellOff, Clock3, CheckCircle2, XCircle, EyeOff
+  ChevronDown, ChevronUp, BellOff, Clock3
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,70 @@ import {
 } from "@/lib/api/db.functions";
 
 const CHECKIN_REMIND_LATER_MS = 4 * 60 * 60 * 1000;
+
+function readDashboardArrivalCount(storageKey: string) {
+  try {
+    const value = Number(localStorage.getItem(storageKey) ?? "0");
+    return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeDashboardArrivalCount(storageKey: string, value: number) {
+  try {
+    localStorage.setItem(storageKey, String(value));
+  } catch {
+    // Ignore private browsing/storage failures. The dashboard still works.
+  }
+}
+
+function cleanInsightText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeInsightText(value: unknown) {
+  return cleanInsightText(value)
+    .replace(/\s+/g, " ")
+    .replace(/[.?!]+$/g, "")
+    .toLowerCase();
+}
+
+function sameInsightText(a: unknown, b: unknown) {
+  const left = normalizeInsightText(a);
+  const right = normalizeInsightText(b);
+  return Boolean(left && right && left === right);
+}
+
+function splitInsightSentences(value: unknown) {
+  const text = cleanInsightText(value).replace(/\s+/g, " ");
+  if (!text) return [];
+  return text.match(/[^.!?]+[.!?]?/g)?.map((part) => part.trim()).filter(Boolean) ?? [text];
+}
+
+function isRepeatedInsight(candidate: string, existing: string[]) {
+  if (!candidate) return true;
+  return existing.some((entry) => {
+    if (!entry) return false;
+    if (entry === candidate) return true;
+    if (candidate.length < 24 || entry.length < 24) return false;
+    return entry.includes(candidate) || candidate.includes(entry);
+  });
+}
+
+function uniqueInsightText(value: unknown, existing: unknown[] = []) {
+  const seen = existing.map(normalizeInsightText).filter(Boolean);
+  const unique: string[] = [];
+
+  splitInsightSentences(value).forEach((sentence) => {
+    const normalized = normalizeInsightText(sentence);
+    if (isRepeatedInsight(normalized, seen)) return;
+    seen.push(normalized);
+    unique.push(sentence);
+  });
+
+  return unique.join(" ").trim();
+}
 
 const getTrustBadgeLabel = (item: any, isPending: boolean = false) => {
   // 1. Prefer backend-provided trust/status fields
@@ -208,11 +273,11 @@ const FALLBACK_CATEGORIES = [
 
 // ── Category accent colours ──────────────────────────────────────────────
 const CAT_COLORS: Record<string, string> = {
-  food: "#C27D56",
-  stationery: "#5E17EB",
+  food: "#0F766E",
+  stationery: "#7C3AED",
   travel: "#2563EB",
-  subscription: "#F7EC13",
-  other: "#6b7280",
+  subscription: "#A16207",
+  other: "#64748B",
 };
 
 const CHECKIN_NOTE_PRESETS = [
@@ -280,12 +345,12 @@ function SpendBar({ days }: { days: { date: string; amount_paise: number }[] }) 
                 style={{
                   height: `${Math.max(pct, 6)}%`,
                   background: isToday
-                    ? "linear-gradient(to top, var(--primary), var(--color-pb-amber))"
-                    : "rgba(255,255,255,0.1)",
+                    ? "var(--primary)"
+                    : "color-mix(in srgb, var(--muted-foreground) 24%, transparent)",
                 }}
               />
             </div>
-            <span className={`text-[8px] font-bold uppercase tracking-wide ${isToday ? "text-primary" : "text-zinc-600"}`}>
+            <span className={`text-[8px] font-bold uppercase tracking-wide ${isToday ? "text-primary" : "text-muted-foreground"}`}>
               {d.date}
             </span>
           </div>
@@ -306,7 +371,7 @@ function CategoryDonut({ breakdown }: { breakdown: { category: string; pct: numb
   return (
     <div className="flex items-center gap-5">
       <svg width="88" height="88" viewBox="0 0 88 88" className="shrink-0">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={stroke} />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="color-mix(in srgb, var(--muted-foreground) 18%, transparent)" strokeWidth={stroke} />
         {top5.map((seg, i) => {
           const dashArr = (seg.pct / 100) * circ;
           const dashOff = circ - offset;
@@ -332,7 +397,7 @@ function CategoryDonut({ breakdown }: { breakdown: { category: string; pct: numb
         {top5.map((seg) => (
           <div key={seg.category} className="flex items-center gap-2 min-w-0">
             <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CAT_COLORS[seg.category] ?? "#6b7280" }} />
-            <span className="text-[10px] md:text-xs text-zinc-400 capitalize truncate">{seg.category}</span>
+            <span className="text-[10px] md:text-xs text-muted-foreground capitalize truncate">{seg.category}</span>
             <span className="text-[10px] md:text-xs font-bold text-foreground ml-auto">{seg.pct}%</span>
           </div>
         ))}
@@ -342,7 +407,9 @@ function CategoryDonut({ breakdown }: { breakdown: { category: string; pct: numb
 }
 
 // ── Nudge popup card ─────────────────────────────────────────────────────
-function NudgeCard({
+/* removed: Smart Nudges now render in DashboardNotifications instead of body cards */
+/*
+function RemovedNudgeCard({
   icon: Icon, accent, title, body, onDismiss,
 }: {
   icon: any; accent: string; title: string; body: string; onDismiss: () => void;
@@ -352,22 +419,14 @@ function NudgeCard({
       className="relative rounded-2xl border p-4 overflow-hidden animate-[nudgePop_0.4s_cubic-bezier(0.34,1.56,0.64,1)]"
       style={{ background: `${accent}0D`, borderColor: `${accent}30` }}
     >
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ background: `radial-gradient(ellipse at top left, ${accent}10, transparent 60%)` }} />
       <div className="flex items-start gap-3">
-        <div className="p-2 rounded-xl bg-white/5 border border-white/10 shrink-0">
-          <Icon className="h-4.5 w-4.5" style={{ color: accent }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: accent }}>{title}</p>
-          <p className="text-xs text-zinc-300 leading-relaxed">{body}</p>
-        </div>
         <button onClick={onDismiss} className="text-zinc-600 hover:text-zinc-400 text-xs shrink-0 cursor-pointer leading-none">✕</button>
       </div>
     </div>
   );
 }
 
+*/
 function ResponsiveFoodPanel({
   open,
   onOpenChange,
@@ -792,7 +851,20 @@ function Dashboard() {
   const qc = useQueryClient();
   const nav = useNavigate();
   const isMobile = useIsMobile();
-  const [snoozedSubs, setSnoozedSubs] = useState<string[]>([]);
+  const notificationStorageKey = `pocketbuddy_dashboard_hidden_notifications_${user?.id ?? "anon"}`;
+  const dashboardVisitStorageKey = `pocketbuddy_dashboard_arrivals_${user?.id ?? "anon"}`;
+  const dashboardVisitRecordedRef = useRef<string | null>(null);
+  const [dashboardVisitOrdinal, setDashboardVisitOrdinal] = useState(0);
+
+  useEffect(() => {
+    if (dashboardVisitRecordedRef.current === dashboardVisitStorageKey) return;
+    dashboardVisitRecordedRef.current = dashboardVisitStorageKey;
+
+    const current = readDashboardArrivalCount(dashboardVisitStorageKey);
+    const next = Math.min(current + 1, 2);
+    writeDashboardArrivalCount(dashboardVisitStorageKey, next);
+    setDashboardVisitOrdinal(next);
+  }, [dashboardVisitStorageKey]);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user?.id],
@@ -927,12 +999,10 @@ function Dashboard() {
       status: runwayForecast?.status ?? "healthy",
       foodRoutine,
       decision,
-      possibleCommitments: (runwayForecast?.possible_commitments ?? []).filter((sub: any) => !snoozedSubs.includes(sub.id)),
-      possibleCommitmentsTotal: (runwayForecast?.possible_commitments ?? [])
-        .filter((sub: any) => !snoozedSubs.includes(sub.id))
-        .reduce((sum: number, sub: any) => sum + sub.amount, 0),
+      possibleCommitments: runwayForecast?.possible_commitments ?? [],
+      possibleCommitmentsTotal: (runwayForecast?.possible_commitments ?? []).reduce((sum: number, sub: any) => sum + sub.amount, 0),
     };
-  }, [runwayForecast, calc, snoozedSubs]);
+  }, [runwayForecast, calc]);
 
   // ── Survive-Until runway timestamp ─────────────────────────────────────
   const { data: subs } = useQuery({
@@ -952,6 +1022,16 @@ function Dashboard() {
       return ps ?? [];
     },
   });
+
+  const activeDashboardPools = useMemo(
+    () =>
+      (pools ?? []).filter(
+        (p) =>
+          (p.status === "open" && new Date(p.expires_at).getTime() > Date.now()) ||
+          (p.status === "completed" && !isPoolFullyPaid(p)),
+      ),
+    [pools],
+  );
 
   const menuFoodGapHours = useMemo(() => {
     const serverGap = insights?.food?.gap_hours;
@@ -1013,15 +1093,6 @@ function Dashboard() {
       .sort((a, b) => foodScore(b) - foodScore(a))[0] ?? null;
   }, [foods]);
 
-  const runwayColor = runwayView
-    ? runwayView.setupRequired
-      ? "var(--primary)"
-      : runwayView.days >= 15
-      ? "var(--success)"
-      : runwayView.days >= 7
-        ? "var(--warning)"
-        : "var(--destructive)"
-    : "var(--primary)";
   const runwayStatusLabel = runwayView?.setupRequired ? "Setup needed" : runwayView?.status === "shortfall" ? "Shortfall" : runwayView?.status === "watch" ? "Watch" : "Healthy";
   const runwayStatusClass =
     runwayView?.setupRequired
@@ -1364,6 +1435,12 @@ function Dashboard() {
     }
   }, [search.log]);
 
+  useEffect(() => {
+    const openLogTransaction = () => setAdding(true);
+    window.addEventListener("pocketbuddy:open-log-transaction", openLogTransaction);
+    return () => window.removeEventListener("pocketbuddy:open-log-transaction", openLogTransaction);
+  }, []);
+
   const hasFoodGapSignal = isFiniteHours(menuFoodGapHours);
   const foodGapHours = hasFoodGapSignal ? menuFoodGapHours : 0;
   const examActive = Boolean(insights?.exam?.in_exam_period);
@@ -1373,25 +1450,6 @@ function Dashboard() {
       : foodGapHours;
   const examNeedsMealSignal = examActive && (!insights?.food?.last_signal_source || examMealGapHours >= 8);
   const examFoodCapPaise = runwayView?.foodRoutine?.recommended_daily_food_cap ?? runwayView?.safeDailyPaise ?? 0;
-  const examBestFoodFitsCap = Boolean(bestFood && (!examFoodCapPaise || Number(bestFood.price ?? 0) <= examFoodCapPaise));
-  const examMealPlan = bestFood
-    ? {
-      title: `${bestFood.item_name} at ${bestFood.venue_name}`,
-      detail: `${rupees(bestFood.price)}${examBestFoodFitsCap ? " fits" : " is closest to"} today's exam food target${examFoodCapPaise > 0 ? ` of ${rupees(examFoodCapPaise)}` : ""}.`,
-    }
-    : {
-      title: "Use mess, cooked food, or a trusted campus meal",
-      detail: examFoodCapPaise > 0
-        ? `Keep the next meal near ${rupees(examFoodCapPaise)} so exam-week spending stays predictable.`
-        : "Keep the next meal predictable and log cash or mess food if there is no payment record.",
-    };
-  const examMealGapKnown =
-    (typeof insights?.food?.gap_hours === "number" && Boolean(insights?.food?.last_signal_source)) ||
-    hasFoodGapSignal;
-  const examMealGapLabel = formatMealGapHours(examMealGapKnown ? examMealGapHours : null, {
-    missingLabel: "No signal",
-    includeAgo: false,
-  });
   const examMealSignalSource =
     insights?.food?.last_signal_source === "checkin"
       ? "Check-in"
@@ -1413,9 +1471,6 @@ function Dashboard() {
   const isPrimaryWellnessAction = (destination: string) => wellnessActionDestination === destination;
 
   // ── Smart nudges derived from insights ──────────────────────────────────
-  const [dismissedNudges, setDismissedNudges] = useState<Set<string>>(new Set());
-  const dismiss = (id: string) => setDismissedNudges((s) => new Set([...s, id]));
-
   const nudges = useMemo(() => {
     const list: { id: string; icon: any; accent: string; title: string; body: string }[] = [];
     if (!insights) {
@@ -1449,7 +1504,7 @@ function Dashboard() {
       list.push({
         id: "late_night",
         icon: Timer,
-        accent: "#5E17EB",
+        accent: "#8C7853",
         title: "After-hours payment signal",
         body: `₹${Math.round(lateTotal)} spent after-hours in the last 30 days. Keep a low-cost snack or mess backup so late orders do not shrink runway.`,
       });
@@ -1481,8 +1536,6 @@ function Dashboard() {
 
     return list;
   }, [insights, calc, runwayView, examActive]);
-
-  const visibleNudges = nudges.filter((n) => !dismissedNudges.has(n.id)).slice(0, 2);
 
   function handleCheckInRemindLater(showToast = true) {
     if (checkInSaving) return;
@@ -1576,6 +1629,378 @@ function Dashboard() {
     }
   }
 
+  const topCategory = insights?.category_breakdown?.[0];
+  const spend7TotalPaise = (insights?.daily_spend_7d ?? []).reduce(
+    (sum: number, day: any) => sum + (day.amount_paise ?? 0),
+    0,
+  );
+  const velocityPct = insights?.velocity?.pct_change ?? 0;
+  const quickStats = [
+    {
+      label: "7-day spend",
+      value: insights?.daily_spend_7d ? rupees(spend7TotalPaise) : "—",
+      detail: velocityPct ? `${velocityPct > 0 ? "+" : ""}${velocityPct}% vs last week` : "Weekly pace",
+    },
+    {
+      label: "Top category",
+      value: topCategory?.category ?? "—",
+      detail: topCategory ? rupees(topCategory.amount_paise) : "No category yet",
+    },
+    {
+      label: "Food pace",
+      value: runwayView?.foodRoutine && !runwayView.setupRequired ? rupees(runwayView.foodRoutine.food_daily_pace ?? 0) : "—",
+      detail: examFoodCapPaise > 0 ? `${rupees(examFoodCapPaise)} target` : "Routine signal",
+    },
+    {
+      label: "After-hours",
+      value: insights ? rupees(insights.late_night.total_paise) : "—",
+      detail: `${insights?.late_night?.txn_count ?? 0} payments`,
+    },
+  ];
+  const wellnessScore = Number(wellness?.score);
+  const hasWellnessScore = Number.isFinite(wellnessScore);
+  const routineStatusLabel = wellnessLoading
+    ? "Loading"
+    : wellnessError
+      ? "Unavailable"
+      : hasWellnessScore
+        ? wellnessIsSteady
+          ? "Steady"
+          : wellnessIsWatch
+            ? "Watch"
+            : "Needs attention"
+        : "No signal";
+  const routineStatusClass = wellnessLoading || wellnessError || !hasWellnessScore
+    ? "border-border bg-surface-raised text-muted-foreground"
+    : wellnessIsSteady
+      ? "border-success/20 bg-success/5 text-success"
+      : wellnessIsWatch
+        ? "border-warning/20 bg-warning/5 text-warning"
+        : "border-destructive/20 bg-destructive/5 text-destructive";
+  const routineFoodMetrics = [
+    {
+      label: "Routine",
+      value: hasWellnessScore ? `${Math.round(wellnessScore)}/100` : "-",
+      detail: routineStatusLabel,
+      icon: ShieldCheck,
+    },
+    {
+      label: "Meal signal",
+      value: formatMealGapHours(
+        insights?.food?.last_signal_source ? insights.food.gap_hours : hasFoodGapSignal ? foodGapHours : null,
+        { missingLabel: "No signal", includeAgo: false },
+      ),
+      detail: examMealSignalSource,
+      icon: Utensils,
+    },
+    {
+      label: "Food pace",
+      value: runwayView?.foodRoutine && !runwayView.setupRequired ? rupees(runwayView.foodRoutine.food_daily_pace ?? 0) : "-",
+      detail: examFoodCapPaise > 0 ? `${rupees(examFoodCapPaise)} target` : "Runway target",
+      icon: Receipt,
+    },
+    {
+      label: "After-hours",
+      value: insights ? rupees(insights.late_night.total_paise) : "-",
+      detail: `${insights?.late_night?.txn_count ?? 0} payments`,
+      icon: Clock3,
+    },
+  ];
+  const showRunwayWarning = Boolean(runwayView && !runwayView.setupRequired && (runwayView.days < 7 || runwayView.safeDailyPaise < 15_000));
+  const showExamWarning = Boolean(insights?.exam?.in_exam_period);
+  const showPossibleCommitments = Boolean(runwayView?.possibleCommitments?.length);
+  const firstName = (user?.fullName || "Student").trim().split(/\s+/)[0] || "Student";
+  const poolPendingPaise = activeDashboardPools.reduce((sum, pool) => {
+    if (pool.status !== "completed") return sum;
+    return sum + Object.values(pool.split_breakdown ?? {}).reduce((inner: number, details: any) => {
+      if (!details || details.paid) return inner;
+      return inner + Number(details.total ?? 0);
+    }, 0);
+  }, 0);
+  const openPoolCount = activeDashboardPools.filter((pool) => pool.status === "open").length;
+  const latestTxn = recent[0];
+  const latestTxnMerchant = latestTxn
+    ? latestTxn.mapped_merchant_name ?? latestTxn.raw_merchant_string ?? "Latest transaction"
+    : null;
+  const featureInsightCards = [
+    {
+      key: "pool",
+      label: "Pool",
+      icon: Users,
+      to: "/pool" as const,
+      action: "Open pools",
+      accent: {
+        ring: "border-emerald-500/25 hover:border-emerald-500/45 focus-visible:ring-emerald-500/35",
+        icon: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+        strip: "bg-emerald-500",
+        action: "text-emerald-700 dark:text-emerald-300",
+      },
+      value: activeDashboardPools.length ? `${activeDashboardPools.length} active` : "No active pools",
+      detail: poolPendingPaise > 0
+        ? `${rupees(poolPendingPaise)} pending settlement`
+        : openPoolCount > 0
+          ? `${openPoolCount} shared cart${openPoolCount === 1 ? "" : "s"} open`
+          : "Start a shared cart when needed",
+      facts: [
+        { label: "Open", value: String(openPoolCount) },
+        { label: "Pending", value: poolPendingPaise > 0 ? rupees(poolPendingPaise) : "0" },
+      ],
+    },
+    {
+      key: "travel",
+      label: "Travel",
+      icon: Compass,
+      to: "/travel" as const,
+      action: "Check fare",
+      accent: {
+        ring: "border-sky-500/25 hover:border-sky-500/45 focus-visible:ring-sky-500/35",
+        icon: "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+        strip: "bg-sky-500",
+        action: "text-sky-700 dark:text-sky-300",
+      },
+      value: Number(travelSavings?.total_saved ?? 0) > 0 ? `₹${travelSavings.total_saved}` : "Fare check ready",
+      detail: "Compare quotes before campus rides",
+      facts: [
+        { label: "Saved", value: Number(travelSavings?.total_saved ?? 0) > 0 ? `₹${travelSavings.total_saved}` : "0" },
+        { label: "Mode", value: "Quote" },
+      ],
+    },
+    {
+      key: "runway",
+      label: "Runway",
+      icon: Timer,
+      to: "/runway" as const,
+      action: "Open runway",
+      accent: {
+        ring: runwayView?.status === "shortfall"
+          ? "border-red-500/25 hover:border-red-500/45 focus-visible:ring-red-500/35"
+          : runwayView?.status === "watch"
+            ? "border-amber-500/25 hover:border-amber-500/45 focus-visible:ring-amber-500/35"
+            : "border-amber-500/25 hover:border-amber-500/45 focus-visible:ring-amber-500/35",
+        icon: runwayView?.status === "shortfall"
+          ? "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
+          : runwayView?.status === "watch"
+            ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+            : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+        strip: runwayView?.status === "shortfall" ? "bg-red-500" : "bg-amber-500",
+        action: runwayView?.status === "shortfall"
+          ? "text-red-700 dark:text-red-300"
+          : "text-amber-700 dark:text-amber-300",
+      },
+      value: runwayView
+        ? runwayView.setupRequired
+          ? "Setup needed"
+          : `${runwayView.expectedDays}d`
+        : "Loading",
+      detail: runwayView && !runwayView.setupRequired
+        ? `${rupees(runwayView.safeDailyPaise)}/day safe · ${Math.round((runwayView.shortfallProbability ?? 0) * 100)}% risk`
+        : "Add allowance for projections",
+      facts: [
+        { label: "Safe/day", value: runwayView && !runwayView.setupRequired ? rupees(runwayView.safeDailyPaise) : "-" },
+        { label: "Risk", value: runwayView && !runwayView.setupRequired ? `${Math.round((runwayView.shortfallProbability ?? 0) * 100)}%` : "-" },
+      ],
+      progress: runwayView && !runwayView.setupRequired ? runwayView.pct : null,
+      progressLabel: runwayView && !runwayView.setupRequired ? `${runwayView.pct}% used` : "",
+    },
+    {
+      key: "transactions",
+      label: "Transactions",
+      icon: Receipt,
+      to: "/transactions" as const,
+      action: "Open transactions",
+      accent: {
+        ring: "border-violet-500/25 hover:border-violet-500/45 focus-visible:ring-violet-500/35",
+        icon: "border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+        strip: "bg-violet-500",
+        action: "text-violet-700 dark:text-violet-300",
+      },
+      value: latestTxn ? rupees(latestTxn.amount) : "No entries",
+      detail: latestTxn ? `${latestTxnMerchant} · ${relativeTime(latestTxn.created_at)}` : "Sync or log your first spend",
+      facts: [
+        { label: "7-day", value: insights?.daily_spend_7d ? rupees(spend7TotalPaise) : "-" },
+        { label: "Top", value: topCategory?.category ?? "-" },
+      ],
+    },
+  ];
+  const showInlineSmartNudges = dashboardVisitOrdinal === 1;
+  const inlineNudgeIds = new Set(["velocity_spike", "late_night", "delivery_overuse", "sub_bleed", "short_runway"]);
+  const inlineSmartNudges = showInlineSmartNudges
+    ? nudges.filter((nudge) => inlineNudgeIds.has(nudge.id)).slice(0, 2)
+    : [];
+  const getNudgeActions = (nudge: any) =>
+    nudge.id === "delivery_overuse" || nudge.id === "late_night"
+      ? [{
+        label: "Campus food",
+        variant: "secondary" as const,
+        onClick: () => {
+          setShowFoodSheet(true);
+          setFoodTab("menus");
+        },
+      }]
+      : nudge.id === "onboard"
+        ? [
+          {
+            label: "Log spend",
+            variant: "primary" as const,
+            onClick: () => setAdding(true),
+          },
+          {
+            label: "Pair phone",
+            variant: "secondary" as const,
+            onClick: () => nav({ to: "/companion" }),
+          },
+        ]
+        : [{
+          label: "Open Runway",
+          variant: "secondary" as const,
+          onClick: () => nav({ to: "/runway" }),
+        }];
+  const dashboardNotifications = useMemo<DashboardNotificationItem[]>(() => {
+    const items: DashboardNotificationItem[] = [];
+
+    const nudgesForBell = showInlineSmartNudges ? [] : nudges;
+    nudgesForBell.forEach((nudge) => {
+      items.push({
+        id: `nudge-${nudge.id}`,
+        title: nudge.title,
+        body: nudge.body,
+        icon: nudge.icon,
+        tone: nudge.id === "velocity_spike" || nudge.id === "sub_bleed" || nudge.id === "late_night" ? "warning" : "neutral",
+        actions: getNudgeActions(nudge),
+      });
+    });
+
+    if (showPossibleCommitments && runwayView && false) {
+      items.push({
+        id: "possible-commitments",
+        title: "Unconfirmed commitments",
+        body: `${rupees(runwayView!.possibleCommitmentsTotal)} may renew before reset. Confirm recurring debits to include them in runway.`,
+        icon: Receipt,
+        tone: "neutral",
+        content: (
+          <div className="space-y-2">
+            {runwayView!.possibleCommitments.slice(0, 3).map((sub: any) => {
+              const daysLeft = Math.max(1, runwayView!.daysLeft || 0);
+              const newSafeDailyPaise = Math.max(0, Math.floor(((runwayView!.remainingPaise || 0) - (sub.amount || 0)) / daysLeft));
+              return (
+                <div key={sub.id} className="rounded-lg border border-border bg-surface-raised/40 p-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <PlatformIcon platform={sub.label} className="h-7 w-7 shrink-0 rounded-lg" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-xs font-semibold text-foreground">{sub.label}</p>
+                        <span className="shrink-0 text-xs font-semibold text-foreground tnum">{rupees(sub.amount)}</span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Due {shortDate(new Date(sub.due_at))} · safe/day becomes {rupees(newSafeDailyPaise)}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          className="h-8 min-w-[72px] px-3 text-[11px] font-semibold"
+                          onClick={async () => {
+                            try {
+                              await confirmSubscription({ data: { id: sub.id } });
+                              qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                              qc.invalidateQueries({ queryKey: ["all-subs"] });
+                              toast.success(`Tracked ${sub.label}.`);
+                            } catch (err: any) {
+                              toast.error(err.message || "Failed to confirm");
+                            }
+                          }}
+                        >
+                          Track
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 min-w-[104px] border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground shadow-sm hover:border-foreground/15 hover:bg-surface-interactive"
+                          onClick={async () => {
+                            try {
+                              await ignoreSubscription({ data: { id: sub.id } });
+                              qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                              qc.invalidateQueries({ queryKey: ["all-subs"] });
+                              toast(`Ignored ${sub.label}.`);
+                            } catch (err: any) {
+                              toast.error(err.message || "Failed to ignore");
+                            }
+                          }}
+                        >
+                          Not recurring
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {runwayView!.possibleCommitments.length > 3 && (
+              <p className="text-[11px] text-muted-foreground">
+                +{runwayView!.possibleCommitments.length - 3} more in Runway.
+              </p>
+            )}
+          </div>
+        ),
+        actions: [
+          {
+            label: "Open Runway",
+            variant: "secondary",
+            onClick: () => nav({ to: "/runway" }),
+          },
+        ],
+      });
+    }
+
+    return items;
+  }, [
+    nudges,
+    showInlineSmartNudges,
+    showRunwayWarning,
+    runwayView,
+    showExamWarning,
+    examNeedsMealSignal,
+    examFoodCapPaise,
+    insights?.exam?.days_left,
+    showPossibleCommitments,
+    nav,
+    qc,
+  ]);
+  const rawCampusIntelHeadline = cleanInsightText(campusIntel?.headline);
+  const campusIntelHeadlineLooksLikeLabel = Boolean(
+    rawCampusIntelHeadline &&
+    rawCampusIntelHeadline.length <= 56 &&
+    !/[.!?]$/.test(rawCampusIntelHeadline),
+  );
+  const rawCampusIntelBody = cleanInsightText(campusIntel?.next_action) || cleanInsightText(campusIntel?.summary);
+  const campusIntelHeadline = campusIntelHeadlineLooksLikeLabel ? rawCampusIntelHeadline : "";
+  const campusIntelBodyText = uniqueInsightText(
+    rawCampusIntelBody || rawCampusIntelHeadline,
+    campusIntelHeadline ? [campusIntelHeadline] : [],
+  );
+  const campusIntelWhy = uniqueInsightText(campusIntel?.why, [
+    campusIntelHeadline,
+    ...splitInsightSentences(campusIntelBodyText),
+  ]);
+  const showCampusIntelHeadline = Boolean(campusIntelHeadline && !sameInsightText(campusIntelHeadline, campusIntelBodyText));
+  const showCampusIntelWhy = Boolean(campusIntelWhy);
+  const inlineTopNudge = inlineSmartNudges[0];
+  const topPriority = inlineTopNudge
+    ? {
+      title: inlineTopNudge.title,
+      body: inlineTopNudge.body,
+      icon: inlineTopNudge.icon,
+      action: getNudgeActions(inlineTopNudge)[0],
+    }
+    : dashboardNotifications[0]
+      ? {
+        title: dashboardNotifications[0].title,
+        body: dashboardNotifications[0].body,
+        icon: dashboardNotifications[0].icon,
+        action: dashboardNotifications[0].actions?.[0],
+      }
+      : null;
+  const TopPriorityIcon = topPriority?.icon;
+
   return (
     <AppShell>
       {/* Page Header */}
@@ -1586,37 +2011,525 @@ function Dashboard() {
             Dashboard
           </h1>
         </div>
-        <div className="hidden">
-          <button
-            onClick={() => nav({ to: "/companion" })}
-            title={compStatus === "green" ? "Companion syncing" : compStatus === "amber" ? "Companion idle" : "No companion"}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-surface border border-border transition-colors hover:bg-surface-raised"
-          >
-            <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${compStatus === "green" ? "bg-success" : compStatus === "amber" ? "bg-warning" : "bg-destructive"}`} />
-          </button>
-          <Badge variant="outline" id="badge-wing" className="bg-white/5 border-border text-foreground font-bold text-[10px] md:text-xs">
-            {profile?.wing_label ?? "—"}
-          </Badge>
+        <div className="flex items-center gap-2">
+          <DashboardNotifications items={dashboardNotifications} storageKey={notificationStorageKey} />
         </div>
       </div>
 
       <div className="pb-16">
+        <section className="mb-5 space-y-4">
+          <div className="relative isolate">
+            <div className="pointer-events-none absolute -inset-x-3 -inset-y-3 -z-10 rounded-[1.75rem] bg-surface-raised sm:-inset-x-4" />
+            <div className="flex flex-col gap-3 px-1 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                  Hi, {firstName}
+                </p>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Pool, travel, runway, and transaction status at a glance.
+                </p>
+              </div>
+              {topPriority && TopPriorityIcon && (
+                <button
+                  type="button"
+                  disabled={!topPriority.action}
+                  onClick={() => topPriority.action?.onClick()}
+                  className="group flex w-full items-center gap-3 rounded-2xl border border-border bg-surface px-3 py-2.5 text-left shadow-sm transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-foreground/15 hover:bg-surface-raised hover:shadow-md disabled:cursor-default disabled:hover:translate-y-0 lg:max-w-[28rem]"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-warning/25 bg-warning/10 text-warning">
+                    <TopPriorityIcon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Top priority</span>
+                    <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">{topPriority.title}</span>
+                  </span>
+                  {topPriority.action && (
+                    <span className="hidden shrink-0 items-center gap-1 text-[11px] font-semibold text-primary sm:inline-flex">
+                      {topPriority.action.label}
+                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:auto-rows-fr">
+              {featureInsightCards.map((card) => {
+                const Icon = card.icon;
+                const compactValue = String(card.value).length > 12;
+                return (
+                  <Link
+                    key={card.key}
+                    to={card.to}
+                    aria-label={`${card.action}: ${card.value}`}
+                    className={`group relative flex h-full min-h-[158px] cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border bg-surface p-4 shadow-sm outline-none transition-[background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-surface-raised hover:shadow-md active:translate-y-0 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${card.accent.ring}`}
+                  >
+                    <span className={`absolute inset-x-0 top-0 h-1 ${card.accent.strip}`} />
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                            {card.label}
+                          </p>
+                          {card.key === "runway" && runwayView && (
+                            <Badge variant="outline" className={`${runwayStatusClass} px-1.5 py-0 text-[9px] font-semibold uppercase tracking-[0.12em]`}>
+                              {runwayStatusLabel}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className={`mt-2 truncate font-semibold leading-[1.08] text-foreground tnum ${compactValue ? "text-lg sm:text-xl" : "text-[1.45rem] sm:text-[1.55rem]"}`}>
+                          {card.value}
+                        </p>
+                      </div>
+                      <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border transition-transform duration-200 group-hover:scale-[1.03] ${card.accent.icon}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        {card.facts.map((fact) => (
+                          <div key={fact.label} className="min-w-0 rounded-lg border border-border bg-surface-raised/40 px-2.5 py-2">
+                            <p className="truncate text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{fact.label}</p>
+                            <p className="mt-1 truncate text-[0.8rem] font-semibold leading-none text-foreground tnum">{fact.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {card.progress != null ? (
+                        <div className="mt-3 flex items-center gap-2">
+                          <Progress value={card.progress} className="h-1 bg-surface-raised" />
+                          <span className="shrink-0 text-[10px] font-semibold text-muted-foreground tnum">{card.progressLabel}</span>
+                        </div>
+                      ) : (
+                        <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                          {card.detail}
+                        </p>
+                      )}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-3">
+                      <span className={`text-[11px] font-semibold ${card.accent.action}`}>{card.action}</span>
+                      <span className="grid h-7 w-7 place-items-center rounded-full border border-border bg-surface-raised text-muted-foreground transition-[border-color,color,transform] duration-200 group-hover:translate-x-0.5 group-hover:border-current group-hover:text-foreground">
+                        <ChevronRight className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {inlineSmartNudges.length > 0 && (
+            <div id="section-dashboard-smart-nudges" className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {inlineSmartNudges.map((nudge) => {
+                const Icon = nudge.icon;
+                const actions = getNudgeActions(nudge).slice(0, 2);
+                const isWarning = nudge.id === "velocity_spike" || nudge.id === "sub_bleed" || nudge.id === "late_night";
+                return (
+                  <div
+                    key={nudge.id}
+                    className={`rounded-2xl border bg-surface p-4 ${
+                      isWarning ? "border-warning/25" : "border-border"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border bg-surface-raised ${
+                        isWarning ? "border-warning/25 text-warning" : "border-border text-muted-foreground"
+                      }`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Needs attention</p>
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Today</span>
+                        </div>
+                        <p className="mt-1 text-sm font-semibold leading-snug text-foreground">{nudge.title}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{nudge.body}</p>
+                        {actions.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {actions.map((action) => (
+                              <Button
+                                key={action.label}
+                                type="button"
+                                size="sm"
+                                variant={action.variant === "primary" ? "default" : "outline"}
+                                className={
+                                  action.variant === "primary"
+                                    ? "h-8 px-3 text-[11px] font-semibold"
+                                    : "h-8 border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive"
+                                }
+                                onClick={() => action.onClick()}
+                              >
+                                {action.label}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* ── Smart Nudges row ──────────────────────────────────────────── */}
-        {visibleNudges.length > 0 && (
-          <div className="mb-6 space-y-2">
-            {visibleNudges.map((n) => (
-              <NudgeCard key={n.id} {...n} onDismiss={() => dismiss(n.id)} />
-            ))}
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* ── Main Column ─────────────────────────────────────────────── */}
-          <div className="md:col-span-7 lg:col-span-8 space-y-6 animate-[fadeIn_0.3s_ease-out]">
+          <div className="md:col-span-7 lg:col-span-8 flex flex-col gap-6 animate-[fadeIn_0.3s_ease-out]">
+
+            {(showRunwayWarning || showExamWarning || showPossibleCommitments) && (
+              <div className="order-0 grid grid-cols-1 gap-3 xl:grid-cols-2">
+                {showRunwayWarning && runwayView && (
+                  <div id="card-runway-alert" className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-destructive/20 bg-background/60 text-destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-destructive">Runway action</p>
+                          <span className="text-[11px] font-semibold text-muted-foreground">{rupees(runwayView.safeDailyPaise)}/day safe limit</span>
+                        </div>
+                        <p className="mt-1 text-sm font-semibold leading-snug text-foreground">
+                          {runwayView.decision?.next_best_action?.title ?? runwayView.nextAction?.title ?? "Keep the next spend planned."}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          Expected {runwayView.expectedDays}d, stress case {runwayView.stressDays}d. Open Runway for the full simulator.
+                        </p>
+                        <Link to="/runway" className="mt-3 inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-[11px] font-semibold text-primary-foreground hover:bg-primary/90">
+                          Open Runway
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {showExamWarning && (
+                  <div id="card-exam-food-alert" className="rounded-2xl border border-border bg-surface p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-surface-raised text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Exam food</p>
+                          <span className="text-[11px] font-semibold text-muted-foreground">{insights?.exam?.days_left ?? 0}d left</span>
+                        </div>
+                        <p className="mt-1 text-sm font-semibold leading-snug text-foreground">
+                          {examNeedsMealSignal ? "No recent meal signal." : "Meal signal is current."}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          Keep the next meal near {examFoodCapPaise > 0 ? rupees(examFoodCapPaise) : "today's target"} while the exam window is active.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {examNeedsMealSignal && (
+                            <Button size="sm" className="h-8 px-3 text-[11px] font-semibold" onClick={() => setShowCheckIn(true)}>
+                              Check in
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive"
+                            onClick={() => {
+                              setShowFoodSheet(true);
+                              setFoodTab("menus");
+                            }}
+                          >
+                            Campus food
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {showPossibleCommitments && runwayView && (
+                  <div id="card-possible-commitments-alert" className="rounded-2xl border border-border bg-surface p-4 xl:col-span-2">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-surface-raised text-muted-foreground">
+                          <Receipt className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Unconfirmed commitments</p>
+                          <p className="mt-1 text-sm font-semibold leading-snug text-foreground">
+                            {rupees(runwayView.possibleCommitmentsTotal)} in possible recurring debits may hit before reset.
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                            Confirm only the ones that are real so Runway does not understate future spend.
+                          </p>
+                        </div>
+                      </div>
+                      <Link to="/runway" className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive">
+                        Open Runway
+                      </Link>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
+                      {runwayView.possibleCommitments.slice(0, 3).map((sub: any) => {
+                        const daysLeft = Math.max(1, runwayView.daysLeft || 0);
+                        const newSafeDailyPaise = Math.max(0, Math.floor(((runwayView.remainingPaise || 0) - (sub.amount || 0)) / daysLeft));
+                        return (
+                          <div key={sub.id} className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                            <div className="flex items-start gap-2.5">
+                              <PlatformIcon platform={sub.label} className="h-8 w-8 shrink-0 rounded-lg" />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="truncate text-xs font-semibold text-foreground">{sub.label}</p>
+                                  <span className="shrink-0 text-xs font-semibold text-foreground tnum">{rupees(sub.amount)}</span>
+                                </div>
+                                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                  Due {shortDate(new Date(sub.due_at))}; safe/day becomes {rupees(newSafeDailyPaise)}
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    className="h-8 min-w-[72px] px-3 text-[11px] font-semibold"
+                                    onClick={async () => {
+                                      try {
+                                        await confirmSubscription({ data: { id: sub.id } });
+                                        qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                        qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                        toast.success(`Tracked ${sub.label}.`);
+                                      } catch (err: any) {
+                                        toast.error(err.message || "Failed to confirm");
+                                      }
+                                    }}
+                                  >
+                                    Track
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 min-w-[104px] border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground shadow-sm hover:border-foreground/15 hover:bg-surface-interactive"
+                                    onClick={async () => {
+                                      try {
+                                        await ignoreSubscription({ data: { id: sub.id } });
+                                        qc.invalidateQueries({ queryKey: ["runway-forecast"] });
+                                        qc.invalidateQueries({ queryKey: ["all-subs"] });
+                                        toast(`Ignored ${sub.label}.`);
+                                      } catch (err: any) {
+                                        toast.error(err.message || "Failed to ignore");
+                                      }
+                                    }}
+                                  >
+                                    Not recurring
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {runwayView.possibleCommitments.length > 3 && (
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        +{runwayView.possibleCommitments.length - 3} more in Runway.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div id="card-routine-food-signals" className="order-1 rounded-2xl border border-border bg-surface p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-surface-raised text-muted-foreground">
+                    <Utensils className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Routine & Food</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                      Meal timing, routine score, and food spend signals feeding Runway.
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="outline" className={`${routineStatusClass} w-fit shrink-0 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider`}>
+                  {routineStatusLabel}
+                </Badge>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+                {routineFoodMetrics.map((metric) => {
+                  const Icon = metric.icon;
+                  return (
+                    <div key={metric.label} className="min-w-0 rounded-xl border border-border bg-surface-raised/35 p-3">
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          {metric.label}
+                        </p>
+                      </div>
+                      <p className="mt-2 truncate text-sm font-semibold text-foreground tnum">{metric.value}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{metric.detail}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0 text-xs leading-relaxed text-muted-foreground">
+                  <p>{routineMealSignalLine}</p>
+                  {wellnessPrimaryAction?.detail && wellnessPrimaryAction.detail !== wellness?.message && (
+                    <p className="mt-1 truncate">{wellnessPrimaryAction.detail}</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {examNeedsMealSignal && (
+                    <Button size="sm" className="h-8 px-3 text-[11px] font-semibold" onClick={() => setShowCheckIn(true)}>
+                      Check in
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive"
+                    onClick={() => {
+                      setShowFoodSheet(true);
+                      setFoodTab("menus");
+                    }}
+                  >
+                    Campus food
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden">
+              <div id="card-runway-focus" className="rounded-2xl border border-border bg-surface p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-surface-raised text-muted-foreground">
+                      <Timer className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">Runway</p>
+                      <p className="mt-1 text-sm font-medium leading-relaxed text-muted-foreground">
+                        How long this allowance can keep going.
+                      </p>
+                    </div>
+                  </div>
+                  {runwayView && (
+                    <Badge variant="outline" className={`${runwayStatusClass} shrink-0 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider`}>
+                      {runwayStatusLabel}
+                    </Badge>
+                  )}
+                </div>
+
+                {!runwayView ? (
+                  <div className="mt-5 space-y-3">
+                    <Skeleton className="h-8 w-32" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                ) : runwayView.setupRequired ? (
+                  <div className="mt-5">
+                    <p className="text-base font-semibold text-foreground">Allowance setup needed</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {runwayView.setupReason ?? "Add allowance to activate safe/day guidance."}
+                    </p>
+                    <Link to="/settings" className="mt-4 inline-flex h-8 items-center justify-center rounded-lg border border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive">
+                      Open Settings
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-5 grid grid-cols-3 gap-2">
+                      <div className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Expected</p>
+                        <p className="mt-1 text-xl font-semibold leading-none text-foreground tnum">{runwayView.expectedDays}d</p>
+                      </div>
+                      <div className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Safe/day</p>
+                        <p className="mt-1 text-base font-semibold leading-none text-foreground tnum">{rupees(runwayView.safeDailyPaise)}</p>
+                      </div>
+                      <div className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Risk</p>
+                        <p className="mt-1 text-base font-semibold leading-none text-foreground tnum">{Math.round((runwayView.shortfallProbability ?? 0) * 100)}%</p>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <Progress id="progress-runway-focus" value={runwayView.pct} className="h-1 bg-surface-raised" />
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                        {runwayView.pct}% spent. Balance {rupees(runwayView.remainingPaise)}. Reset in {runwayView.daysLeft}d.
+                      </p>
+                    </div>
+                    <Link to="/runway" className="mt-4 inline-flex h-8 items-center justify-center rounded-lg border border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive">
+                      Open Runway
+                    </Link>
+                  </>
+                )}
+              </div>
+
+              <div id="card-food-guard-focus" className="rounded-2xl border border-border bg-surface p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-surface-raised text-muted-foreground">
+                      <Utensils className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">Food Guard</p>
+                      <p className="mt-1 text-sm font-medium leading-relaxed text-muted-foreground">
+                        Meal signal, food pace, and campus options.
+                      </p>
+                    </div>
+                  </div>
+                  {runwayView?.foodRoutine?.label && !runwayView?.setupRequired && (
+                    <Badge variant="outline" className="shrink-0 border-border bg-surface-raised px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-foreground">
+                      {runwayView.foodRoutine.label}
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="mt-5 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Meal</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                      {formatMealGapHours(insights?.food?.last_signal_source ? insights.food.gap_hours : hasFoodGapSignal ? foodGapHours : null, { missingLabel: "No signal", includeAgo: false })}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Food pace</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground tnum">
+                      {runwayView?.foodRoutine && !runwayView.setupRequired ? rupees(runwayView.foodRoutine.food_daily_pace ?? 0) : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Delivery</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground tnum">
+                      {!runwayView?.setupRequired ? runwayView?.foodRoutine?.delivery?.count ?? insights?.food?.delivery_count_30d ?? "—" : insights?.food?.delivery_count_30d ?? "—"}x
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+                  {routineMealSignalLine}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {examNeedsMealSignal && (
+                    <Button size="sm" className="h-8 px-3 text-[11px] font-semibold" onClick={() => setShowCheckIn(true)}>
+                      Check in
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive"
+                    onClick={() => {
+                      setShowFoodSheet(true);
+                      setFoodTab("menus");
+                    }}
+                  >
+                    Campus Food
+                  </Button>
+                </div>
+              </div>
+            </div>
 
             {/* Routine Signal Index Card */}
-            <div id="card-wellness-index" className="bg-surface rounded-2xl border border-border relative overflow-hidden transition-colors duration-200 hover:border-border/80">
+            <div id="card-wellness-index" className="hidden">
               <div className="absolute top-0 left-0 w-full h-[2px] bg-border" />
 
               {wellnessLoading ? (
@@ -1796,318 +2709,104 @@ function Dashboard() {
               )}
             </div>
 
-            {/* Runway Hero */}
-            <div id="card-runway-status" className="bg-surface rounded-2xl border border-border relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-accent-bronze via-accent-amber to-accent-copper opacity-80" />
-              <div className="p-6 md:p-8">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
-                  <div>
-                    <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Runway Status</p>
-                    <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
-                      Expected and stress-case view from the runway engine.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 sm:justify-end">
+            {/* Runway summary */}
+            <div id="card-runway-status" className="hidden">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Timer className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-xs font-bold tracking-[0.18em] text-zinc-500 uppercase">Runway</p>
                     {runwayView && (
-                      <Badge variant="outline" className={`${runwayStatusClass} font-semibold text-[10px] uppercase tracking-wider px-2.5 py-0.5`}>
+                      <Badge variant="outline" className={`${runwayStatusClass} font-semibold text-[10px] uppercase tracking-wider px-2 py-0.5`}>
                         {runwayStatusLabel}
                       </Badge>
                     )}
-                    <Badge variant="outline" className="hidden">
-                      {profile?.wing_label ?? "—"}
-                    </Badge>
-                    <button
-                      onClick={() => nav({ to: "/companion" })}
-                      title="Companion Status"
-                      className="hidden"
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${compStatus === "green" ? "bg-success" : compStatus === "amber" ? "bg-warning" : "bg-destructive"}`} />
-                    </button>
                   </div>
-                </div>
-
-                {!runwayView ? (
-                  <Skeleton className="mt-2 h-20 w-full max-w-xs" />
-                ) : runwayView.setupRequired ? (
-                  <div className="rounded-2xl border border-primary/15 bg-primary/5 p-5">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Setup needed</p>
-                    <h2 className="mt-2 text-xl font-semibold text-foreground">Add allowance to activate Runway</h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                      {runwayView.setupReason ?? "Runway needs your monthly allowance or a synced allowance credit before it can calculate safe/day and shortfall guidance."}
-                    </p>
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                      <Link to="/settings" className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-xs font-bold uppercase tracking-wider text-primary-foreground">
-                        Open Settings
-                      </Link>
-                      <Link to="/transactions" className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-surface px-3 text-xs font-bold uppercase tracking-wider text-foreground">
-                        View Transactions
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-stretch">
-                      <div className="min-w-0">
-                        <div className="flex items-baseline gap-2.5">
-                          <h2 className="text-[56px] sm:text-[70px] md:text-[80px] font-bold tracking-tighter text-foreground tnum leading-none" style={{ color: runwayColor }}>
-                            <CountUp to={runwayView.expectedDays} />
-                          </h2>
-                          <span className="text-[16px] md:text-[20px] font-bold tracking-widest text-zinc-500 uppercase">Days</span>
-                        </div>
-                        <p className="mt-3 max-w-2xl text-[13px] md:text-sm text-zinc-400 font-medium leading-6 tracking-normal">
-                          Expected runway at <span className="text-foreground font-bold">{rupees(runwayView.safeDailyPaise)}/day</span>. Stress case: <span className="text-foreground font-bold">{runwayView.stressDays} days</span>.
-                        </p>
-                        <p className="mt-2 text-[11px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">
-                          Reset in {runwayView.daysLeft} days{runwayView.cycleEnd ? ` (${shortDate(runwayView.cycleEnd)})` : ""}
-                        </p>
-                        <p className="hidden">
-                          Reset in {runwayView.daysLeft} days{runwayView.cycleEnd ? ` · ${shortDate(runwayView.cycleEnd)}` : ""}
-                        </p>
-                        <p className="hidden">
-                          {runwayView.daysLeft} days until reset · {Math.round((runwayView.shortfallProbability ?? 0) * 100)}% shortfall risk
-                        </p>
-                      </div>
-
-                      <div className="xl:border-l xl:border-border/70 xl:pl-6 flex flex-col justify-between gap-4">
+                  {!runwayView ? (
+                    <Skeleton className="mt-3 h-8 w-44" />
+                  ) : runwayView.setupRequired ? (
+                    <>
+                      <p className="mt-2 text-sm font-semibold text-foreground">Allowance setup needed</p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        {runwayView.setupReason ?? "Add allowance to activate safe/day guidance."}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mt-3 flex flex-wrap items-end gap-x-5 gap-y-2">
                         <div>
-                          <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.2em] text-primary">Next best action</p>
-                          <h3 className="mt-2 text-sm sm:text-base font-semibold text-foreground">
-                            {runwayView.nextAction?.title ?? "Keep your current pace"}
-                          </h3>
-                          <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                            {runwayView.nextAction?.detail ?? "Your current runway can reach reset if today stays inside the safe daily limit."}
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Expected</p>
+                          <p className="text-3xl font-semibold leading-none text-foreground tnum">
+                            <CountUp to={runwayView.expectedDays} /> <span className="text-sm text-muted-foreground">days</span>
                           </p>
                         </div>
                         <div>
-                          <Link to="/runway" className="inline-flex h-8 rounded-lg bg-primary text-primary-foreground px-3 items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all">
-                            Open Runway
-                          </Link>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Safe/day</p>
+                          <p className="text-lg font-semibold text-foreground tnum">{rupees(runwayView.safeDailyPaise)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Stress case</p>
+                          <p className="text-lg font-semibold text-foreground tnum">{runwayView.stressDays} days</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Risk</p>
+                          <p className="text-lg font-semibold text-foreground tnum">{Math.round((runwayView.shortfallProbability ?? 0) * 100)}%</p>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4 border-t border-border pt-5">
-                      <div className="min-w-0">
-                        <p className="text-[10px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">Balance</p>
-                        <p className="mt-1 text-[17px] md:text-[20px] font-semibold text-foreground tnum">{rupees(runwayView.remainingPaise)}</p>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] md:text-xs text-primary font-semibold uppercase tracking-wider">Safe/day</p>
-                        <p className="mt-1 text-[17px] md:text-[20px] font-semibold text-foreground tnum">{rupees(runwayView.safeDailyPaise)}</p>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">Food pace</p>
-                        <p className="mt-1 text-[17px] md:text-[20px] font-semibold text-foreground tnum">{rupees(runwayView.foodRoutine?.food_daily_pace ?? 0)}</p>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] md:text-xs text-zinc-500 font-semibold uppercase tracking-wider">Today</p>
-                        <p className="mt-1 text-[17px] md:text-[20px] font-semibold text-foreground tnum">{rupees(runwayView.spentTodayPaise)}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-5">
-                      <Progress id="progress-runway" value={runwayView.pct} className="h-1 bg-surface-raised" />
-                      <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground font-medium sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {profile?.companion_paired ? (
-                            <span className="flex items-center gap-1.5 text-zinc-400">
-                              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-                              Auto-tracking via {profile.companion_device_name ?? "companion"}
-                            </span>
-                          ) : (
-                            <Link to="/companion" className="text-warning flex items-center gap-1.5 hover:underline">
-                              <span className="w-1.5 h-1.5 bg-warning rounded-full" /> Manual tracking mode
-                            </Link>
-                          )}
-                          {(calc?.unpaidPoolDebt ?? 0) > 0 && (
-                            <span className="inline-flex items-center rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] md:text-xs font-semibold text-amber-500">
-                              Pool dues included {rupees((calc?.unpaidPoolDebt ?? 0) * 100)}
-                            </span>
-                          )}
+                      <div className="mt-3 max-w-xl">
+                        <Progress id="progress-runway" value={runwayView.pct} className="h-1 bg-surface-raised" />
+                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                          <span><span className="font-semibold text-foreground">{runwayView.pct}%</span> spent</span>
+                          <span>Balance <span className="font-semibold text-foreground">{rupees(runwayView.remainingPaise)}</span></span>
+                          <span>Reset in {runwayView.daysLeft}d{runwayView.cycleEnd ? ` · ${shortDate(runwayView.cycleEnd)}` : ""}</span>
                         </div>
-                        <span className="font-bold text-foreground">{runwayView.pct}% Spent</span>
                       </div>
-                    </div>
-
-                    {false && runwayView?.decision?.absorbed?.length ? (
-                      <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
-                        {runwayView?.decision?.absorbed?.map((factor: any) => (
-                          <div key={factor.kind} className="rounded-xl border border-border/70 bg-surface-raised/60 p-3 min-w-0">
-                            <p className="text-[10px] md:text-xs font-black uppercase tracking-wider text-zinc-500 truncate">{factor.label}</p>
-                            <p className="mt-1 text-sm font-black text-foreground tnum">
-                              {rupees(factor.daily_amount ?? factor.amount)}
-                              {factor.daily_amount ? <span className="text-[9px] md:text-xs text-zinc-500">/day</span> : null}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </>
-                )}
+                    </>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row lg:shrink-0">
+                  {runwayView?.setupRequired ? (
+                    <Link to="/settings" className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive">
+                      Open Settings
+                    </Link>
+                  ) : (
+                    <Link to="/runway" className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive">
+                      Open Runway
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Possible commitments runway warn banner */}
-            {runwayView && runwayView.possibleCommitments && runwayView.possibleCommitments.length > 0 && (
-              <Card
-                id="card-possible-commitments-alert"
-                className="border border-border bg-surface p-5 rounded-2xl mt-4"
-              >
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-raised text-muted-foreground">
-                      <Receipt className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-                        Unconfirmed commitments
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground tnum">{rupees(runwayView.possibleCommitmentsTotal)}</span> may renew before reset. Confirm it to include the amount in runway.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {runwayView.possibleCommitments.map((sub: any) => {
-                      const daysLeft = Math.max(1, runwayView.daysLeft || 0);
-                      const dailyImpactPaise = Math.round((sub.amount || 0) / daysLeft);
-                      const newSafeDailyPaise = Math.max(0, Math.floor(((runwayView.remainingPaise || 0) - (sub.amount || 0)) / daysLeft));
-                      return (
-                        <div
-                          key={sub.id}
-                          className="rounded-xl border border-border bg-surface-raised/40 p-3.5"
-                        >
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div className="flex min-w-0 items-start gap-3">
-                              <PlatformIcon platform={sub.label} className="h-9 w-9 shrink-0 rounded-xl" />
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="text-sm font-semibold text-foreground truncate">{sub.label}</p>
-                                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                                    <ShieldCheck className="h-3 w-3" />
-                                    {Math.round(sub.confidence)}% confidence
-                                  </span>
-                                </div>
-                                <p className="mt-1 text-[11px] text-muted-foreground">
-                                  {rupees(sub.amount)} due {shortDate(new Date(sub.due_at))} · {sub.cadence || "monthly"}
-                                </p>
-                                {dailyImpactPaise > 0 && (
-                                  <p className="mt-1 text-[11px] text-muted-foreground">
-                                    If confirmed, safe/day becomes <span className="font-semibold text-foreground">{rupees(newSafeDailyPaise)}</span> ({rupees(dailyImpactPaise)}/day pressure).
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col gap-2 sm:flex-row md:justify-end">
-                              <Button
-                                size="sm"
-                                className="h-8 border border-foreground bg-foreground px-3 text-[11px] font-semibold text-background hover:bg-foreground/90"
-                                onClick={async () => {
-                                  try {
-                                    await confirmSubscription({ data: { id: sub.id } });
-                                    qc.invalidateQueries({ queryKey: ["runway-forecast"] });
-                                    qc.invalidateQueries({ queryKey: ["all-subs"] });
-                                    toast.success(`Tracked ${sub.label}!`);
-                                  } catch (err: any) {
-                                    toast.error(err.message || "Failed to confirm");
-                                  }
-                                }}
-                              >
-                                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                                Track
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 border-zinc-300 bg-surface px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive dark:border-zinc-700"
-                                onClick={async () => {
-                                  try {
-                                    await ignoreSubscription({ data: { id: sub.id } });
-                                    qc.invalidateQueries({ queryKey: ["runway-forecast"] });
-                                    qc.invalidateQueries({ queryKey: ["all-subs"] });
-                                    toast(`Ignored ${sub.label}.`);
-                                  } catch (err: any) {
-                                    toast.error(err.message || "Failed to ignore");
-                                  }
-                                }}
-                              >
-                                <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                                Not recurring
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 border-zinc-300 bg-surface px-3 text-[11px] font-semibold text-muted-foreground hover:bg-surface-interactive hover:text-foreground dark:border-zinc-700"
-                                onClick={() => {
-                                  setSnoozedSubs(prev => [...prev, sub.id]);
-                                  toast.success(`Hidden for now.`);
-                                }}
-                              >
-                                <EyeOff className="mr-1.5 h-3.5 w-3.5" />
-                                Hide
-                              </Button>
-                            </div>
-                          </div>
-
-                          {sub.evidence && sub.evidence.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              {sub.evidence.slice(0, 3).map((ev: string, idx: number) => (
-                                <span key={idx} className="rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground">
-                                  {ev}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+            {/* Quick stats */}
+            <div className="order-4 rounded-2xl border border-border bg-surface p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">Quick stats</p>
+                  <p className="mt-1 text-xs text-muted-foreground">One glance at pace, category, food, and late spends.</p>
                 </div>
-              </Card>
-            )}
-
-            {runwayView && !runwayView.setupRequired && <MealRunwayCheck calc={calc} runwayView={runwayView} />}
-
-            {/* ── Behaviour Analytics Row ─────────────────────────────── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-              {/* 7-day spend bar chart */}
-              <div className="bg-surface border border-border rounded-2xl p-5">
-                <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase mb-4">7-Day Spend</p>
-                {insights?.daily_spend_7d ? (
-                  <>
-                    <SpendBar days={insights.daily_spend_7d} />
-                    {(insights.velocity?.pct_change ?? 0) !== 0 && (
-                      <p className={`mt-3 text-xs font-bold ${insights.velocity.pct_change > 0 ? "text-destructive" : "text-success"}`}>
-                        {insights.velocity.pct_change > 0 ? "▲" : "▼"} {Math.abs(insights.velocity.pct_change)}% vs last week
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex h-16 items-center rounded-xl border border-dashed border-border bg-surface-raised/30 px-4">
-                    <p className="text-xs text-zinc-500">No weekly spend pattern yet. Sync or add transactions to build this chart.</p>
-                  </div>
-                )}
+                <Link to="/transactions" className="inline-flex h-8 w-fit items-center justify-center rounded-lg border border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive">
+                  View Transactions
+                </Link>
               </div>
-
-              {/* Category breakdown donut */}
-              <div className="bg-surface border border-border rounded-2xl p-5">
-                <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase mb-4">Spend by Category</p>
-                {insights?.category_breakdown?.length ? (
-                  <CategoryDonut breakdown={insights.category_breakdown} />
-                ) : (
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full border-4 border-white/10 border-t-primary animate-spin" />
-                    <p className="text-xs text-zinc-500">No data yet — start logging transactions</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {quickStats.map((item) => (
+                  <div key={item.label} className="min-w-0 rounded-xl border border-border bg-surface-raised/35 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{item.label}</p>
+                    <p className="mt-1 truncate text-sm font-semibold capitalize text-foreground tnum">{item.value}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{item.detail}</p>
                   </div>
-                )}
+                ))}
               </div>
+              {insights?.daily_spend_7d ? (
+                <div className="mt-4 rounded-xl border border-border bg-surface-raised/25 p-3">
+                  <SpendBar days={insights.daily_spend_7d} />
+                </div>
+              ) : null}
             </div>
 
             {/* ── Food & Routine Strip ─────────────────────────────────── */}
-            <div className="bg-surface border border-border rounded-2xl p-5">
+            <div className="hidden">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
                 <div>
                   <div className="flex items-center gap-3">
@@ -2193,85 +2892,6 @@ function Dashboard() {
                 </div>
               </div>
 
-              {examActive && (
-                <div className="mt-5 rounded-xl border border-border bg-surface-raised/30 p-3.5">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-xs font-semibold text-foreground">Exam meal checkpoint</p>
-                          <span className="rounded-md border border-border bg-surface px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-                            {insights?.exam?.days_left ?? 0}d left
-                          </span>
-                          <span className={`rounded-md border px-2 py-0.5 text-[10px] font-medium ${
-                            examNeedsMealSignal
-                              ? "border-amber-500/20 bg-amber-500/10 text-amber-500"
-                              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-500"
-                          }`}>
-                            {examNeedsMealSignal ? "Signal needs update" : "Signal current"}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          {examNeedsMealSignal
-                            ? `No recent meal signal. Log it if you already ate, or keep the next meal near ${examFoodCapPaise > 0 ? rupees(examFoodCapPaise) : "today's food target"}.`
-                            : `Meal signal is current. Keep the next meal near ${examFoodCapPaise > 0 ? rupees(examFoodCapPaise) : "today's food target"} so exam-week food stays predictable.`}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-                          <span>Last signal: <span className="text-foreground">{examMealGapLabel}</span></span>
-                          <span>Source: <span className="text-foreground">{examMealSignalSource}</span></span>
-                          <span>Suggested target: <span className="text-foreground">{examFoodCapPaise > 0 ? rupees(examFoodCapPaise) : "Runway"}</span></span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 sm:shrink-0">
-                        {examNeedsMealSignal && (
-                          <button
-                            type="button"
-                            onClick={() => setShowCheckIn(true)}
-                            className={`h-8 rounded-lg border px-3 text-[11px] font-medium transition-colors ${
-                              isPrimaryWellnessAction("checkin")
-                                ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-                                : "border-border bg-surface text-foreground hover:bg-surface-interactive"
-                            }`}
-                          >
-                            Meal check-in
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => { setShowFoodSheet(true); setFoodTab("menus"); }}
-                          className={`h-8 rounded-lg border px-3 text-[11px] font-medium transition-colors ${
-                            isPrimaryWellnessAction("food")
-                              ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-                              : "border-border bg-surface text-foreground hover:bg-surface-interactive"
-                          }`}
-                        >
-                          Campus food
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-border bg-surface/50 px-3 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Next meal option</p>
-                          <p className="mt-1 text-sm font-semibold text-foreground">{examMealPlan.title}</p>
-                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">{examMealPlan.detail}</p>
-                        </div>
-                        {bestFood && (
-                          <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium ${
-                            examBestFoodFitsCap
-                              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-500"
-                              : "border-border bg-surface text-zinc-500"
-                          }`}>
-                            {examBestFoodFitsCap ? "Fits target" : "Closest option"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Mess vs delivery bar */}
               {insights?.food && (insights.food.delivery_count_30d + insights.food.mess_count_30d) > 0 && (
                 <div className="mt-5 pt-4 border-t border-border">
@@ -2295,9 +2915,10 @@ function Dashboard() {
             </div>
 
             {/* Active Pools */}
-            <section id="section-active-pools" className="space-y-4 pt-2">
+            {activeDashboardPools.length > 0 && (
+            <section id="section-active-pools" className="order-2 space-y-4 pt-2">
               <div className="flex items-center justify-between px-1">
-                <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase">Active Pools</h3>
+                <h3 className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">Active Pools</h3>
                 <Link
                   to="/pool"
                   id="btn-new-pool-dash"
@@ -2308,22 +2929,7 @@ function Dashboard() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {(() => {
-                  const activeDashboardPools = (pools ?? []).filter(
-                    (p) => (p.status === "open" && new Date(p.expires_at).getTime() > Date.now()) ||
-                           (p.status === "completed" && !isPoolFullyPaid(p))
-                  );
-
-                  if (activeDashboardPools.length === 0) {
-                    return (
-                      <div className="col-span-full py-10 text-center border border-dashed border-border rounded-2xl bg-surface-raised/40">
-                        <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">No active pools in your wing.</p>
-                        <p className="text-xs text-zinc-500 mt-1">Start one now to split delivery fees with your wing.</p>
-                      </div>
-                    );
-                  }
-
-                  return activeDashboardPools.map((p) => {
+                {activeDashboardPools.map((p) => {
                     const total = p.status === "completed"
                       ? (p.items ?? []).filter((it: any) => it.is_purchased).reduce((s: number, i: any) => s + i.estimated_price, 0)
                       : (p.items ?? []).reduce((s: number, i: any) => s + i.estimated_price, 0);
@@ -2356,13 +2962,13 @@ function Dashboard() {
 
                     return (
                       <Link key={p.id} to="/pool/$id" params={{ id: p.id }} className="group">
-                        <Card className="bg-surface relative overflow-hidden border border-border p-5 transition-all duration-300 hover:border-white/15 hover:bg-surface-raised h-full flex flex-col justify-between hover:shadow-lg hover:shadow-black/40">
+                        <Card className="bg-surface relative overflow-hidden border border-border p-5 transition-all duration-200 hover:border-foreground/15 hover:bg-surface-raised h-full flex flex-col justify-between hover:shadow-md">
                           <div>
                             <div className="flex items-start justify-between gap-2 mb-3">
                               <div className="flex items-center gap-2 min-w-0">
                                 <PlatformIcon platform={p.platform} name={p.platform_display_label || p.platform.replace("_", " ")} className="h-5 w-5" />
                                 <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                                  <span className="text-xs font-black uppercase tracking-wider text-foreground truncate max-w-[120px] sm:max-w-none">{p.platform_display_label || p.platform.replace("_", " ")}</span>
+                                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-foreground truncate max-w-[120px] sm:max-w-none">{p.platform_display_label || p.platform.replace("_", " ")}</span>
                                   <Badge variant="outline" className="hidden">{p.wing_label}</Badge>
                                 </div>
                               </div>
@@ -2411,23 +3017,23 @@ function Dashboard() {
                           </div>
                           <div className="mt-6 pt-4 border-t border-border flex items-center justify-between">
                             <div className="flex flex-col">
-                              <span className="text-[10px] md:text-xs text-zinc-500 font-bold uppercase tracking-wider">Cart</span>
-                              <span className="text-xs font-black text-foreground">
+                              <span className="text-[10px] md:text-xs text-muted-foreground font-semibold uppercase tracking-[0.12em]">Cart</span>
+                              <span className="text-xs font-semibold text-foreground">
                                 {rupees(total)}
                                 {p.status === "open" && (
-                                  <span className="text-zinc-500 font-normal text-[10px] md:text-xs"> / {rupees(p.min_cart_value)} min</span>
+                                  <span className="text-muted-foreground font-normal text-[10px] md:text-xs"> / {rupees(p.min_cart_value)} min</span>
                                 )}
                               </span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[10px] md:text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                              <span className="text-[10px] md:text-xs text-muted-foreground font-semibold uppercase tracking-[0.12em]">
                                 {p.status === "completed" ? "Your Split" : "Split Est."}
                               </span>
-                              <span className="text-xs font-black text-success">
+                              <span className="text-xs font-semibold text-success">
                                 {p.status === "completed" && rSummary
                                   ? rupees(rSummary.myOwed || (total / (Object.keys(p.split_breakdown ?? {}).length || 1)))
                                   : rupees(perPerson)}
-                                <span className="text-zinc-500 font-normal text-[10px] md:text-xs">
+                                <span className="text-muted-foreground font-normal text-[10px] md:text-xs">
                                   {p.status === "completed" ? "" : " / person"}
                                 </span>
                               </span>
@@ -2436,10 +3042,10 @@ function Dashboard() {
                         </Card>
                       </Link>
                     );
-                  });
-                })()}
+                  })}
               </div>
             </section>
+            )}
           </div>
 
           {/* ── Sidebar ─────────────────────────────────────────────────── */}
@@ -2447,12 +3053,12 @@ function Dashboard() {
 
             {/* ── Wing Netting & Suggested Settlements ─────────────────── */}
             {nettedBalances && (nettedBalances.balances?.you_owe?.length > 0 || nettedBalances.balances?.owes_you?.length > 0 || nettedBalances.suggested_settlements?.length > 0) && (
-              <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden transition-all duration-300 hover:border-white/10">
-                <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 opacity-80" />
+              <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden transition-colors duration-200 hover:border-foreground/15">
+                <div className="absolute top-0 left-0 w-full h-[2px] bg-success" />
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                  <p className="text-xs font-bold tracking-[0.12em] text-zinc-500 uppercase">Wing Netting & Settlements</p>
-                  <span className="text-[10px] md:text-xs font-black px-2 py-0.5 rounded-full border text-emerald-500 border-emerald-500/20 bg-emerald-500/5">
-                    NETTED ACTIVE
+                  <p className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">Wing Netting & Settlements</p>
+                  <span className="text-[10px] md:text-xs font-semibold px-2 py-0.5 rounded-full border text-success border-success/20 bg-success/5 uppercase tracking-[0.12em]">
+                    Netted active
                   </span>
                 </div>
 
@@ -2460,12 +3066,12 @@ function Dashboard() {
                   {/* Nishant owes others (you_owe) */}
                   {nettedBalances.balances?.you_owe?.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-[11px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider">You Owe</p>
+                      <p className="text-[11px] md:text-xs font-semibold text-muted-foreground uppercase tracking-[0.12em]">You Owe</p>
                       <div className="space-y-1.5">
                         {nettedBalances.balances.you_owe.map((item: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg text-xs border border-border">
-                            <span className="font-semibold text-zinc-300">{item.name}</span>
-                            <span className="font-bold text-red-400 font-mono">{rupees(item.amount)}</span>
+                          <div key={idx} className="flex items-center justify-between bg-surface-raised/40 px-3 py-2 rounded-lg text-xs border border-border">
+                            <span className="font-semibold text-foreground">{item.name}</span>
+                            <span className="font-semibold text-destructive tnum">{rupees(item.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -2475,12 +3081,12 @@ function Dashboard() {
                   {/* Others owe Nishant (owes_you) */}
                   {nettedBalances.balances?.owes_you?.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-[11px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider">Owes You</p>
+                      <p className="text-[11px] md:text-xs font-semibold text-muted-foreground uppercase tracking-[0.12em]">Owes You</p>
                       <div className="space-y-1.5">
                         {nettedBalances.balances.owes_you.map((item: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between bg-white/5 px-3 py-2 rounded-lg text-xs border border-border">
-                            <span className="font-semibold text-zinc-300">{item.name}</span>
-                            <span className="font-bold text-green-400 font-mono">{rupees(item.amount)}</span>
+                          <div key={idx} className="flex items-center justify-between bg-surface-raised/40 px-3 py-2 rounded-lg text-xs border border-border">
+                            <span className="font-semibold text-foreground">{item.name}</span>
+                            <span className="font-semibold text-success tnum">{rupees(item.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -2490,12 +3096,12 @@ function Dashboard() {
                   {/* Suggested settlements path */}
                   {nettedBalances.suggested_settlements?.length > 0 && (
                     <div className="space-y-2 pt-3 border-t border-border/60">
-                      <p className="text-[11px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <span>💡 Optimized Settlement Plan</span>
+                      <p className="text-[11px] md:text-xs font-semibold text-muted-foreground uppercase tracking-[0.12em] flex items-center gap-1.5">
+                        <span>Optimized settlement plan</span>
                       </p>
                       <div className="space-y-1.5">
                         {nettedBalances.suggested_settlements.map((item: any, idx: number) => (
-                          <p key={idx} className="text-xs text-zinc-300 bg-emerald-500/5 border border-emerald-500/10 px-3 py-2 rounded-lg font-medium leading-relaxed">
+                          <p key={idx} className="text-xs text-muted-foreground bg-success/5 border border-success/10 px-3 py-2 rounded-lg font-medium leading-relaxed">
                             {item.text}
                           </p>
                         ))}
@@ -2516,8 +3122,8 @@ function Dashboard() {
                     <ShieldCheck className="h-4 w-4 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-bold tracking-[0.16em] text-muted-foreground uppercase">Campus Intelligence</p>
-                    <p className="text-[11px] text-muted-foreground leading-snug">Cycle balance, spend pace, commitments, and routine.</p>
+                    <p className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">Campus Intelligence</p>
+                    <p className="text-[11px] text-muted-foreground leading-snug">One grounded next step for today.</p>
                   </div>
                 </div>
                 {campusIntel?.source === "bedrock" && (
@@ -2526,59 +3132,74 @@ function Dashboard() {
                   </span>
                 )}
               </div>
-              {campusIntel?.headline ? (
+              {campusIntelHeadline || campusIntelBodyText ? (
                 <div>
-                  <div className="border-l-2 border-primary/40 pl-3">
-                    <h3 className="text-sm sm:text-base font-semibold text-foreground leading-snug">{campusIntel.headline}</h3>
-                    <p className="mt-2 text-xs text-foreground/90 leading-relaxed">{campusIntel.next_action ?? campusIntel.summary}</p>
-                  </div>
-                  {campusIntel.why && (
-                    <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed">{campusIntel.why}</p>
+                  {showCampusIntelHeadline && (
+                    <h3 className="text-base font-semibold text-foreground leading-snug">{campusIntelHeadline}</h3>
+                  )}
+                  {campusIntelBodyText && (
+                    <p className={showCampusIntelHeadline ? "mt-2 text-sm text-foreground/90 leading-relaxed" : "text-sm text-foreground/90 leading-relaxed"}>
+                      {campusIntelBodyText}
+                    </p>
+                  )}
+                  {showCampusIntelWhy && (
+                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{campusIntelWhy}</p>
                   )}
 
-                  <div className="mt-4 pt-3 border-t border-border divide-y divide-border/60">
-                    {(() => {
-                      const signals = campusIntel.signals ?? [
-                        { label: "Runway", value: rupees((campusIntel.safe_daily ?? 0) * 100) + "/day", detail: "Safe spend", tone: "steady" },
-                        { label: "Spend pace", value: rupees((campusIntel.spend_7d ?? 0) * 100), detail: "Last 7 days", tone: "steady" },
-                        { label: "Commitments", value: rupees((campusIntel.upcoming_commitments ?? 0) * 100), detail: "Next 7 days", tone: "steady" },
-                      ];
-                      const visibleSignals = signals
-                        .filter((signal: any, index: number) => index < 2 || signal.tone === "watch")
-                        .slice(0, 3);
-
-                      return visibleSignals.map((signal: any) => (
-                        <div key={signal.label} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${signal.tone === "watch" ? "bg-warning" : "bg-muted-foreground/50"}`} />
-                              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider truncate">{signal.label}</p>
-                            </div>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground/80 truncate">{signal.detail}</p>
-                          </div>
-                          <p className="text-xs font-semibold text-foreground tnum shrink-0">{signal.value}</p>
-                        </div>
-                      ));
-                    })()}
+                  <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border/70 pt-3">
+                    <div className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">7-day spend</p>
+                      <p className="mt-1 text-sm font-semibold text-foreground tnum">
+                        {campusIntel.spend_7d != null ? rupees(Math.round(Number(campusIntel.spend_7d) * 100)) : "-"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-surface-raised/35 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Last meal</p>
+                      <p className="mt-1 text-sm font-semibold text-foreground tnum">
+                        {Number(campusIntel.last_food_hours ?? 0) > 0 ? `${Math.round(Number(campusIntel.last_food_hours))}h ago` : "No signal"}
+                      </p>
+                    </div>
                   </div>
+
+                  {campusIntel.food_option && (
+                    <div className="mt-4 rounded-xl border border-border bg-surface-raised/40 p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Campus food option</p>
+                          <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                            {campusIntel.food_option.item} · {campusIntel.food_option.venue}
+                          </p>
+                          {campusIntel.food_option.reason && (
+                            <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{campusIntel.food_option.reason}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 sm:shrink-0">
+                          <span className="text-sm font-semibold text-foreground tnum">₹{campusIntel.food_option.price_rs}</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 min-w-[78px] gap-1 border-border bg-surface-raised px-3 text-[11px] font-semibold text-foreground shadow-sm hover:border-foreground/15 hover:bg-surface-interactive"
+                            onClick={() => { setShowFoodSheet(true); setFoodTab("menus"); }}
+                          >
+                            Food
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
                   <Skeleton className="h-4 w-24" />
                   <Skeleton className="h-5 w-2/3" />
                   <Skeleton className="h-4 w-full" />
-                  <div className="pt-3 border-t border-border space-y-2">
-                    <Skeleton className="h-7 w-full" />
-                    <Skeleton className="h-7 w-full" />
-                    <Skeleton className="h-7 w-full" />
-                  </div>
                 </div>
               )}
             </div>
 
             {/* ── Campus Fare Guard (Travel Savings) ────────────────── */}
-            <div className="bg-surface border border-border rounded-2xl p-5 relative overflow-hidden">
-              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at top right, rgba(22,163,74,0.05), transparent 60%)" }} />
+            <div className="hidden">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Compass className="h-4.5 w-4.5 text-primary" />
@@ -2604,9 +3225,9 @@ function Dashboard() {
             {/* ── Wing Activity Feed ────────────────────────────────── */}
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-xs font-bold tracking-[0.2em] text-zinc-500 uppercase">Wing Activity</p>
-                <span className="flex items-center gap-1.5 text-[10px] md:text-xs text-zinc-600 font-bold">
-                  <span className={`w-1.5 h-1.5 rounded-full ${wingEvents.length ? "bg-success animate-pulse" : "bg-zinc-600"}`} />
+                <p className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">Wing Activity</p>
+                <span className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground font-semibold">
+                  <span className={`w-1.5 h-1.5 rounded-full ${wingEvents.length ? "bg-success animate-pulse" : "bg-muted-foreground/40"}`} />
                   {wingEvents.length ? "Live" : "No Live Events"}
                 </span>
               </div>
@@ -2614,7 +3235,7 @@ function Dashboard() {
                 {wingEvents.length ? (
                   wingEvents.map((ev: any, i: number) => (
                     <div key={i} className="flex items-start gap-3 animate-[fadeIn_0.4s_ease-out]" style={{ animationDelay: `${i * 80}ms` }}>
-                      <span className="shrink-0 mt-0.5 text-zinc-500">
+                      <span className="shrink-0 mt-0.5 text-muted-foreground">
                         {ev.type === "pool_created" ? (
                           <ShoppingBag className="h-4 w-4" />
                         ) : ev.type === "merchant_mapped" ? (
@@ -2630,8 +3251,8 @@ function Dashboard() {
                         )}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-zinc-300 leading-snug">{ev.text}</p>
-                        <p className="text-[10px] md:text-xs text-zinc-600 mt-0.5 font-bold">
+                        <p className="text-xs text-foreground leading-snug">{ev.text}</p>
+                        <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 font-semibold">
                           {ev.mins_ago === 0 ? "just now" : ev.mins_ago < 60 ? `${ev.mins_ago}m ago` : `${Math.floor(ev.mins_ago / 60)}h ago`}
                         </p>
                       </div>
@@ -2639,8 +3260,8 @@ function Dashboard() {
                   ))
                 ) : (
                   <div className="rounded-xl border border-dashed border-border bg-surface-raised/40 p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">No wing activity yet</p>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">No wing activity yet</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       Start a cart pool, identify a merchant, or check in from the dashboard to populate this feed.
                     </p>
                   </div>
@@ -2648,84 +3269,12 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* Exam banner */}
-            {insights?.exam?.in_exam_period && (
-              <div className="relative rounded-2xl overflow-hidden border border-border bg-surface p-5">
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <span className="text-xs font-black text-foreground uppercase tracking-widest">Exam Window Active</span>
-                  <span className="text-xs text-zinc-500 font-bold">- {insights.exam.days_left}d left</span>
-                </div>
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-border bg-surface-raised/35 p-3.5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Suggested next meal</p>
-                    <p className="mt-1 text-xs font-bold leading-relaxed text-foreground">{examMealPlan.title}</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{examMealPlan.detail}</p>
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowFoodSheet(true); setFoodTab("menus"); }}
-                    className="h-8 rounded-lg bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-all"
-                  >
-                    Food Options
-                  </button>
-                  {examNeedsMealSignal ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowCheckIn(true)}
-                      className="h-8 rounded-lg bg-surface-raised border border-border text-foreground text-[10px] font-bold uppercase tracking-wider hover:bg-surface-interactive transition-all"
-                    >
-                      Log If Ate
-                    </button>
-                  ) : (
-                    <Link
-                      to="/runway"
-                      className="h-8 rounded-lg bg-surface-raised border border-border text-foreground text-[10px] font-bold uppercase tracking-wider hover:bg-surface-interactive transition-all flex items-center justify-center"
-                    >
-                      Runway
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Alert Widget */}
-            {runwayView && !runwayView.setupRequired && (runwayView.days < 7 || runwayView.safeDailyPaise < 15_000) && (
-              <Card id="card-runway-alert" className="border-destructive/30 bg-destructive/5 p-5 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-[3px] h-full bg-destructive" />
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
-                  <p className="text-xs font-bold text-destructive tracking-widest uppercase">Runway Action</p>
-                </div>
-                <p className="text-xs font-medium text-foreground leading-relaxed">
-                  Safe limit is <span className="text-destructive font-bold">{rupees(runwayView.safeDailyPaise)}</span>. {runwayView.decision?.next_best_action?.detail ?? runwayView.foodRoutine?.action?.detail ?? "Reduce today's flexible spend to protect the allowance cycle."}
-                </p>
-                {bestFood && (
-                  <div className="mt-4 rounded-lg border border-success/20 bg-success/5 p-3.5 space-y-1">
-                    <p className="text-xs font-bold tracking-widest text-success uppercase">Dine In Option</p>
-                    <p className="text-xs text-foreground leading-relaxed">
-                      <span className="font-bold">{bestFood.venue_name}</span> has{" "}
-                      <span className="font-semibold">{bestFood.item_name}</span> for{" "}
-                      <strong className="text-success">{rupees(bestFood.price)}</strong>.
-                    </p>
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowFoodSheet(true)}
-                  className="mt-3 text-xs font-bold text-foreground hover:underline uppercase tracking-wider cursor-pointer"
-                >
-                  All Campus Foods →
-                </button>
-              </Card>
-            )}
-
             {/* Collisions */}
             {collisions.length > 0 && (
               <section id="section-collisions" className="space-y-3">
                 <div className="flex items-center gap-2 px-1">
                   <div className="w-1.5 h-3.5 bg-destructive rounded-full" />
-                  <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase">Budget Collisions</h3>
+                  <h3 className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">Budget Collisions</h3>
                 </div>
                 <Card className="bg-surface border-border p-4 space-y-4">
                   {collisions.length > 1 && (
@@ -2735,7 +3284,7 @@ function Dashboard() {
                         <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                         <div className="space-y-1">
                           <p className="font-bold tracking-wider text-xs text-destructive uppercase">Cumulative Debit Impact</p>
-                          <p className="font-medium text-zinc-400 leading-relaxed">
+                          <p className="font-medium text-muted-foreground leading-relaxed">
                             If all {collisions.length} debits hit this week, your safe limit drops to <strong className="text-foreground">{rupees(cumulativeCollisionLimit * 100)}</strong>/day.
                           </p>
                         </div>
@@ -2764,29 +3313,29 @@ function Dashboard() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${brandColorClass}`}>
+                              <span className={`text-[10px] font-semibold uppercase tracking-[0.12em] px-2 py-0.5 rounded border ${brandColorClass}`}>
                                 {c.service_name ?? c.name}
                               </span>
                               {c.detected_from === "auto_detected" && (
-                                <Badge className="bg-zinc-800 text-zinc-400 border border-zinc-700/60 text-[9px] font-bold px-1.5 py-0 uppercase tracking-widest font-mono">
+                                <Badge className="bg-surface-raised text-muted-foreground border border-border text-[9px] font-semibold px-1.5 py-0 uppercase tracking-[0.12em]">
                                   Auto
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-xs font-black text-destructive tnum flex items-center gap-0.5">
+                            <p className="text-xs font-semibold text-destructive tnum flex items-center gap-0.5">
                               <span>−</span>
                               <span>{rupees(c.amount)}</span>
                             </p>
                           </div>
 
-                          <div className="flex items-center justify-between text-xs text-zinc-500">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
                             <div className="flex items-center gap-1.5 font-semibold">
                               <Calendar className="h-3.5 w-3.5" />
                               <span>{shortDate(new Date(c.next_debit_date))}</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                               <span>Limit:</span>
-                              <span className="text-foreground font-black tnum">{rupees(c.newLimit * 100)}</span>
+                              <span className="text-foreground font-semibold tnum">{rupees(c.newLimit * 100)}</span>
                               {c.critical && (
                                 <span className="ml-1.5 text-red-500 bg-red-500/10 border border-red-500/20 text-[9px] font-bold tracking-widest px-2 py-0.5 rounded-full uppercase animate-pulse">
                                   Critical
@@ -2805,7 +3354,7 @@ function Dashboard() {
             {/* Recent Ledger */}
             <section id="section-recent" className="space-y-3">
               <div className="flex items-center justify-between px-1">
-                <h3 className="text-xs font-bold tracking-[0.25em] text-zinc-500 uppercase">Recent Ledger</h3>
+                <h3 className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">Recent Ledger</h3>
                 <Link to="/transactions" id="link-see-all-txns" className="text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
                   See all →
                 </Link>
@@ -2814,7 +3363,7 @@ function Dashboard() {
                 {!txns ? (
                   <div className="p-4"><Skeleton className="h-32 w-full border-none" /></div>
                 ) : recent.length === 0 ? (
-                  <p className="py-8 text-center text-xs text-zinc-500 font-semibold uppercase tracking-wider">No transactions logged</p>
+                  <p className="py-8 text-center text-xs text-muted-foreground font-semibold uppercase tracking-[0.12em]">No transactions logged</p>
                 ) : (
                   <div className="divide-y divide-border">
                     {recent.map((t, i) => {
@@ -2826,15 +3375,15 @@ function Dashboard() {
                         style={{ animation: `pb-stagger 300ms ${i * 40}ms backwards ease-out` }}
                       >
                         <div className="flex-1 min-w-0 pr-4">
-                          <p className={`text-xs font-bold truncate ${t.is_mapped ? "text-foreground" : "text-zinc-400 italic"}`}>
+                          <p className={`text-xs font-semibold truncate ${t.is_mapped ? "text-foreground" : "text-muted-foreground italic"}`}>
                             {t.mapped_merchant_name ?? t.raw_merchant_string}
                           </p>
                           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                             {t.category && (
-                              <span className="text-[10px] md:text-xs font-black tracking-widest text-zinc-500 uppercase">{t.category}</span>
+                              <span className="text-[10px] md:text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">{t.category}</span>
                             )}
                             {trustLabel && (
-                              <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-wider border px-1.5 py-0.5 rounded ${transactionTrustClass(trustLabel)}`}>
+                              <span className={`text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.12em] border px-1.5 py-0.5 rounded ${transactionTrustClass(trustLabel)}`}>
                                 {trustLabel}
                               </span>
                             )}
@@ -2842,7 +3391,7 @@ function Dashboard() {
                               <button
                                 id={`btn-identify-${t.id}`}
                                 onClick={() => setIdentifying(t)}
-                                className="ml-1 rounded-full px-3 py-1 text-[11px] md:text-xs font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
+                                className="ml-1 rounded-full px-3 py-1 text-[11px] md:text-xs font-semibold bg-surface-raised border border-border hover:bg-surface-interactive hover:border-foreground/15 transition-colors cursor-pointer uppercase text-foreground"
                               >
                                 Identify?
                               </button>
@@ -2850,15 +3399,15 @@ function Dashboard() {
                             <button
                               id={`btn-edit-ledger-${t.id}`}
                               onClick={() => setEditingTxn(t)}
-                              className="ml-1 rounded-full px-3 py-1 text-[11px] md:text-xs font-bold bg-white/5 border border-border hover:bg-white/10 hover:border-white/15 transition-all cursor-pointer uppercase text-foreground"
+                              className="ml-1 rounded-full px-3 py-1 text-[11px] md:text-xs font-semibold bg-surface-raised border border-border hover:bg-surface-interactive hover:border-foreground/15 transition-colors cursor-pointer uppercase text-foreground"
                             >
                               Edit
                             </button>
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-xs font-black text-foreground tnum">{rupees(t.amount)}</p>
-                          <p className="text-[10px] md:text-xs text-zinc-500 font-semibold mt-0.5">{relativeTime(t.created_at)}</p>
+                          <p className="text-xs font-semibold text-foreground tnum">{rupees(t.amount)}</p>
+                          <p className="text-[10px] md:text-xs text-muted-foreground font-semibold mt-0.5">{relativeTime(t.created_at)}</p>
                         </div>
                       </div>
                       );

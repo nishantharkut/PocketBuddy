@@ -410,6 +410,23 @@ function TxnsPage() {
     setViewTab(search.tab ?? "daily");
   }, [search.view, search.tab]);
 
+  useEffect(() => {
+    if (!search.import) return;
+
+    setStatementImportOpen(true);
+    navigate({
+      to: "/transactions",
+      search: (prev) => ({ ...prev, import: undefined }),
+      replace: true,
+    });
+  }, [navigate, search.import]);
+
+  useEffect(() => {
+    const openStatementImport = () => setStatementImportOpen(true);
+    window.addEventListener("pocketbuddy:open-statement-import", openStatementImport);
+    return () => window.removeEventListener("pocketbuddy:open-statement-import", openStatementImport);
+  }, []);
+
   const updateViewMode = (mode: "ledger" | "analytics") => {
     setViewMode(mode);
     setSelectedDay(null);

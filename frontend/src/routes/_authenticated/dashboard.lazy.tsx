@@ -1534,7 +1534,7 @@ function Dashboard() {
           context_note: checkInNote,
         },
       });
-      localStorage.setItem(checkInStorageKey, String(Date.now()));
+      localStorage.setItem(checkInSnoozeKey, String(Date.now()));
       setShowCheckIn(false);
       setCheckInNote("");
       setCheckInExpanded(false);

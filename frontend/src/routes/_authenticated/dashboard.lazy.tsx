@@ -3172,7 +3172,7 @@ function Dashboard() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Menu Image (Max 5MB)</label>
+                  <label className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-widest pl-0.5">Menu Photo / PDF (Max 5MB)</label>
                   <div className="flex items-center justify-center w-full">
                     <label className="flex flex-col items-center justify-center w-full h-32 border border-dashed border-border rounded-xl cursor-pointer bg-surface hover:bg-surface-raised transition-all">
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -3180,11 +3180,11 @@ function Dashboard() {
                         <p className="text-xs text-zinc-300 font-semibold">
                           {scanFile ? scanFile.name : "Select or Drop Menu Photo"}
                         </p>
-                        <p className="text-[10px] md:text-xs text-zinc-500 mt-1">PNG, JPG or JPEG up to 5MB</p>
+                        <p className="text-[10px] md:text-xs text-zinc-500 mt-1">PNG, JPG, JPEG or PDF up to 5MB</p>
                       </div>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,application/pdf,.pdf"
                         className="hidden"
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {

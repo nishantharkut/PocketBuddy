@@ -22,6 +22,36 @@ from app.services.campus_food import compute_food_verification_threshold
 logger = logging.getLogger(__name__)
 
 
+def demo_menu_text_for_venue(venue_name: str) -> str:
+    """
+    Demo-mode fallback menu text.
+
+    This is intentionally venue-shaped, not file-shaped: it exists only to keep
+    a recorded demo unblocked when OCR is not configured or a sample PDF cannot
+    be read. API callers still store the resulting rows as pending verification
+    candidates, never as trusted menu data.
+    """
+    venue = str(venue_name or "").lower()
+    if any(k in venue for k in ("tea", "chai", "nescafe", "coffee")):
+        return "Masala Chai 10\nGinger Tea 12\nSamosa 15\nKachori 15\nBun Maska 25"
+    if any(k in venue for k in ("canteen", "mess", "dining", "hostel", "bh2", "bh-2")):
+        return "Veg Thali 80\nSpecial Thali 120\nPaneer Butter Masala 110\nTandoori Roti 8\nJeera Rice 60"
+    if any(k in venue for k in ("dhaba", "punjabi")):
+        return "Aloo Paratha 40\nPaneer Paratha 60\nDal Makhani 90\nLassi 35"
+    return "Masala Maggi 30\nCheese Maggi 40\nVeg Sandwich 45\nCold Coffee 35"
+
+
+def upload_filetype_for_ocr(image_bytes: bytes) -> tuple[str, str]:
+    """Return (mime, OCR.space filetype) from upload magic bytes."""
+    if image_bytes[:4] == b'\x89PNG':
+        return "image/png", "PNG"
+    if image_bytes[:4] == b'GIF8':
+        return "image/gif", "GIF"
+    if image_bytes[:4] == b'%PDF':
+        return "application/pdf", "PDF"
+    return "image/jpeg", "JPG"
+
+
 def _s3_client():
     import boto3
     return boto3.client("s3", region_name=settings.AWS_REGION)
@@ -43,16 +73,7 @@ def extract_text_from_image(image_bytes: bytes) -> str:
 
     base64_image = base64.b64encode(image_bytes).decode("utf-8")
 
-    # Detect content type from magic bytes
-    if image_bytes[:4] == b'\x89PNG':
-        mime = "image/png"
-        filetype = "PNG"
-    elif image_bytes[:4] == b'GIF8':
-        mime = "image/gif"
-        filetype = "GIF"
-    else:
-        mime = "image/jpeg"
-        filetype = "JPG"
+    mime, filetype = upload_filetype_for_ocr(image_bytes)
 
     def request_ocr(engine: str) -> str:
         data = urllib.parse.urlencode({

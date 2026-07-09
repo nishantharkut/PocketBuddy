@@ -526,51 +526,48 @@ async def scan_menu_photo(
 
     # Import scanner service
     try:
-        from app.services.menu_scanner import extract_text_from_image, structure_menu_text
+        from app.services.menu_scanner import demo_menu_text_for_venue, extract_text_from_image, structure_menu_text
     except ImportError as exc:
         logger.error("Menu scanner not available: %s", exc)
         raise HTTPException(status_code=503, detail="Menu scanning service unavailable.")
 
     # Step 1: OCR via OCR.space Engine 2
     raw_text = ""
+    is_fallback = False
     try:
         raw_text = extract_text_from_image(image_bytes)
         logger.info("OCR extracted %d chars for venue '%s'", len(raw_text), venue_name)
     except Exception as exc:
         logger.warning("OCR request failed for menu scan: %s", exc)
         reason = "ocr_unavailable" if "OCR_SPACE_API_KEY" in str(exc) or "OCR unavailable" in str(exc) else "ocr_failed"
-        message = (
-            "Menu photo received, but OCR is not configured. No menu items were added; please review the photo manually."
-            if reason == "ocr_unavailable"
-            else "Menu photo received, but OCR could not read it reliably. No menu items were added; please review the photo manually."
-        )
-        return {
-            "status": "needs_review",
-            "reason": reason,
-            "items_scanned": 0,
-            "items": [],
-            "message": message,
-        }
+        if settings.DEMO_MODE:
+            is_fallback = True
+            raw_text = demo_menu_text_for_venue(venue_name)
+            logger.warning("Using DEMO_MODE menu fallback after OCR failure for venue '%s'.", venue_name)
+        else:
+            message = (
+                "Menu photo received, but OCR is not configured. No menu items were added; please review the photo manually."
+                if reason == "ocr_unavailable"
+                else "Menu photo received, but OCR could not read it reliably. No menu items were added; please review the photo manually."
+            )
+            return {
+                "status": "needs_review",
+                "reason": reason,
+                "items_scanned": 0,
+                "items": [],
+                "message": message,
+            }
 
     # Step 2: Structure into items with robust fallback
     parsed_items = []
     if raw_text.strip():
         parsed_items = structure_menu_text(raw_text, venue_name, campus)
 
-    is_fallback = False
     if not parsed_items:
         if settings.DEMO_MODE:
             logger.warning("OCR returned empty or unparseable text. Using venue-based fallback in DEMO_MODE.")
             is_fallback = True
-            vl = venue_name.lower()
-            if any(k in vl for k in ("tea", "chai", "nescafe", "coffee")):
-                raw_text = "Masala Chai 10\nGinger Tea 12\nSamosa 15\nKachori 15\nBun Maska 25"
-            elif any(k in vl for k in ("canteen", "mess", "dining", "hostel", "bh2", "bh-2")):
-                raw_text = "Veg Thali 80\nSpecial Thali 120\nPaneer Butter Masala 110\nTandoori Roti 8\nJeera Rice 60"
-            elif any(k in vl for k in ("dhaba", "punjabi")):
-                raw_text = "Aloo Paratha 40\nPaneer Paratha 60\nDal Makhani 90\nLassi 35"
-            else:
-                raw_text = "Masala Maggi 30\nCheese Maggi 40\nVeg Sandwich 45\nCold Coffee 35"
+            raw_text = demo_menu_text_for_venue(venue_name)
             parsed_items = structure_menu_text(raw_text, venue_name, campus)
         else:
             logger.warning("OCR returned empty or unparseable text for menu scan.")

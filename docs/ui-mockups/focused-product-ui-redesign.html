@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PocketBuddy Focused UI Mockups</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101012;
+      --surface: #17171a;
+      --raised: #202025;
+      --border: #2d2d33;
+      --muted: #9ca3af;
+      --text: #f5f5f4;
+      --soft: #d4d4d8;
+      --primary: #f08a68;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      --blue: #60a5fa;
+      --purple: #c084fc;
+      --radius: 18px;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { display: grid; grid-template-columns: 260px minmax(0, 1fr); }
+    button { font: inherit; color: inherit; }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      border-right: 1px solid var(--border);
+      background: #151517;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: -0.02em; }
+    .mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #ff9f43, #ff6b00); position: relative; }
+    .mark:after { content: ""; position: absolute; left: 9px; top: 11px; width: 10px; height: 6px; border-radius: 999px; background: #fff; opacity: .9; }
+    .nav { margin-top: 42px; display: grid; gap: 8px; }
+    .nav button {
+      border: 1px solid transparent;
+      background: transparent;
+      text-align: left;
+      padding: 12px 14px;
+      border-radius: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .nav button.active { background: var(--raised); color: var(--text); border-color: var(--border); }
+    .sync-box { border: 1px solid var(--border); background: rgba(255,255,255,.02); padding: 14px; border-radius: 14px; color: var(--soft); font-size: 13px; }
+    .sync-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 8px; }
+
+    main { min-width: 0; }
+    .topbar {
+      border-bottom: 1px solid var(--border);
+      background: rgba(16,16,18,.88);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding: 16px 28px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+    }
+    .eyebrow { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); font-size: 12px; letter-spacing: .18em; text-transform: uppercase; font-weight: 800; }
+    .state-pills { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .pill {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 9px 12px;
+      border-radius: 11px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .pill.active { background: var(--primary); border-color: var(--primary); color: #17110e; }
+
+    .page {
+      max-width: 1500px;
+      padding: 28px;
+      display: none;
+    }
+    .page.active { display: block; }
+
+    .grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+    .stack { display: grid; gap: 18px; }
+    .section-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card.pad { padding: 24px; }
+    .card.compact { padding: 18px; box-shadow: none; }
+    .accent { height: 3px; background: var(--green); }
+    .accent.warn { background: var(--yellow); }
+    .accent.danger { background: var(--red); }
+    .accent.exam { background: var(--purple); }
+
+    .title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    h1, h2, h3, p { margin: 0; }
+    .label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--soft); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; font-weight: 900; }
+    .headline { margin-top: 8px; font-size: clamp(24px, 4vw, 54px); line-height: .95; letter-spacing: -0.05em; font-weight: 900; }
+    .subtle { color: var(--muted); line-height: 1.55; }
+    .small { font-size: 13px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .green { color: var(--green); }
+    .yellow { color: var(--yellow); }
+    .red { color: var(--red); }
+    .purple { color: var(--purple); }
+    .primary { color: var(--primary); }
+
+    .metric-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding-top: 20px; border-top: 1px solid var(--border); margin-top: 22px; }
+    .metric .value { margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 21px; font-weight: 900; letter-spacing: -0.04em; }
+    .metric .caption { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+    .signal-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .signal { border: 1px solid var(--border); background: var(--raised); color: var(--soft); border-radius: 999px; padding: 8px 10px; font-size: 13px; }
+    .hero-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 430px); gap: 22px; align-items: center; }
+    .action-box { background: rgba(255,255,255,.025); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+    .progress { height: 8px; background: #27272a; border-radius: 999px; overflow: hidden; margin-top: 18px; }
+    .bar { height: 100%; background: var(--primary); width: 62%; border-radius: inherit; }
+    .bar.danger { background: var(--red); width: 93%; }
+    .bar.exam { background: var(--purple); width: 58%; }
+
+    .rail { display: grid; gap: 18px; }
+    .list { display: grid; gap: 10px; margin-top: 14px; }
+    .list-item { display: flex; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 13px; background: #111113; }
+    .cta { margin-top: 14px; width: 100%; border: 1px solid var(--border); background: var(--raised); border-radius: 13px; padding: 11px; cursor: pointer; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+
+    .checkin {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      background: rgba(0,0,0,.62);
+      place-items: center;
+      padding: 24px;
+    }
+    .checkin.show { display: grid; }
+    .modal { width: min(620px, 100%); background: #18181b; border: 1px solid var(--border); border-radius: 24px; padding: 24px; box-shadow: 0 40px 100px rgba(0,0,0,.5); }
+    .modal-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+    .modal-actions button { border: 1px solid var(--border); background: var(--raised); border-radius: 12px; padding: 12px; cursor: pointer; font-weight: 800; }
+
+    .segmented { display: inline-flex; padding: 4px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); gap: 4px; }
+    .segmented button { border: 0; background: transparent; padding: 9px 12px; border-radius: 10px; color: var(--muted); font-weight: 800; cursor: pointer; }
+    .segmented button.active { background: var(--raised); color: var(--text); }
+
+    .driver { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--border); border-radius: 13px; background: #111113; }
+    .driver strong { font-size: 14px; }
+    .driver small { display: block; color: var(--muted); margin-top: 3px; }
+    .toggle-row { display: grid; gap: 10px; margin-top: 14px; }
+    .toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--border); background: #111113; border-radius: 13px; padding: 12px; }
+    .switch { width: 42px; height: 24px; border-radius: 999px; background: var(--primary); position: relative; flex: 0 0 auto; }
+    .switch:after { content: ""; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #111; top: 3px; right: 3px; }
+
+    .travel-flow { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .field { display: grid; gap: 7px; margin-top: 12px; }
+    .field label { color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
+    .input { border: 1px solid var(--border); background: #111113; color: var(--text); border-radius: 12px; padding: 12px; font-weight: 700; }
+    .time-pills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+    .time-pills button { border: 1px solid var(--border); background: #111113; border-radius: 12px; padding: 10px; color: var(--soft); cursor: pointer; font-weight: 800; }
+    .time-pills button.active { border-color: var(--primary); color: var(--primary); background: rgba(240,138,104,.08); }
+    .map-placeholder { min-height: 300px; border: 1px solid var(--border); border-radius: 18px; background: radial-gradient(circle at 20% 30%, rgba(96,165,250,.18), transparent 30%), radial-gradient(circle at 70% 60%, rgba(52,211,153,.16), transparent 34%), #121216; display: grid; place-items: center; color: var(--muted); font-weight: 800; }
+
+    [data-state="exams"] .state-only { display: block; }
+    .state-only { display: none; }
+    [data-state="steady"] .steady-hide { display: none; }
+    [data-state="shortfall"] .danger-state { display: block; }
+    [data-state="shortfall"] .steady-state,
+    [data-state="stressed"] .steady-state,
+    [data-state="exams"] .steady-state { display: none; }
+
+    @media (max-width: 1100px) {
+      body { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; flex-direction: row; align-items: center; padding: 14px; }
+      .nav { display: none; }
+      .sync-box { display: none; }
+      .topbar { position: static; align-items: flex-start; flex-direction: column; }
+      .grid, .travel-flow { grid-template-columns: 1fr; }
+      .rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      .page { padding: 16px; }
+      .topbar { padding: 14px 16px; }
+      .section-row, .metric-row, .hero-split, .rail { grid-template-columns: 1fr; }
+      .headline { font-size: 42px; }
+      .modal-actions { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body data-state="steady">
+  <aside class="sidebar">
+    <div>
+      <div class="brand"><span class="mark"></span><span>PocketBuddy</span></div>
+      <nav class="nav">
+        <button class="active" data-page-button="dashboard" onclick="showPage('dashboard')">Dashboard</button>
+        <button data-page-button="runway" onclick="showPage('runway')">Runway</button>
+        <button data-page-button="travel" onclick="showPage('travel')">Travel</button>
+        <button>Transactions</button>
+        <button>Pool</button>
+      </nav>
+    </div>
+    <div class="sync-box"><span class="sync-dot"></span><strong>Sync active</strong><br><span class="subtle small">Android connector paired</span></div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">Focused UI Mockup</div>
+        <div class="subtle small" id="pageLabel">Dashboard - steady state</div>
+      </div>
+      <div class="state-pills">
+        <button class="pill active" data-state-button="steady" onclick="setState('steady')">A Healthy</button>
+        <button class="pill" data-state-button="shortfall" onclick="setState('shortfall')">B Shortfall</button>
+        <button class="pill" data-state-button="stressed" onclick="setState('stressed')">C Stressed</button>
+        <button class="pill" data-state-button="exams" onclick="setState('exams')">D Exams</button>
+      </div>
+    </div>
+
+    <section class="page active" id="page-dashboard">
+      <div class="grid">
+        <div class="stack">
+          <article class="card">
+            <div class="accent" id="wellnessAccent"></div>
+            <div class="pad">
+              <div class="title-row">
+                <div>
+                  <div class="label">Today’s Control Center</div>
+                  <h1 class="headline" id="dashboardHeadline">You are steady today.</h1>
+                </div>
+                <span class="badge green" id="dashboardBadge">Steady</span>
+              </div>
+              <p class="subtle" id="dashboardCopy" style="margin-top: 18px; max-width: 760px;">Your allowance, meal rhythm, and companion sync are inside normal range. Keep today’s flexible spend under the safe limit.</p>
+              <div class="signal-row" id="dashboardSignals">
+                <span class="signal">Wellness 85/100</span>
+                <span class="signal">Runway 12 days</span>
+                <span class="signal">Last meal 4h ago</span>
+                <span class="signal">Safe/day ₹238</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="card pad">
+            <div class="hero-split">
+              <div>
+                <div class="label">Runway Status</div>
+                <div class="headline" id="runwayHero">12 <span style="font-size: 22px; color: var(--muted); letter-spacing: .05em;">days</span></div>
+                <p class="subtle" id="runwayHeroCopy">How long your allowance can last at the current pace.</p>
+              </div>
+              <div class="action-box">
+                <div class="label primary">Next best action</div>
+                <h3 id="nextAction" style="margin-top: 8px;">Keep current pace</h3>
+                <p class="subtle small" id="nextActionCopy" style="margin-top: 8px;">Today can stay normal if you keep flexible spends within ₹238.</p>
+              </div>
+            </div>
+            <div class="metric-row">
+              <div class="metric"><div class="label">Balance</div><div class="value" id="balanceVal">₹4,758</div><div class="caption">remaining</div></div>
+              <div class="metric"><div class="label primary">Safe/day</div><div class="value" id="safeVal">₹238</div><div class="caption">until reset</div></div>
+              <div class="metric"><div class="label">Food pace</div><div class="value">₹182</div><div class="caption">daily average</div></div>
+              <div class="metric"><div class="label">Today</div><div class="value">₹60</div><div class="caption">spent so far</div></div>
+            </div>
+            <div class="progress"><div class="bar" id="runwayBar"></div></div>
+          </article>
+
+          <div class="section-row">
+            <article class="card compact">
+              <div class="label">Food & Wellness</div>
+              <div class="metric-row" style="grid-template-columns: repeat(2, 1fr); margin-top: 14px;">
+                <div class="metric"><div class="value green" id="mealGap">4h</div><div class="caption">last meal signal</div></div>
+                <div class="metric"><div class="value">12x</div><div class="caption">delivery this month</div></div>
+              </div>
+            </article>
+            <article class="card compact">
+              <div class="label">Recent Sync</div>
+              <div class="list">
+                <div class="list-item"><span>BH-2 Night Canteen</span><strong>₹45</strong></div>
+                <div class="list-item"><span>Campus Store</span><strong>₹154</strong></div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <aside class="rail">
+          <article class="card compact state-only" id="examCard">
+            <div class="label purple">Exam Mode</div>
+            <p class="subtle small" style="margin-top: 10px;">Exam window is active. Meal gap and late-night spending are weighted more heavily this week.</p>
+          </article>
+          <article class="card compact">
+            <div class="title-row"><div class="label">Wing Netting</div><span class="badge green">Net +₹480</span></div>
+            <div class="list">
+              <div class="list-item"><span>You owe Rahul</span><strong class="red">₹140</strong></div>
+              <div class="list-item"><span>Abhishek owes you</span><strong class="green">₹620</strong></div>
+            </div>
+          </article>
+          <article class="card compact">
+            <div class="label">Campus Intelligence</div>
+            <p class="subtle small" style="margin-top: 10px;">BH-2 night canteen is active. Station route fares are running above normal in evening reports.</p>
+          </article>
+          <article class="card compact">
+            <div class="title-row"><div class="label">Fare Guard</div><span class="badge green">Saved ₹280</span></div>
+            <p class="subtle small" style="margin-top: 10px;">Use quote check before accepting station rides.</p>
+            <button class="cta" onclick="showPage('travel')">Open Travel</button>
+          </article>
+          <article class="card compact steady-hide">
+            <div class="label red">Runway Action</div>
+            <p class="subtle small" style="margin-top: 10px;" id="railWarning">Shift one delivery to mess food today to protect the reset date.</p>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section class="page" id="page-runway">
+      <div class="stack">
+        <div class="title-row">
+          <div>
+            <div class="eyebrow">Runway</div>
+            <h1 style="margin-top: 6px;">Allowance forecast without cockpit noise.</h1>
+          </div>
+          <div class="segmented">
+            <button class="active">Summary</button>
+            <button>Try Changes</button>
+            <button>Details</button>
+          </div>
+        </div>
+
+        <article class="card pad">
+          <div class="hero-split">
+            <div>
+              <div class="label">Survive Until Broke</div>
+              <div class="headline" id="runwayPageDays">12 <span style="font-size: 22px; color: var(--muted); letter-spacing: .05em;">days</span></div>
+              <p class="subtle" id="runwayPageCopy">Expected reset coverage is healthy. The low case still has room if food pace remains controlled.</p>
+            </div>
+            <div class="action-box">
+              <div class="label primary">Do this first</div>
+              <h3 id="runwayPageAction" style="margin-top: 8px;">Keep delivery under the food cap today</h3>
+              <p class="subtle small" style="margin-top: 8px;">This keeps the forecast inside the expected band without asking for more allowance.</p>
+            </div>
+          </div>
+          <div class="metric-row">
+            <div class="metric"><div class="label">Shortfall risk</div><div class="value green" id="riskVal">Low</div><div class="caption">normal model</div></div>
+            <div class="metric"><div class="label">Expected</div><div class="value">12d</div><div class="caption">current pace</div></div>
+            <div class="metric"><div class="label">Stress case</div><div class="value" id="stressCase">8d</div><div class="caption">high spend band</div></div>
+            <div class="metric"><div class="label">Safe/day</div><div class="value" id="runwaySafe">₹238</div><div class="caption">flexible spend</div></div>
+          </div>
+        </article>
+
+        <div class="section-row">
+          <article class="card pad">
+            <div class="label">Why this forecast changed</div>
+            <div class="list">
+              <div class="driver"><span class="badge primary">1</span><div><strong>Food pace</strong><small>Delivery is the largest flexible driver.</small></div><strong>₹182/day</strong></div>
+              <div class="driver"><span class="badge primary">2</span><div><strong>Recurring commitments</strong><small>Three subscriptions are already reserved.</small></div><strong>₹337</strong></div>
+              <div class="driver"><span class="badge primary">3</span><div><strong>Pool dues</strong><small>Outstanding roommate splits are included.</small></div><strong>₹140</strong></div>
+            </div>
+          </article>
+          <article class="card pad">
+            <div class="label">Try changes</div>
+            <div class="toggle-row">
+              <div class="toggle"><div><strong>Replace two deliveries with mess meals</strong><p class="subtle small">Adds 2 to 3 days in this cycle.</p></div><span class="switch"></span></div>
+              <div class="toggle"><div><strong>Pause one subscription</strong><p class="subtle small">Reclaims fixed monthly spend.</p></div><span class="switch"></span></div>
+              <div class="toggle"><div><strong>Collect pending pool dues</strong><p class="subtle small">Improves available balance.</p></div><span class="switch"></span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="page-travel">
+      <div class="travel-flow">
+        <article class="card pad">
+          <div class="label">Plan a campus ride</div>
+          <div class="field"><label>From</label><div class="input">Gwalior Railway Station</div></div>
+          <div class="field"><label>To</label><div class="input">ABV-IIITM Main Gate</div></div>
+          <div class="field"><label>Fare timing</label>
+            <div class="time-pills">
+              <button>Morning</button><button>Afternoon</button><button class="active">Evening</button><button>Late night</button>
+            </div>
+          </div>
+          <button class="cta">Check route</button>
+        </article>
+
+        <div class="stack">
+          <article class="card pad">
+            <div class="title-row">
+              <div>
+                <div class="label">Fare Guard Result</div>
+                <h2 style="margin-top: 8px;">Station -> ABV-IIITM</h2>
+              </div>
+              <span class="badge green">High trust</span>
+            </div>
+            <div class="metric-row">
+              <div class="metric"><div class="label">Expected fare</div><div class="value">₹140-₹180</div><div class="caption">evening window</div></div>
+              <div class="metric"><div class="label">Distance</div><div class="value">7.8 km</div><div class="caption">route estimate</div></div>
+              <div class="metric"><div class="label">ETA</div><div class="value">22 min</div><div class="caption">traffic aware</div></div>
+              <div class="metric"><div class="label">Reports</div><div class="value">28</div><div class="caption">recent students</div></div>
+            </div>
+          </article>
+
+          <div class="section-row">
+            <article class="card pad">
+              <div class="label">Check a driver quote</div>
+              <p class="subtle small" style="margin-top: 8px;">For Gwalior Railway Station -> ABV-IIITM, evening.</p>
+              <div class="field"><label>Quoted amount</label><div class="input">₹220</div></div>
+              <div class="action-box" style="margin-top: 14px;"><strong class="yellow">Above normal range</strong><p class="subtle small" style="margin-top: 6px;">Ask for ₹160-₹180, or match with another student.</p></div>
+            </article>
+            <article class="card pad">
+              <div class="label">AI coach</div>
+              <p class="subtle" style="margin-top: 10px;">"Bhaiya, station se IIITM tak students usually ₹160-₹180 dete hain. Agar meter nahi hai, ₹170 final kar dete hain."</p>
+              <p class="subtle small" style="margin-top: 12px;">Uses only computed route range and recent community reports.</p>
+            </article>
+          </div>
+          <div class="map-placeholder">Map and route preview</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="checkin" id="checkin">
+    <div class="modal">
+      <div class="label red">Meal check-in</div>
+      <h2 style="margin-top: 8px;">No food signal for 21h.</h2>
+      <p class="subtle" style="margin-top: 10px;">If you ate in mess or cooked, log it without creating a fake spend. This keeps wellness and runway grounded.</p>
+      <div class="modal-actions">
+        <button onclick="hideCheckin()">Ate in mess</button>
+        <button onclick="hideCheckin()">Cooked or shared</button>
+        <button onclick="hideCheckin()">Not now</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const labels = {
+      steady: "Dashboard - healthy state",
+      shortfall: "Dashboard - shortfall state",
+      stressed: "Dashboard - stressed check-in state",
+      exams: "Dashboard - exam mode state",
+    };
+
+    function setState(state) {
+      document.body.dataset.state = state;
+      document.querySelectorAll("[data-state-button]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.stateButton === state);
+      });
+      document.getElementById("pageLabel").textContent = labels[state] || state;
+
+      const data = {
+        steady: {
+          accent: "", wellness: "85/100", badge: ["Steady", "green"], head: "You are steady today.", copy: "Your allowance, meal rhythm, and companion sync are inside normal range. Keep today’s flexible spend under the safe limit.",
+          days: "12", action: "Keep current pace", actionCopy: "Today can stay normal if you keep flexible spends within ₹238.", forecastCopy: "Expected reset coverage is healthy. The low case still has room if food pace remains controlled.", balance: "₹4,758", safe: "₹238", meal: "4h", bar: ""
+        },
+        shortfall: {
+          accent: "danger", wellness: "42/100", badge: ["Shortfall", "red"], head: "Your runway needs action.", copy: "Flexible funds are projected to run out before reset. One food choice and one fixed cost decision can recover the week.",
+          days: "1", action: "Lower spending immediately", actionCopy: "Shift one delivery to mess food and pause one non-essential spend.", forecastCopy: "Current pace can miss the reset date. The fastest recovery is to reduce food delivery and protect cash for essentials.", balance: "₹480", safe: "₹24", meal: "14h", bar: "danger"
+        },
+        stressed: {
+          accent: "danger", wellness: "18/100", badge: ["Needs attention", "red"], head: "Check in before spending.", copy: "Long meal gap and zero runway are stacked today. Start with a meal signal, then choose the smallest next spend.",
+          days: "0", action: "Log a meal signal first", actionCopy: "If you ate in mess, record it without creating a fake transaction.", forecastCopy: "The forecast is already in collision. Log the meal state first, then choose the smallest safe next spend.", balance: "₹80", safe: "₹6", meal: "21h", bar: "danger"
+        },
+        exams: {
+          accent: "exam", wellness: "72/100", badge: ["Exam mode", "purple"], head: "Exam week mode is active.", copy: "PocketBuddy is weighting meal gaps and late-night spending more heavily while your exam window is active.",
+          days: "12", action: "Keep meals predictable", actionCopy: "Target a routine meal before late-night delivery becomes the default.", forecastCopy: "Expected reset coverage is healthy. Exam mode is weighting food gaps and late-night activity more heavily.", balance: "₹4,758", safe: "₹238", meal: "6h", bar: "exam"
+        }
+      }[state];
+
+      document.getElementById("wellnessAccent").className = `accent ${data.accent}`;
+      document.getElementById("dashboardHeadline").textContent = data.head;
+      document.getElementById("dashboardCopy").textContent = data.copy;
+      const badge = document.getElementById("dashboardBadge");
+      badge.textContent = data.badge[0];
+      badge.className = `badge ${data.badge[1]}`;
+      document.getElementById("dashboardSignals").innerHTML = `
+        <span class="signal">Wellness ${data.wellness}</span>
+        <span class="signal">Runway ${data.days} days</span>
+        <span class="signal">Last meal ${data.meal} ago</span>
+        <span class="signal">Safe/day ${data.safe}</span>
+      `;
+      document.getElementById("runwayHero").innerHTML = `${data.days} <span style="font-size: 22px; color: var(--muted); letter-spacing: .05em;">days</span>`;
+      document.getElementById("runwayHeroCopy").textContent = data.forecastCopy;
+      document.getElementById("nextAction").textContent = data.action;
+      document.getElementById("nextActionCopy").textContent = data.actionCopy;
+      document.getElementById("balanceVal").textContent = data.balance;
+      document.getElementById("safeVal").textContent = data.safe;
+      document.getElementById("mealGap").textContent = data.meal;
+      document.getElementById("runwayBar").className = `bar ${data.bar}`;
+
+      document.getElementById("runwayPageDays").innerHTML = `${data.days} <span style="font-size: 22px; color: var(--muted); letter-spacing: .05em;">days</span>`;
+      document.getElementById("riskVal").textContent = state === "steady" || state === "exams" ? "Low" : state === "shortfall" ? "High" : "Critical";
+      document.getElementById("riskVal").className = `value ${state === "steady" || state === "exams" ? "green" : "red"}`;
+      document.getElementById("stressCase").textContent = state === "steady" || state === "exams" ? "8d" : state === "shortfall" ? "1d" : "0d";
+      document.getElementById("runwaySafe").textContent = data.safe;
+      document.getElementById("runwayPageAction").textContent = data.action;
+
+      if (state === "stressed") {
+        document.getElementById("checkin").classList.add("show");
+      } else {
+        document.getElementById("checkin").classList.remove("show");
+      }
+    }
+
+    function hideCheckin() {
+      document.getElementById("checkin").classList.remove("show");
+    }
+
+    function showPage(page) {
+      document.querySelectorAll(".page").forEach((el) => el.classList.toggle("active", el.id === `page-${page}`));
+      document.querySelectorAll("[data-page-button]").forEach((button) => button.classList.toggle("active", button.dataset.pageButton === page));
+      const state = document.body.dataset.state;
+      document.getElementById("pageLabel").textContent = page === "dashboard" ? labels[state] : `${page[0].toUpperCase()}${page.slice(1)} - focused mockup`;
+    }
+
+    const allowedStates = new Set(["steady", "shortfall", "stressed", "exams"]);
+    const rawQuery = window.location.search || window.location.hash.replace(/^#/, "?");
+    const params = new URLSearchParams(rawQuery);
+    const initialState = params.get("state");
+    const initialPage = params.get("page");
+    if (initialState && allowedStates.has(initialState)) {
+      setState(initialState);
+    }
+    if (initialPage && ["dashboard", "runway", "travel"].includes(initialPage)) {
+      showPage(initialPage);
+    }
+  </script>
+</body>
+</html>

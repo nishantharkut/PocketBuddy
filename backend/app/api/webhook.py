@@ -713,6 +713,7 @@ async def try_auto_verify_pool_payment(
     pools = await pools_cursor.to_list(length=20)
 
     amount_only_candidates = []
+    sender_amount_candidates = []
     for pool in pools:
         pool_id = pool["_id"]
         items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
@@ -774,18 +775,33 @@ async def try_auto_verify_pool_payment(
                 sender_matches = bool(r_key and s_key and (r_key in s_key or s_key in r_key))
 
             if sender_matches:
-                return await record_pool_payment_candidate(
-                    pool,
-                    roommate,
-                    roommate_payment,
-                    total_owed,
-                    "verified",
-                    "high",
-                    None,
-                    "Incoming host credit matched roommate name and finalized split amount.",
-                )
+                sender_amount_candidates.append((pool, roommate, roommate_payment, total_owed))
+                continue
 
             amount_only_candidates.append((pool, roommate, roommate_payment, total_owed))
+
+    if len(sender_amount_candidates) == 1:
+        pool, roommate, roommate_payment, total_owed = sender_amount_candidates[0]
+        return await record_pool_payment_candidate(
+            pool,
+            roommate,
+            roommate_payment,
+            total_owed,
+            "verified",
+            "high",
+            None,
+            "Incoming host credit matched roommate name and finalized split amount.",
+        )
+
+    if len(sender_amount_candidates) > 1:
+        return {
+            "payment_status": "needs_review",
+            "processing_status": "pool_payment_review",
+            "reason": "Incoming host credit matched multiple unsettled splits with the same sender and amount.",
+            "amount_paise": amount_paise,
+            "transaction_reference": utr or None,
+            "candidate_count": len(sender_amount_candidates),
+        }
 
     if len(amount_only_candidates) == 1:
         pool, roommate, roommate_payment, total_owed = amount_only_candidates[0]

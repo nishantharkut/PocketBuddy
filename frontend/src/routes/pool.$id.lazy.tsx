@@ -198,12 +198,16 @@ function itemActivityTime(it: any) {
   return new Date(it?.item_updated_at || it?.cart_status_updated_at || it?.created_at || 0).getTime();
 }
 
+function participantKey(value: any) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 
 
 function isHostParticipant(pool: Pool | null | undefined, participantName: string, user: any) {
   if (!pool) return false;
-  const pName = participantName.trim().toLowerCase();
-  const hostName = (pool.created_by_name ?? "").trim().toLowerCase();
+  const pName = participantKey(participantName);
+  const hostName = participantKey(pool.created_by_name);
 
   if (pName === "host" || pName === hostName) {
     return true;
@@ -217,7 +221,7 @@ function isHostParticipant(pool: Pool | null | undefined, participantName: strin
   }
 
   if (user && user.fullName) {
-    const userFull = user.fullName.trim().toLowerCase();
+    const userFull = participantKey(user.fullName);
     if (pName === userFull && pool.host_id === user.id) {
       return true;
     }
@@ -290,9 +294,6 @@ function PoolDetail() {
   const [finalDiscount, setFinalDiscount] = useState("");
   const [hostUpi, setHostUpi] = useState("");
 
-  // Roommate selected identity for payment details
-  const [selectedPayeeName, setSelectedPayeeName] = useState("");
-
   // UTR confirmation state
   const [confirmUtrOpen, setConfirmUtrOpen] = useState(false);
   const [utrInput, setUtrInput] = useState("");
@@ -364,7 +365,6 @@ function PoolDetail() {
               onboarding_completed: true,
               setup_completed: true,
               phone: cleanPhone,
-              wing_label: pool.wing_label // Auto-add to the host's wing for rating compatibility
             }
           });
           toast.success("Joined pool successfully!");
@@ -623,6 +623,21 @@ function PoolDetail() {
       };
     });
   }
+
+  const selfPayeeName = (
+    (user?.id
+      ? participants.find((p) =>
+          allItems.some(
+            (it: any) =>
+              it.added_by_user_id === user.id &&
+              participantKey(it.added_by_name) === participantKey(p),
+          ),
+        )
+      : "") ||
+    participants.find((p) => participantKey(p) === participantKey(user?.fullName)) ||
+    participants.find((p) => participantKey(p) === participantKey(name)) ||
+    ""
+  );
 
   // Actions
   async function addItem() {
@@ -1075,9 +1090,9 @@ function PoolDetail() {
       toast.error("Enter a valid 12-digit numeric UPI Ref / UTR number");
       return;
     }
-    const targetRoommate = selectedPayeeName || name;
+    const targetRoommate = selfPayeeName;
     if (!targetRoommate) {
-      toast.error("Please select or type your roommate name first.");
+      toast.error("Your account is not attached to a payable split in this pool.");
       return;
     }
     setBusy(true);
@@ -1154,7 +1169,7 @@ function PoolDetail() {
   }
 
   // Generate UPI pay deep link
-  const payeeDetails = splitBreakdown[selectedPayeeName || name];
+  const payeeDetails = selfPayeeName ? splitBreakdown[selfPayeeName] : undefined;
   const upiPayUrl = pool.upi_id && payeeDetails
     ? `upi://pay?pa=${pool.upi_id}&pn=${encodeURIComponent(pool.created_by_name || "Host")}&am=${(payeeDetails.total / 100).toFixed(2)}&tn=${encodeURIComponent(`PocketBuddy ${theme.name} Pool Split`)}&cu=INR`
     : "";
@@ -1480,6 +1495,34 @@ function PoolDetail() {
 
             {pool.status === "open" ? (
               <div className="space-y-4">
+                {hostAndroidStatus && (
+                  <div className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-xs ${
+                    hostAndroidStatus.can_auto_verify
+                      ? "border-green-500/25 bg-green-500/10 text-green-500"
+                      : "border-orange-600/25 bg-orange-600/10 text-orange-600"
+                  }`}>
+                    <Smartphone className="h-4 w-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black uppercase tracking-wider">{hostAndroidStatus.label}</p>
+                      <p className="mt-0.5 leading-relaxed text-muted-foreground">
+                        {hostAndroidStatus.can_auto_verify
+                          ? "Incoming roommate credits can auto-match after checkout when sender or UTR is clear."
+                          : "Pair the Android connector before checkout if you want repayment credits to auto-match."}
+                      </p>
+                    </div>
+                    {!hostAndroidStatus.can_auto_verify && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => nav({ to: "/companion" })}
+                        className="h-8 shrink-0 border-orange-600/30 text-orange-600 hover:bg-orange-600/10 text-[10px] font-bold uppercase"
+                      >
+                        Setup
+                      </Button>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <Button
                     id="btn-host-checkout"
@@ -1949,19 +1992,20 @@ function PoolDetail() {
 
             <div className="space-y-4">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-0.5">Select roommate to pay:</label>
-                <select
-                  className="w-full bg-surface text-foreground border border-border rounded-md py-2 px-3 text-xs font-bold uppercase tracking-wider focus:outline-none focus:border-primary/40"
-                  value={selectedPayeeName || name}
-                  onChange={(e) => setSelectedPayeeName(e.target.value)}
-                >
-                  <option value="" disabled>-- Choose Roommate --</option>
-                  {participants.filter(p => splitBreakdown[p]).map(p => (
-                    <option key={p} value={p}>
-                      {p} ({rupees(splitBreakdown[p].total)}) - {splitBreakdown[p].paymentLabel || paymentStatusLabel(splitBreakdown[p].paymentStatus)}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-0.5">Your settlement identity</label>
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-3">
+                  <User className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black text-foreground">
+                      {selfPayeeName || user?.fullName || name || "No split matched"}
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold leading-relaxed text-muted-foreground">
+                      {selfPayeeName
+                        ? "Locked to your logged-in account. You can submit a UTR only for this split."
+                        : "This account has no payable split in the pool."}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {hostAndroidStatus && (
@@ -2106,9 +2150,9 @@ function PoolDetail() {
                         <Button
                           className="w-full text-xs font-black uppercase tracking-wider bg-[#FF9900] hover:bg-[#E48A00] text-black flex items-center justify-center gap-1.5 h-10 shadow-sm border border-[#D58000]"
                           onClick={() => {
-                            handleAmazonRoommateReimburse(selectedPayeeName || name, payeeDetails.total);
+                            handleAmazonRoommateReimburse(selfPayeeName, payeeDetails.total);
                           }}
-                          disabled={busy}
+                          disabled={busy || !selfPayeeName}
                         >
                           Simulate Settlement
                         </Button>
@@ -2121,7 +2165,7 @@ function PoolDetail() {
                 </div>
               ) : (
                 <div className="text-center p-6 border border-dashed border-border rounded-xl bg-surface-raised/40 text-xs text-muted-foreground font-semibold">
-                  Select your name in the dropdown list above to fetch splits, scan QR, and confirm transfer.
+                  This account does not have a payable split in this pool. Add an item first, or ask the host to check the participant list.
                 </div>
               )}
 
@@ -2131,7 +2175,7 @@ function PoolDetail() {
                   Settlement Checklist:
                 </p>
                 <ol className="list-decimal pl-4 text-xs space-y-2 text-zinc-400 leading-relaxed">
-                  <li>Select your roommate name from the dropdown menu.</li>
+                  <li>Confirm the split shown above belongs to your logged-in account.</li>
                   <li>Pay the split total to the host's QR code or VPA.</li>
                   <li>Fetch the 12-digit UTR reference ID from your transaction receipt.</li>
                   <li>Enter and submit the UTR to complete the verification checklist.</li>

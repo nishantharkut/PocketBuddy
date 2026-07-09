@@ -7,7 +7,7 @@ import { PlatformIcon } from "@/components/PlatformIcon";
 import {
   Plus, ChevronRight, AlertTriangle, Users, Utensils, ShoppingBag,
   Bus, Receipt, MoreHorizontal, Wallet, Timer, MapPin, Compass, TrendingDown, Calendar, ShieldCheck,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, BellOff, Clock3, CheckCircle2, XCircle, EyeOff
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,7 @@ import {
   ignoreSubscription,
 } from "@/lib/api/db.functions";
 
+const CHECKIN_REMIND_LATER_MS = 4 * 60 * 60 * 1000;
 
 const getTrustBadgeLabel = (item: any, isPending: boolean = false) => {
   // 1. Prefer backend-provided trust/status fields
@@ -1324,6 +1325,7 @@ function Dashboard() {
   const checkinChecked = useRef(false);
   const checkInStorageKey = `pocketbuddy_last_checkin_${user?.id ?? "anon"}`;
   const checkInSnoozeKey = `pocketbuddy_checkin_snooze_${user?.id ?? "anon"}`;
+  const checkInStopKey = `pocketbuddy_checkin_stop_${user?.id ?? "anon"}_${profile?.exam_start_date ?? "no_start"}_${profile?.exam_end_date ?? "no_end"}`;
 
   useEffect(() => {
     if (checkinChecked.current || !profile || !txns || !insights) return;
@@ -1338,12 +1340,13 @@ function Dashboard() {
     const fallbackHours = lastFood ? (Date.now() - new Date(lastFood.created_at).getTime()) / 3600000 : 999;
     const hours = insights.food?.last_signal_source && typeof insights.food?.gap_hours === "number" ? insights.food.gap_hours : fallbackHours;
     if (hours < 16) return;
+    if (localStorage.getItem(checkInStopKey)) return;
     const snoozedAt = localStorage.getItem(checkInSnoozeKey);
-    if (snoozedAt && Date.now() - parseInt(snoozedAt, 10) < 4 * 3600000) return;
+    if (snoozedAt && Date.now() - parseInt(snoozedAt, 10) < CHECKIN_REMIND_LATER_MS) return;
     const lastCk = localStorage.getItem(checkInStorageKey);
     if (lastCk && Date.now() - parseInt(lastCk, 10) < 16 * 3600000) return;
     setShowCheckIn(true);
-  }, [profile, txns, insights, checkInStorageKey, checkInSnoozeKey]);
+  }, [profile, txns, insights, checkInStorageKey, checkInSnoozeKey, checkInStopKey]);
 
   useEffect(() => {
     if (!showCheckIn) {
@@ -1400,14 +1403,9 @@ function Dashboard() {
     : hasFoodGapSignal
       ? `Last meal signal: recent food spend, ${formatMealGapHours(foodGapHours)}`
       : "Last meal signal: no payment or check-in yet";
-  const checkInMealSignalLead = !hasFoodGapSignal
-    ? "No recent meal signal is available yet."
-    : foodGapHours < 1
-      ? "PocketBuddy already saw a recent food payment or meal check-in just now."
-      : `PocketBuddy has not seen a food payment or meal check-in for ${Math.round(foodGapHours)} hours.`;
-  const checkInMealSignalFollowup = hasFoodGapSignal && foodGapHours < 1
-    ? "Only add a check-in if that meal happened through mess, cooking, home food, or cash so Food Guard and runway stay accurate."
-    : "If you ate through mess, cooking, home food, or cash, log it so Food Guard and runway stay accurate.";
+  const checkInMealSignalLine = hasFoodGapSignal
+    ? `No food payment or check-in for ${Math.max(1, Math.round(foodGapHours))}h.`
+    : "No recent meal signal.";
   const wellnessPrimaryAction = wellness?.primary_action as
     | { key?: string; title?: string; detail?: string; cta_label?: string; destination?: string }
     | undefined;
@@ -1485,6 +1483,29 @@ function Dashboard() {
   }, [insights, calc, runwayView, examActive]);
 
   const visibleNudges = nudges.filter((n) => !dismissedNudges.has(n.id)).slice(0, 2);
+
+  function handleCheckInRemindLater(showToast = true) {
+    if (checkInSaving) return;
+    localStorage.setItem(checkInSnoozeKey, String(Date.now()));
+    setShowCheckIn(false);
+    setCheckInExpanded(false);
+    setCheckInMealSource(null);
+    setCheckInNote("");
+    if (showToast) {
+      toast.info("Meal check-in hidden for a few hours.");
+    }
+  }
+
+  function handleCheckInStopAsking() {
+    if (checkInSaving) return;
+    localStorage.setItem(checkInStopKey, String(Date.now()));
+    localStorage.removeItem(checkInSnoozeKey);
+    setShowCheckIn(false);
+    setCheckInExpanded(false);
+    setCheckInMealSource(null);
+    setCheckInNote("");
+    toast.info("Meal check-in prompts paused for this exam window.");
+  }
 
   async function handleCheckInAte() {
     if (!user || checkInSaving) return;
@@ -1930,75 +1951,59 @@ function Dashboard() {
             {runwayView && runwayView.possibleCommitments && runwayView.possibleCommitments.length > 0 && (
               <Card
                 id="card-possible-commitments-alert"
-                className="border-amber-500/20 bg-amber-500/5 p-5 rounded-2xl relative overflow-hidden mt-4"
+                className="border border-border bg-surface p-5 rounded-2xl mt-4"
               >
-                <div style={{ display: "flex", alignItems: "start", gap: "14px" }}>
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: "#f59e0b",
-                      marginTop: "6px",
-                      boxShadow: "0 0 8px #f59e0b",
-                    }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: "11px", fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      Unconfirmed Commitments
-                    </p>
-                    <p className="text-[13px] text-zinc-400 mt-1.5 leading-relaxed">
-                      <strong className="text-foreground">{rupees(runwayView.possibleCommitmentsTotal)}</strong> in possible recurring debits may hit before your allowance reset. These are currently excluded from your runway.
-                    </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
-                      {runwayView.possibleCommitments.map((sub: any) => {
-                        const daysLeft = Math.max(1, runwayView.daysLeft || 0);
-                        const dailyImpactPaise = Math.round((sub.amount || 0) / daysLeft);
-                        const newSafeDailyPaise = Math.max(0, Math.floor(((runwayView.remainingPaise || 0) - (sub.amount || 0)) / daysLeft));
-                        return (
-                          <div
-                            key={sub.id}
-                            className="bg-surface-raised border border-border/80 rounded-xl p-4 flex flex-col gap-3"
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                                <PlatformIcon platform={sub.label} className="h-9 w-9 rounded-xl" />
-                                <div>
-                                  <p className="text-xs font-semibold text-foreground">{sub.label}</p>
-                                  <p style={{ fontSize: "11px", color: "var(--muted-foreground)", marginTop: "2px" }}>
-                                    {rupees(sub.amount)} - expected {shortDate(new Date(sub.due_at))} - {sub.cadence || "monthly"} cycle
-                                  </p>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-raised text-muted-foreground">
+                      <Receipt className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                        Unconfirmed commitments
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground tnum">{rupees(runwayView.possibleCommitmentsTotal)}</span> may renew before reset. Confirm it to include the amount in runway.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {runwayView.possibleCommitments.map((sub: any) => {
+                      const daysLeft = Math.max(1, runwayView.daysLeft || 0);
+                      const dailyImpactPaise = Math.round((sub.amount || 0) / daysLeft);
+                      const newSafeDailyPaise = Math.max(0, Math.floor(((runwayView.remainingPaise || 0) - (sub.amount || 0)) / daysLeft));
+                      return (
+                        <div
+                          key={sub.id}
+                          className="rounded-xl border border-border bg-surface-raised/40 p-3.5"
+                        >
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div className="flex min-w-0 items-start gap-3">
+                              <PlatformIcon platform={sub.label} className="h-9 w-9 shrink-0 rounded-xl" />
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-foreground truncate">{sub.label}</p>
+                                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                    <ShieldCheck className="h-3 w-3" />
+                                    {Math.round(sub.confidence)}% confidence
+                                  </span>
                                 </div>
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {rupees(sub.amount)} due {shortDate(new Date(sub.due_at))} · {sub.cadence || "monthly"}
+                                </p>
+                                {dailyImpactPaise > 0 && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    If confirmed, safe/day becomes <span className="font-semibold text-foreground">{rupees(newSafeDailyPaise)}</span> ({rupees(dailyImpactPaise)}/day pressure).
+                                  </p>
+                                )}
                               </div>
-                              <span style={{ alignSelf: "flex-start", fontSize: "9px", fontWeight: 700, padding: "2px 6px", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "4px", color: "#f59e0b", letterSpacing: "0.05em" }}>
-                                {Math.round(sub.confidence)}% CONFIDENCE
-                              </span>
                             </div>
 
-                            {/* Evidence list */}
-                            {sub.evidence && sub.evidence.length > 0 && (
-                              <div style={{ display: "flex", flexDirection: "column", gap: "2px", background: "rgba(255,255,255,0.015)", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.05em", color: "var(--muted-foreground)", textTransform: "uppercase", marginBottom: "2px" }}>Why Detected</p>
-                                {sub.evidence.map((ev: string, idx: number) => (
-                                  <span key={idx} style={{ fontSize: "10px", color: "var(--muted-foreground)" }}>
-                                    - {ev}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Runway Impact */}
-                            {dailyImpactPaise > 0 && (
-                              <p style={{ fontSize: "11px", color: "#f59e0b", fontWeight: 500, background: "rgba(245,158,11,0.05)", padding: "6px 10px", borderRadius: "6px", border: "1px dashed rgba(245,158,11,0.2)" }}>
-                                <strong>Runway impact if confirmed:</strong> Safe daily spend would drop by <strong>{rupees(dailyImpactPaise)}/day</strong> (adjusting to {rupees(newSafeDailyPaise)}/day).
-                              </p>
-                            )}
-
-                            {/* Actions buttons */}
-                            <div className="flex flex-wrap gap-2 mt-1">
+                            <div className="flex flex-col gap-2 sm:flex-row md:justify-end">
                               <Button
                                 size="sm"
-                                className="bg-amber-500 text-black hover:bg-amber-600 h-8 text-[11px] font-bold uppercase tracking-wider"
+                                className="h-8 border border-foreground bg-foreground px-3 text-[11px] font-semibold text-background hover:bg-foreground/90"
                                 onClick={async () => {
                                   try {
                                     await confirmSubscription({ data: { id: sub.id } });
@@ -2010,12 +2015,13 @@ function Dashboard() {
                                   }
                                 }}
                               >
-                                Track this
+                                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                                Track
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-border text-muted-foreground hover:text-foreground h-8 text-[11px] font-bold uppercase tracking-wider"
+                                className="h-8 border-zinc-300 bg-surface px-3 text-[11px] font-semibold text-foreground hover:bg-surface-interactive dark:border-zinc-700"
                                 onClick={async () => {
                                   try {
                                     await ignoreSubscription({ data: { id: sub.id } });
@@ -2027,24 +2033,36 @@ function Dashboard() {
                                   }
                                 }}
                               >
+                                <XCircle className="mr-1.5 h-3.5 w-3.5" />
                                 Not recurring
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-border text-muted-foreground hover:text-foreground h-8 text-[11px] font-bold uppercase tracking-wider"
+                                className="h-8 border-zinc-300 bg-surface px-3 text-[11px] font-semibold text-muted-foreground hover:bg-surface-interactive hover:text-foreground dark:border-zinc-700"
                                 onClick={() => {
                                   setSnoozedSubs(prev => [...prev, sub.id]);
                                   toast.success(`Hidden for now.`);
                                 }}
                               >
-                                Hide for now
+                                <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                                Hide
                               </Button>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          {sub.evidence && sub.evidence.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {sub.evidence.slice(0, 3).map((ev: string, idx: number) => (
+                                <span key={idx} className="rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground">
+                                  {ev}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </Card>
@@ -3440,68 +3458,38 @@ function Dashboard() {
         </ResponsiveFoodPanel>
 
         {/* Check-in dialog */}
-        <Dialog open={showCheckIn} onOpenChange={setShowCheckIn}>
+        <Dialog
+          open={showCheckIn}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCheckInRemindLater(false);
+              return;
+            }
+            setShowCheckIn(true);
+          }}
+        >
           <DialogContent id="dialog-checkin" className="max-w-md max-h-[85vh] overflow-y-auto bg-surface border border-border p-4 sm:p-5 rounded-2xl">
             <DialogHeader className="space-y-1">
-              <div className="flex items-center gap-2 text-primary">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Utensils className="h-4 w-4" />
-                <span className="text-[11px] font-medium">Meal check-in</span>
+                <span className="text-[11px] font-medium">Food Guard</span>
               </div>
               <DialogTitle className="text-sm md:text-base font-semibold text-foreground">
-                Update your last meal signal
+                Did you eat without a payment?
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-3 mt-2">
               <p className="text-xs text-zinc-400 leading-relaxed font-normal">
-                {checkInMealSignalLead}{" "}
-                {checkInMealSignalFollowup}
+                {checkInMealSignalLine} Use this only for mess, cooked food, home food, or cash. No expense is added.
               </p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-border bg-surface-raised/30 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Last signal</p>
-                  <p className="mt-1 text-sm font-semibold text-foreground">
-                    {formatMealGapHours(hasFoodGapSignal ? foodGapHours : null, { missingLabel: "Missing" })}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-surface-raised/30 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Food target</p>
-                  <p className="mt-1 text-sm font-semibold text-foreground">{examFoodCapPaise > 0 ? rupees(examFoodCapPaise) : "Runway"}</p>
-                </div>
-              </div>
-              {examActive && (
-                <div className="rounded-lg border border-border bg-surface-raised/40 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-                  Exam window is active. A meal check-in keeps the next food suggestion grounded without creating a fake spend.
-                </div>
-              )}
-              {(bestFood || examActive) && (
-                <div className="rounded-lg border border-border bg-surface-raised/30 px-3 py-2.5">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">If you still need to eat</p>
-                      <p className="mt-1 text-sm font-semibold text-foreground">{examMealPlan.title}</p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{examMealPlan.detail}</p>
-                    </div>
-                    {bestFood && (
-                      <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium ${
-                        examBestFoodFitsCap
-                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-500"
-                          : "border-border bg-surface text-zinc-500"
-                      }`}>
-                        {bestFood.price ? rupees(bestFood.price) : "Campus option"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
 
               <div className="space-y-2 mt-3">
                 <div className="rounded-xl border border-border bg-surface-raised/40 p-3.5 space-y-3">
                   <div className="flex items-center justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs font-semibold text-foreground">I already ate</p>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">Choose the source so future food nudges stay accurate.</p>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">Select where the meal came from.</p>
                     </div>
-                    <span className="text-[10px] text-zinc-500">No spend added</span>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                     {[
@@ -3517,7 +3505,7 @@ function Dashboard() {
                         onClick={() => setCheckInMealSource(value as typeof checkInMealSource)}
                         className={`h-8 rounded-lg border px-2 text-[11px] font-medium transition-all ${
                           checkInMealSource === value
-                            ? "border-primary/40 bg-primary/10 text-primary"
+                            ? "border-foreground bg-foreground text-background"
                             : "border-border bg-surface text-zinc-400 hover:text-foreground hover:bg-surface-interactive"
                         }`}
                       >
@@ -3529,7 +3517,7 @@ function Dashboard() {
                     id="btn-checkin-ate"
                     onClick={handleCheckInAte}
                     disabled={Boolean(checkInSaving) || !checkInMealSource}
-                    className="w-full h-9 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/95 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full h-9 rounded-lg border border-foreground bg-foreground text-background text-xs font-medium hover:bg-foreground/90 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {checkInSaving === "ate" ? "Saving..." : "Save meal check-in"}
                   </button>
@@ -3541,14 +3529,11 @@ function Dashboard() {
                     onClick={() => setCheckInExpanded(true)}
                     className="w-full flex items-center justify-between text-left text-xs font-semibold text-foreground cursor-pointer"
                   >
-                    <span>I could not eat yet</span>
-                    <span className="text-[10px] text-zinc-500">Add context</span>
+                    <span>I have not eaten yet</span>
+                    <span className="text-[10px] text-zinc-500">Optional note</span>
                   </button>
                   {checkInExpanded && (
                     <div className="mt-3 space-y-2.5 animate-[fadeIn_0.15s_ease-out]">
-                      <p className="text-[11px] leading-relaxed text-zinc-500">
-                        This keeps the reminder honest without marking the meal as eaten.
-                      </p>
                       <div className="flex flex-wrap gap-1.5">
                         {CHECKIN_NOTE_PRESETS.map((preset) => (
                           <button
@@ -3558,7 +3543,7 @@ function Dashboard() {
                             onClick={() => setCheckInNote(preset)}
                             className={`rounded-md border px-2.5 py-1 text-[10px] transition-colors ${
                               checkInNote === preset
-                                ? "border-primary/40 bg-primary/10 text-primary"
+                                ? "border-foreground bg-foreground text-background"
                                 : "border-border bg-surface text-zinc-500 hover:text-foreground"
                             }`}
                           >
@@ -3583,6 +3568,28 @@ function Dashboard() {
                       </Button>
                     </div>
                   )}
+                </div>
+                <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 w-full border-zinc-300 bg-surface-raised text-xs font-medium text-foreground hover:bg-surface-interactive dark:border-zinc-700"
+                    onClick={() => handleCheckInStopAsking()}
+                    disabled={Boolean(checkInSaving)}
+                  >
+                    <BellOff className="mr-1.5 h-3.5 w-3.5" />
+                    Stop asking
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 w-full border-zinc-300 bg-surface text-xs font-medium text-foreground hover:bg-surface-interactive dark:border-zinc-700"
+                    onClick={() => handleCheckInRemindLater(true)}
+                    disabled={Boolean(checkInSaving)}
+                  >
+                    <Clock3 className="mr-1.5 h-3.5 w-3.5" />
+                    Remind me later
+                  </Button>
                 </div>
               </div>
             </div>

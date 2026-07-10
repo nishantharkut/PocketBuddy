@@ -12,12 +12,18 @@ os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017/pocketbuddy_test")
 
 from app.api.pools import (
+    JoinDecisionReq,
     PaymentConfirmReq,
+    PoolItemReq,
     RoommateAmznPayReq,
+    approve_pool_join_request,
     build_payment_state,
     enrich_pool_document,
+    get_cart_pools,
+    insert_pool_item,
     payment_confirm,
     process_amazon_roommate_payment,
+    request_pool_join,
     sanitize_pool_item_for_viewer,
 )
 from app.api.webhook import try_auto_verify_pool_payment
@@ -26,6 +32,9 @@ from app.api.webhook import try_auto_verify_pool_payment
 class FakeCursor:
     def __init__(self, docs):
         self.docs = docs
+
+    def sort(self, *args, **kwargs):
+        return self
 
     async def to_list(self, length=100):
         return list(self.docs[:length])
@@ -93,6 +102,21 @@ class FakeCartPools:
 
         return SimpleNamespace(matched_count=1, modified_count=1)
 
+    async def update_many(self, query, update):
+        modified = 0
+        cutoff = (query.get("expires_at") or {}).get("$lt")
+        for pool in self.pools:
+            if query.get("wing_label") and pool.get("wing_label") != query["wing_label"]:
+                continue
+            if query.get("status") and pool.get("status") != query["status"]:
+                continue
+            if cutoff and pool.get("expires_at") and pool.get("expires_at") >= cutoff:
+                continue
+            if "$set" in update:
+                pool.update(update["$set"])
+                modified += 1
+        return SimpleNamespace(matched_count=modified, modified_count=modified)
+
 
 class FakeCartPoolItems:
     def __init__(self, items):
@@ -100,6 +124,10 @@ class FakeCartPoolItems:
 
     def find(self, query):
         return FakeCursor([item for item in self.items if item.get("pool_id") == query.get("pool_id")])
+
+    async def insert_one(self, doc):
+        self.items.append(doc)
+        return SimpleNamespace(inserted_id=doc.get("_id"))
 
 
 class FakeUsers:
@@ -466,6 +494,14 @@ class PoolingHardeningTests(unittest.TestCase):
                 "verification_source": "manual_utr",
             }
         ])
+        pool.update({
+            "upi_id": "host@upi",
+            "checkout_notes": "Collect before 10 PM",
+            "final_overhead": 1200,
+            "final_discount": 300,
+            "auto_nudge_enabled": True,
+            "nudge_interval_hours": 8,
+        })
         db = make_db(
             pool,
             make_items(),
@@ -486,9 +522,44 @@ class PoolingHardeningTests(unittest.TestCase):
         self.assertEqual(enriched["reliability_scores"], {})
         self.assertEqual(enriched["settlement_summary"], {})
         self.assertEqual(enriched["wing_members"], [])
-        self.assertEqual(enriched["split_breakdown"]["Asha"]["email"], "")
-        self.assertEqual(enriched["split_breakdown"]["Asha"]["utr"], "")
-        self.assertIsNone(enriched["split_breakdown"]["Asha"]["verification_source"])
+        self.assertEqual(enriched["split_breakdown"], {})
+        self.assertNotIn("host_id", enriched)
+        self.assertNotIn("upi_id", enriched)
+        self.assertNotIn("checkout_notes", enriched)
+        self.assertNotIn("final_overhead", enriched)
+        self.assertNotIn("final_discount", enriched)
+        self.assertNotIn("auto_nudge_enabled", enriched)
+        self.assertNotIn("nudge_interval_hours", enriched)
+
+    def test_pool_list_sanitizes_items_for_non_host_participant(self):
+        pool = make_completed_pool(pool_id="pool-1")
+        pool["status"] = "open"
+        pool["expires_at"] = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+        items = make_items(pool_id="pool-1", user_id="asha-right") + [{
+            "_id": "item-rohan",
+            "pool_id": "pool-1",
+            "added_by_name": "Rohan",
+            "added_by_user_id": "rohan-id",
+            "item_description": "Chips",
+            "estimated_price": 5000,
+            "is_purchased": True,
+            "item_updated_by": "host-1",
+            "cart_status_updated_by": "host-1",
+        }]
+        db = make_db(
+            pool,
+            items,
+            profiles=[{"_id": "asha-right", "wing_label": "BH-2 Wing B"}],
+        )
+
+        with patch("app.api.pools.get_db", return_value=db):
+            pools = asyncio.run(get_cart_pools(user_id="asha-right"))
+
+        self.assertEqual(len(pools), 1)
+        rohan_item = next(item for item in pools[0]["items"] if item["added_by_name"] == "Rohan")
+        self.assertNotIn("added_by_user_id", rohan_item)
+        self.assertNotIn("item_updated_by", rohan_item)
+        self.assertNotIn("cart_status_updated_by", rohan_item)
 
     def test_host_pool_enrichment_uses_pool_user_id_for_participant_contact(self):
         pool = make_completed_pool([
@@ -539,6 +610,194 @@ class PoolingHardeningTests(unittest.TestCase):
         self.assertEqual(sanitized["item_description"], "Tea")
         self.assertNotIn("added_by_user_id", sanitized)
         self.assertNotIn("item_updated_by", sanitized)
+
+    def test_non_participant_gets_request_state_without_private_pool_contents(self):
+        pool = {
+            "_id": "pool-1",
+            "host_id": "host-1",
+            "status": "open",
+            "created_by_name": "Host",
+            "wing_label": "BH-2 Wing B",
+            "payments": [
+                {"name": "Asha", "utr": "123456789012", "status": "pending"},
+            ],
+            "join_requests": [],
+        }
+        db = make_db(
+            pool,
+            make_items(user_id="asha-right"),
+            users=[
+                {"_id": "host-1", "full_name": "Host", "phone_number": "9876543210"},
+                {"_id": "visitor-1", "full_name": "Rohan", "email": "rohan@example.com"},
+            ],
+            profiles=[
+                {"_id": "host-1", "wing_label": "BH-2 Wing B"},
+                {"_id": "visitor-1", "wing_label": "BH-2 Wing B"},
+            ],
+        )
+
+        enriched = asyncio.run(enrich_pool_document(db, dict(pool), current_user_id="visitor-1"))
+
+        self.assertEqual(enriched["viewer_access"]["state"], "request_required")
+        self.assertFalse(enriched["viewer_access"]["can_view_pool"])
+        self.assertEqual(enriched["host_phone"], "")
+        self.assertEqual(enriched["payments"], [])
+        self.assertEqual(enriched["split_breakdown"], {})
+        self.assertEqual(enriched["wing_members"], [])
+        self.assertEqual(enriched["join_requests"], [])
+
+    def test_pending_join_request_cannot_add_items_until_host_approves(self):
+        pool = {
+            "_id": "pool-1",
+            "host_id": "host-1",
+            "status": "open",
+            "created_by_name": "Host",
+            "wing_label": "BH-2 Wing B",
+            "min_cart_value": 50000,
+            "delivery_fee": 2000,
+            "payments": [],
+            "join_requests": [
+                {
+                    "user_id": "visitor-1",
+                    "name": "Rohan",
+                    "email": "rohan@example.com",
+                    "status": "pending",
+                    "requested_at": datetime.datetime.utcnow().isoformat(),
+                }
+            ],
+        }
+        db = make_db(
+            pool,
+            [],
+            users=[{"_id": "visitor-1", "full_name": "Rohan", "email": "rohan@example.com"}],
+            profiles=[{"_id": "visitor-1", "wing_label": "BH-2 Wing B"}],
+        )
+
+        with patch("app.api.pools.get_db", return_value=db):
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(insert_pool_item(
+                    "pool-1",
+                    PoolItemReq(
+                        added_by_name="Rohan",
+                        item_description="Chips",
+                        estimated_price=5000,
+                        quantity=1,
+                    ),
+                    user_id="visitor-1",
+                ))
+
+        self.assertEqual(error.exception.status_code, 403)
+        self.assertEqual(db.cart_pool_items.items, [])
+
+    def test_host_approval_unlocks_pool_item_add_for_requester(self):
+        pool = {
+            "_id": "pool-1",
+            "host_id": "host-1",
+            "status": "open",
+            "created_by_name": "Host",
+            "wing_label": "BH-2 Wing B",
+            "min_cart_value": 50000,
+            "delivery_fee": 2000,
+            "payments": [],
+            "join_requests": [
+                {
+                    "user_id": "visitor-1",
+                    "name": "Rohan",
+                    "email": "rohan@example.com",
+                    "status": "pending",
+                    "requested_at": datetime.datetime.utcnow().isoformat(),
+                }
+            ],
+        }
+        db = make_db(
+            pool,
+            [],
+            users=[
+                {"_id": "host-1", "full_name": "Host"},
+                {"_id": "visitor-1", "full_name": "Rohan", "email": "rohan@example.com"},
+            ],
+            profiles=[
+                {"_id": "host-1", "wing_label": "BH-2 Wing B"},
+                {"_id": "visitor-1", "wing_label": "BH-2 Wing B"},
+            ],
+        )
+
+        with patch("app.api.pools.get_db", return_value=db):
+            asyncio.run(approve_pool_join_request(
+                "pool-1",
+                JoinDecisionReq(user_id="visitor-1"),
+                user_id="host-1",
+            ))
+            asyncio.run(insert_pool_item(
+                "pool-1",
+                PoolItemReq(
+                    added_by_name="Rohan",
+                    item_description="Chips",
+                    estimated_price=5000,
+                    quantity=1,
+                ),
+                user_id="visitor-1",
+            ))
+
+        self.assertEqual(pool["join_requests"][0]["status"], "approved")
+        self.assertEqual(db.cart_pool_items.items[0]["added_by_user_id"], "visitor-1")
+        self.assertEqual(db.cart_pool_items.items[0]["added_by_name"], "Rohan")
+
+    def test_request_pool_join_is_idempotent_for_pending_user(self):
+        pool = {
+            "_id": "pool-1",
+            "host_id": "host-1",
+            "status": "open",
+            "created_by_name": "Host",
+            "wing_label": "BH-2 Wing B",
+            "payments": [],
+            "join_requests": [],
+        }
+        db = make_db(
+            pool,
+            [],
+            users=[{"_id": "visitor-1", "full_name": "Rohan", "email": "rohan@example.com"}],
+            profiles=[{"_id": "visitor-1", "wing_label": "BH-2 Wing B"}],
+        )
+
+        with patch("app.api.pools.get_db", return_value=db):
+            first = asyncio.run(request_pool_join("pool-1", user_id="visitor-1"))
+            second = asyncio.run(request_pool_join("pool-1", user_id="visitor-1"))
+
+        self.assertEqual(len(pool["join_requests"]), 1)
+        self.assertEqual(first["viewer_access"]["state"], "pending")
+        self.assertEqual(second["viewer_access"]["state"], "pending")
+
+    def test_host_cannot_approve_join_request_after_pool_closes(self):
+        pool = {
+            "_id": "pool-1",
+            "host_id": "host-1",
+            "status": "closed",
+            "created_by_name": "Host",
+            "wing_label": "BH-2 Wing B",
+            "payments": [],
+            "join_requests": [
+                {
+                    "user_id": "visitor-1",
+                    "name": "Rohan",
+                    "email": "rohan@example.com",
+                    "status": "pending",
+                    "requested_at": datetime.datetime.utcnow().isoformat(),
+                }
+            ],
+        }
+        db = make_db(pool, [])
+
+        with patch("app.api.pools.get_db", return_value=db):
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(approve_pool_join_request(
+                    "pool-1",
+                    JoinDecisionReq(user_id="visitor-1"),
+                    user_id="host-1",
+                ))
+
+        self.assertEqual(error.exception.status_code, 400)
+        self.assertEqual(pool["join_requests"][0]["status"], "pending")
 
 
 if __name__ == "__main__":

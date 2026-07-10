@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ChevronLeft, Share2, Trash2, Check, X, AlertCircle, Sparkles, ExternalLink, User, ShoppingBag, Clock, Shield, Link as LinkIcon, Bell, Eye, EyeOff, Smartphone, Plus, Minus, Pencil, CheckCircle2, ClipboardList } from "lucide-react";
+import { ChevronLeft, Share2, Trash2, Check, X, AlertCircle, Sparkles, ExternalLink, User, ShoppingBag, Clock, Shield, Link as LinkIcon, Bell, Eye, EyeOff, Smartphone, Plus, Minus, Pencil, CheckCircle2, ClipboardList, UserCheck, UserPlus, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { rupees, relativeTime } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
@@ -25,6 +25,9 @@ import {
   updateCartPoolItem,
   getProfile,
   updateProfile,
+  requestCartPoolJoin,
+  approveCartPoolJoin,
+  rejectCartPoolJoin,
   paymentConfirm,
   paymentVerify,
   nudgeRoommate,
@@ -128,7 +131,7 @@ function listActiveParticipants(itemsList: any[]) {
 
 function statusToneClass(tone?: string, status?: string) {
   const key = tone || status;
-  if (key === "success" || status === "verified") return "bg-green-600/10 border-green-600/25 text-green-500";
+  if (key === "success" || status === "verified") return "border-success/25 bg-success/10 text-emerald-700 dark:text-success";
   if (key === "danger" || status === "rejected") return "bg-destructive/10 border-destructive/25 text-destructive";
   if (status === "needs_review") return "bg-orange-500/10 border-orange-500/25 text-orange-400";
   return "bg-orange-600/10 border-orange-600/25 text-orange-600";
@@ -164,7 +167,7 @@ function cartStatusLabel(status?: string) {
 }
 
 function cartStatusClass(status?: string) {
-  if (status === "added") return "border-green-600/25 bg-green-600/10 text-green-600";
+  if (status === "added") return "border-success/25 bg-success/10 text-emerald-700 dark:text-success";
   if (status === "substituted") return "border-blue-600/20 bg-blue-600/5 text-blue-600";
   if (status === "unavailable" || status === "skipped") return "border-destructive/25 bg-destructive/10 text-destructive";
   if (status === "mixed") return "border-border bg-muted/30 text-muted-foreground";
@@ -305,6 +308,7 @@ function PoolDetail() {
   // Amazon Pay sandbox contract states
   const [showAmazonMockGateway, setShowAmazonMockGateway] = useState(false);
   const [amazonSessionId, setAmazonSessionId] = useState("");
+  const [joinBusy, setJoinBusy] = useState(false);
 
   // Track toasting status to avoid spamming on 3-second polls
   const [hasToastedStatus, setHasToastedStatus] = useState<string | null>(null);
@@ -367,7 +371,7 @@ function PoolDetail() {
               phone: cleanPhone,
             }
           });
-          toast.success("Joined pool successfully!");
+          toast.success("Account ready. Request host approval to join.");
           qc.invalidateQueries({ queryKey: ["pool", id] });
         }
       } else {
@@ -1168,6 +1172,38 @@ function PoolDetail() {
     }
   }
 
+  async function handleRequestJoin() {
+    setJoinBusy(true);
+    try {
+      await requestCartPoolJoin({ pool_id: id });
+      toast.success("Request sent to the host.");
+      qc.invalidateQueries({ queryKey: ["pool", id] });
+      qc.invalidateQueries({ queryKey: ["pool-items", id] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to request access");
+    } finally {
+      setJoinBusy(false);
+    }
+  }
+
+  async function handleJoinDecision(requestUserId: string, action: "approve" | "reject") {
+    setJoinBusy(true);
+    try {
+      if (action === "approve") {
+        await approveCartPoolJoin({ pool_id: id, user_id: requestUserId });
+      } else {
+        await rejectCartPoolJoin({ pool_id: id, user_id: requestUserId });
+      }
+      toast.success(action === "approve" ? "Roommate approved." : "Join request rejected.");
+      qc.invalidateQueries({ queryKey: ["pool", id] });
+      qc.invalidateQueries({ queryKey: ["pool-items", id] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update join request");
+    } finally {
+      setJoinBusy(false);
+    }
+  }
+
   // Generate UPI pay deep link
   const payeeDetails = selfPayeeName ? splitBreakdown[selfPayeeName] : undefined;
   const upiPayUrl = pool.upi_id && payeeDetails
@@ -1180,6 +1216,9 @@ function PoolDetail() {
   const settlementSummary = pool.settlement_summary ?? {};
   const hostAndroidStatus = pool.host_android_status ?? settlementSummary.host_android_status;
   const editingHostItem = editingItem ? isHostParticipant(pool, editingItem.added_by_name, user) : false;
+  const viewerAccess = pool.viewer_access ?? { state: "approved", can_view_pool: true, can_request_join: false };
+  const canViewPool = viewerAccess.can_view_pool !== false;
+  const pendingJoinRequests = ((pool.join_requests ?? []) as any[]).filter((request) => request.status === "pending");
 
   if (!user) {
     return (
@@ -1197,8 +1236,8 @@ function PoolDetail() {
                 </h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   {authMode === "signup"
-                    ? `Register in 5 seconds to join ${pool.created_by_name}'s ${theme.name} cart pool safely.`
-                    : "Log in with your email to participate in this cart pool."}
+                    ? `Create an account, then request access to ${pool.created_by_name}'s ${theme.name} cart pool.`
+                    : "Log in with your email to request or continue pool access."}
                 </p>
               </div>
 
@@ -1270,7 +1309,7 @@ function PoolDetail() {
                   disabled={authBusy}
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-10 font-bold uppercase tracking-wider text-xs"
                 >
-                  {authBusy ? "Authenticating..." : authMode === "signup" ? "Create Account & Join" : "Log In & Join"}
+                  {authBusy ? "Authenticating..." : authMode === "signup" ? "Create Account & Continue" : "Log In & Continue"}
                 </Button>
               </form>
 
@@ -1285,6 +1324,88 @@ function PoolDetail() {
                     : "Don't have an account? Sign up"}
                 </button>
               </div>
+            </div>
+          </Card>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!canViewPool) {
+    const state = viewerAccess.state;
+    const canRequest = Boolean(viewerAccess.can_request_join);
+    const title =
+      state === "pending"
+        ? "Request sent"
+        : state === "rejected"
+          ? "Host declined this request"
+          : "Ask the host before adding items";
+    const detail =
+      state === "pending"
+        ? `${pool.created_by_name} needs to approve you before the cart contents and item form unlock.`
+        : state === "rejected"
+          ? "This keeps shared carts from leaking outside the room or wing. Ask the host directly if this was accidental."
+          : "PocketBuddy keeps pool links shareable, but the host controls who can see the cart and add items.";
+
+    return (
+      <AppShell>
+        <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => nav({ to: "/pool" })} className="text-muted-foreground cursor-pointer">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="text-base sm:text-lg font-black tracking-wider uppercase truncate text-foreground">
+              Cart Pool
+            </span>
+          </div>
+          <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider bg-muted/50 border-border">
+            {theme.name}
+          </Badge>
+        </div>
+
+        <div className="mx-auto flex min-h-[calc(100vh-12rem)] max-w-xl items-center px-4 py-8">
+          <Card className="w-full overflow-hidden border border-border bg-surface">
+            <div className="border-t-4 border-t-primary p-6 md:p-8">
+              <div className="flex items-start gap-4">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-border bg-muted/30 text-primary">
+                  {state === "pending" ? <Clock className="h-6 w-6" /> : state === "rejected" ? <UserX className="h-6 w-6" /> : <UserPlus className="h-6 w-6" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-muted-foreground">
+                    {pool.created_by_name}'s {theme.name} pool
+                  </p>
+                  <h2 className="mt-2 text-xl font-black tracking-tight text-foreground">
+                    {title}
+                  </h2>
+                  <p className="mt-2 text-sm font-medium leading-relaxed text-muted-foreground">
+                    {detail}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-xl border border-border bg-muted/20 p-4">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="font-bold uppercase tracking-widest text-muted-foreground">Host</p>
+                    <p className="mt-1 font-black text-foreground">{pool.created_by_name}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold uppercase tracking-widest text-muted-foreground">Window</p>
+                    <p className="mt-1 font-black text-foreground">{expired ? "Closed" : `${minsLeft}m left`}</p>
+                  </div>
+                </div>
+              </div>
+
+              {canRequest && (
+                <Button
+                  id="btn-request-pool-join"
+                  onClick={handleRequestJoin}
+                  disabled={joinBusy}
+                  className="mt-6 h-11 w-full bg-primary text-primary-foreground text-xs font-black uppercase tracking-wider"
+                >
+                  {joinBusy ? "Sending request..." : "Request to Join Pool"}
+                </Button>
+              )}
             </div>
           </Card>
         </div>
@@ -1367,7 +1488,7 @@ function PoolDetail() {
           </div>
           <div>
             {pool.status === "completed" ? (
-              <Badge className="bg-green-600/10 border border-green-600/30 text-green-500 font-bold text-xs px-3 py-1">FINALIZED</Badge>
+              <Badge className="border border-success/25 bg-success/10 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-success">FINALIZED</Badge>
             ) : pool.status === "cancelled" ? (
               <Badge className="bg-red-600/10 border border-red-600/30 text-red-500 font-bold text-xs px-3 py-1">CANCELLED</Badge>
             ) : expired ? (
@@ -1385,19 +1506,19 @@ function PoolDetail() {
       <div className="space-y-4 px-4 py-4 pb-96">
         {/* Status Callouts */}
         {pool.status === "completed" && isFullySettled && (
-          <div className="flex flex-col gap-3 rounded-xl border border-green-600/25 bg-green-600/10 p-4 text-xs text-green-600">
+          <div className="flex flex-col gap-3 rounded-xl border border-success/25 bg-success/10 p-4 text-xs text-emerald-700 dark:text-success">
             <div className="flex gap-2.5 items-start">
-              <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-green-600" />
+              <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-emerald-700 dark:text-success" />
               <div>
-                <p className="font-black uppercase tracking-wider text-green-600 text-sm">Pool Fully Settled</p>
+                <p className="text-sm font-black uppercase tracking-wider text-emerald-700 dark:text-success">Pool Fully Settled</p>
                 <p className="text-muted-foreground leading-relaxed mt-1">
                   All roommate splits for this {theme.name} pool are paid and verified. No outstanding balances remain.
                 </p>
               </div>
             </div>
             {pool.checkout_notes && (
-              <div className="bg-background/50 border border-green-600/15 rounded-lg p-3 text-xs">
-                <span className="font-bold text-green-600 uppercase tracking-widest text-[9px] md:text-xs block mb-1">Host Note / Message</span>
+              <div className="rounded-lg border border-success/15 bg-background/50 p-3 text-xs">
+                <span className="mb-1 block text-[9px] font-bold uppercase tracking-widest text-emerald-700 dark:text-success md:text-xs">Host Note / Message</span>
                 <p className="text-muted-foreground leading-relaxed font-semibold">
                   "{pool.checkout_notes}"
                 </p>
@@ -1407,20 +1528,20 @@ function PoolDetail() {
         )}
 
         {pool.status === "completed" && !isFullySettled && (
-          <div className="flex flex-col gap-3 p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl text-xs">
+          <div className="flex flex-col gap-3 rounded-xl border border-success/25 bg-success/10 p-4 text-xs text-emerald-700 dark:text-success">
             <div className="flex gap-2.5 items-start">
-              <Check className="h-4.5 w-4.5 shrink-0 mt-0.5 text-green-500" />
+              <Check className="h-4.5 w-4.5 shrink-0 mt-0.5 text-emerald-700 dark:text-success" />
               <div>
-                <p className="font-bold uppercase tracking-wider text-green-500">Order Splits Finalized</p>
-                <p className="text-zinc-300 leading-relaxed mt-1">
+                <p className="font-bold uppercase tracking-wider text-emerald-700 dark:text-success">Order Splits Finalized</p>
+                <p className="mt-1 leading-relaxed text-muted-foreground">
                   The host has checked out this cart pool. Roommates should check their splits below, pay the host via the VPA deep link or QR code, and submit the 12-digit UTR to confirm verification.
                 </p>
               </div>
             </div>
             {pool.checkout_notes && (
-              <div className="bg-green-600/5 border border-green-500/10 rounded-lg p-3 text-xs">
-                <span className="font-bold text-green-500 uppercase tracking-widest text-[9px] md:text-xs block mb-1">Host Note / Message</span>
-                <p className="text-zinc-300 leading-relaxed font-semibold">
+              <div className="rounded-lg border border-success/15 bg-background/50 p-3 text-xs">
+                <span className="mb-1 block text-[9px] font-bold uppercase tracking-widest text-emerald-700 dark:text-success md:text-xs">Host Note / Message</span>
+                <p className="font-semibold leading-relaxed text-muted-foreground">
                   "{pool.checkout_notes}"
                 </p>
               </div>
@@ -1495,10 +1616,63 @@ function PoolDetail() {
 
             {pool.status === "open" ? (
               <div className="space-y-4">
+                {pendingJoinRequests.length > 0 && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-primary">
+                          Join Requests
+                        </p>
+                        <p className="mt-1 text-xs font-semibold leading-relaxed text-muted-foreground">
+                          Approve only the roommates you expect before they can see the cart or add items.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 border-primary/25 bg-background text-[10px] font-black uppercase tracking-wider text-primary">
+                        {pendingJoinRequests.length} pending
+                      </Badge>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {pendingJoinRequests.map((request) => (
+                        <div key={request.user_id} className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-black text-foreground">{request.name}</p>
+                            <p className="mt-0.5 truncate text-[10px] font-semibold text-muted-foreground">
+                              {[request.email, request.wing_label, request.room_number ? `Room ${request.room_number}` : ""].filter(Boolean).join(" - ") || "Logged-in PocketBuddy user"}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleJoinDecision(request.user_id, "reject")}
+                              disabled={joinBusy}
+                              className="h-8 border-destructive/25 px-3 text-[10px] font-bold uppercase tracking-wider text-destructive hover:bg-destructive/10"
+                            >
+                              <UserX className="mr-1.5 h-3.5 w-3.5" />
+                              Reject
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleJoinDecision(request.user_id, "approve")}
+                              disabled={joinBusy}
+                              className="h-8 bg-primary px-3 text-[10px] font-bold uppercase tracking-wider text-primary-foreground"
+                            >
+                              <UserCheck className="mr-1.5 h-3.5 w-3.5" />
+                              Approve
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {hostAndroidStatus && (
                   <div className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-xs ${
                     hostAndroidStatus.can_auto_verify
-                      ? "border-green-500/25 bg-green-500/10 text-green-500"
+                      ? "border-success/25 bg-success/10 text-emerald-700 dark:text-success"
                       : "border-orange-600/25 bg-orange-600/10 text-orange-600"
                   }`}>
                     <Smartphone className="h-4 w-4 shrink-0" />
@@ -1627,7 +1801,7 @@ function PoolDetail() {
                                     variant="outline"
                                     onClick={() => updateCartRunnerGroup(group.items, "added")}
                                     disabled={busy}
-                                    className="h-8 border-green-600/25 px-2.5 text-[10px] font-bold uppercase tracking-wider text-green-600 hover:bg-green-600/10"
+                                    className="h-8 border-success/25 px-2.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 hover:bg-success/10 dark:text-success"
                                   >
                                     Added
                                   </Button>
@@ -1722,7 +1896,7 @@ function PoolDetail() {
                 {!isFullySettled && hostAndroidStatus && (
                   <div className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-xs ${
                     hostAndroidStatus.can_auto_verify
-                      ? "border-green-500/25 bg-green-500/10 text-green-400"
+                      ? "border-success/25 bg-success/10 text-emerald-700 dark:text-success"
                       : "border-orange-600/25 bg-orange-600/10 text-orange-600"
                   }`}>
                     <Smartphone className="h-4 w-4 shrink-0" />
@@ -1784,7 +1958,7 @@ function PoolDetail() {
                       };
                       
                       let badgeColor = "bg-blue-500/10 text-blue-500 border-blue-500/20";
-                      if (rel.color === "green") badgeColor = "bg-green-500/10 text-green-500 border-green-500/20";
+                      if (rel.color === "green") badgeColor = "border-success/25 bg-success/10 text-emerald-700 dark:text-success";
                       else if (rel.color === "yellow") badgeColor = "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
                       else if (rel.color === "red") badgeColor = "bg-red-500/10 text-red-500 border-red-500/20";
 
@@ -1836,7 +2010,7 @@ function PoolDetail() {
                             <div className="flex w-full items-center md:w-auto">
                               {details.paid ? (
                                 <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-end">
-                                  <Badge className="bg-green-600/10 border border-green-600/20 text-green-500 font-bold py-1 px-2.5">
+                                  <Badge className="border border-success/25 bg-success/10 px-2.5 py-1 font-bold text-emerald-700 dark:text-success">
                                     VERIFIED
                                   </Badge>
                                   {(details.settlementMode === "settle_in_kind" || details.settlement_mode === "settle_in_kind") && (
@@ -1922,7 +2096,7 @@ function PoolDetail() {
                       {pool.status === "completed" ? (
                         <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
                           details.paymentStatus === "verified" || details.paymentStatus === "host"
-                            ? "bg-green-500"
+                            ? "bg-emerald-700 dark:bg-success"
                             : details.paymentStatus === "pending" || details.paymentStatus === "needs_review"
                               ? "bg-orange-500"
                               : details.paymentStatus === "rejected"
@@ -1948,7 +2122,7 @@ function PoolDetail() {
                     {pool.status === "completed" && (
                       <span className="text-xs font-black uppercase tracking-wider mt-0.5">
                         {details.paymentStatus === "verified" ? (
-                          <span className="text-green-500 font-bold">Paid</span>
+                          <span className="font-bold text-emerald-700 dark:text-success">Paid</span>
                         ) : details.paymentStatus === "pending" ? (
                           <span className="text-orange-600 font-bold">UTR Pending</span>
                         ) : details.paymentStatus === "needs_review" ? (
@@ -1956,7 +2130,7 @@ function PoolDetail() {
                         ) : details.paymentStatus === "rejected" ? (
                           <span className="text-destructive font-bold">Rejected</span>
                         ) : details.paymentStatus === "host" ? (
-                          <span className="text-green-500 font-bold">HOST (OWN SHARE)</span>
+                          <span className="font-bold text-emerald-700 dark:text-success">HOST (OWN SHARE)</span>
                         ) : details.isOverdue ? (
                           <span className="text-destructive font-bold">Overdue</span>
                         ) : (
@@ -2011,11 +2185,11 @@ function PoolDetail() {
               {hostAndroidStatus && (
                 <div className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs ${
                   hostAndroidStatus.can_auto_verify
-                    ? "border-green-500/20 bg-green-500/10 text-green-400"
+                    ? "border-success/25 bg-success/10 text-emerald-700 dark:text-success"
                     : "border-orange-600/25 bg-orange-600/10 text-orange-600"
                 }`}>
                   <Smartphone className="h-4 w-4 shrink-0 mt-0.5" />
-                  <p className="leading-relaxed text-zinc-300">
+                  <p className="leading-relaxed text-muted-foreground">
                     <span className="font-bold text-current">{hostAndroidStatus.label}: </span>
                     {hostAndroidStatus.can_auto_verify
                       ? "host credits can auto-match when sender or UTR is clear."
@@ -2035,7 +2209,7 @@ function PoolDetail() {
                   </div>
 
                   {payeeDetails.paymentStatus === "verified" ? (
-                    <div className="flex items-center gap-1.5 text-xs text-green-500 bg-green-600/10 border border-green-600/20 px-4 py-2 rounded-full font-bold">
+                    <div className="flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-4 py-2 text-xs font-bold text-emerald-700 dark:text-success">
                       <Check className="h-4 w-4" /> Paid & Confirmed
                     </div>
                   ) : payeeDetails.paymentStatus === "pending" ? (
@@ -2057,7 +2231,7 @@ function PoolDetail() {
                       <p className="text-xs text-muted-foreground leading-relaxed">{payeeDetails.paymentDetail || payeeDetails.reviewReason}</p>
                     </div>
                   ) : payeeDetails.paymentStatus === "host" ? (
-                    <div className="flex items-center gap-1.5 text-xs text-green-500 bg-green-600/10 border border-green-600/20 px-4 py-2 rounded-full font-bold">
+                    <div className="flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-4 py-2 text-xs font-bold text-emerald-700 dark:text-success">
                       <Check className="h-4 w-4" /> Host User (Automatically Verified)
                     </div>
                   ) : (
@@ -2368,7 +2542,7 @@ function PoolDetail() {
                               {isHost && (
                                 <button
                                   onClick={() => toggleAvailability(it.id, it.is_purchased !== false)}
-                                  className={`cursor-pointer rounded-md border border-border p-1.5 text-muted-foreground hover:bg-muted/40 ${it.is_purchased !== false ? "hover:text-destructive" : "hover:text-green-600"}`}
+                                  className={`cursor-pointer rounded-md border border-border p-1.5 text-muted-foreground hover:bg-muted/40 ${it.is_purchased !== false ? "hover:text-destructive" : "hover:text-emerald-700 dark:hover:text-success"}`}
                                   title={it.is_purchased !== false ? "Mark unavailable and notify roommate" : "Restore item to active cart"}
                                 >
                                   {it.is_purchased !== false ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
@@ -2980,7 +3154,7 @@ function PoolDetail() {
       {/* Settlement complete receipt modal */}
       <Dialog open={settledPopupOpen} onOpenChange={setSettledPopupOpen}>
         <DialogContent id="dialog-settlement-complete" className="max-w-[400px] p-6 space-y-4">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-green-600/25 bg-green-600/10 text-green-600">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-success/25 bg-success/10 text-emerald-700 dark:text-success">
             <CheckCircle2 className="h-7 w-7" />
           </div>
           <DialogHeader>

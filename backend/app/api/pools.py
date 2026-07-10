@@ -52,6 +52,9 @@ class PaymentVerifyReq(BaseModel):
     roommate_name: str
     action: str  # "verify" or "reject"
 
+class JoinDecisionReq(BaseModel):
+    user_id: str
+
 class PoolItemReq(BaseModel):
     added_by_name: str
     item_description: str
@@ -76,7 +79,9 @@ def utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 
-def to_utc_naive(value: datetime.datetime) -> datetime.datetime:
+def to_utc_naive(value: datetime.datetime | str) -> datetime.datetime:
+    if isinstance(value, str):
+        value = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
     if value.tzinfo is None:
         return value
     return value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
@@ -639,6 +644,150 @@ def sanitize_pool_item_for_viewer(item: dict, current_user_id: Optional[str], ho
     return safe_item
 
 
+def pool_join_requests(pool: dict) -> list[dict]:
+    requests = pool.get("join_requests") or []
+    return [req for req in requests if req.get("user_id")]
+
+
+def find_join_request(pool: dict, user_id: Optional[str]) -> Optional[dict]:
+    if not user_id:
+        return None
+    return next((req for req in pool_join_requests(pool) if req.get("user_id") == user_id), None)
+
+
+def user_has_pool_items(items: list[dict], user_id: Optional[str]) -> bool:
+    if not user_id:
+        return False
+    return any(item.get("added_by_user_id") == user_id for item in items)
+
+
+def is_pool_open_for_join(pool: dict) -> bool:
+    return pool.get("status") == "open" and not is_pool_expired(pool)
+
+
+def build_pool_viewer_access(pool: dict, items: list[dict], user_id: Optional[str]) -> dict:
+    is_open_for_join = is_pool_open_for_join(pool)
+    if not user_id:
+        return {
+            "state": "login_required",
+            "label": "Log in to request access",
+            "can_view_pool": False,
+            "can_add_item": False,
+            "can_request_join": False,
+            "can_manage_join_requests": False,
+            "join_request": None,
+        }
+
+    if pool.get("host_id") == user_id:
+        return {
+            "state": "host",
+            "label": "Host access",
+            "can_view_pool": True,
+            "can_add_item": is_open_for_join,
+            "can_request_join": False,
+            "can_manage_join_requests": is_open_for_join,
+            "join_request": None,
+        }
+
+    request = find_join_request(pool, user_id)
+    has_items = user_has_pool_items(items, user_id)
+    if has_items or (request and request.get("status") == "approved"):
+        return {
+            "state": "approved",
+            "label": "Approved participant",
+            "can_view_pool": True,
+            "can_add_item": is_open_for_join,
+            "can_request_join": False,
+            "can_manage_join_requests": False,
+            "join_request": sanitize_join_request(request) if request else None,
+        }
+
+    if request and request.get("status") == "pending":
+        return {
+            "state": "pending",
+            "label": "Waiting for host approval",
+            "can_view_pool": False,
+            "can_add_item": False,
+            "can_request_join": False,
+            "can_manage_join_requests": False,
+            "join_request": sanitize_join_request(request),
+        }
+
+    if request and request.get("status") == "rejected":
+        return {
+            "state": "rejected",
+            "label": "Request declined",
+            "can_view_pool": False,
+            "can_add_item": False,
+            "can_request_join": False,
+            "can_manage_join_requests": False,
+            "join_request": sanitize_join_request(request),
+        }
+
+    return {
+        "state": "request_required",
+        "label": "Host approval required",
+        "can_view_pool": False,
+        "can_add_item": False,
+        "can_request_join": is_open_for_join,
+        "can_manage_join_requests": False,
+        "join_request": None,
+    }
+
+
+def limited_pool_view(pool: dict) -> dict:
+    safe_keys = {
+        "_id",
+        "id",
+        "status",
+        "created_by_name",
+        "wing_label",
+        "platform",
+        "platform_display_label",
+        "min_cart_value",
+        "delivery_fee",
+        "expires_at",
+        "created_at",
+    }
+    return {key: pool[key] for key in safe_keys if key in pool}
+
+
+def sanitize_join_request(request: Optional[dict], *, host_view: bool = False) -> Optional[dict]:
+    if not request:
+        return None
+    safe = {
+        "user_id": request.get("user_id"),
+        "name": request.get("name") or "Roommate",
+        "status": request.get("status") or "pending",
+        "requested_at": request.get("requested_at"),
+        "decided_at": request.get("decided_at"),
+    }
+    if host_view:
+        safe["email"] = request.get("email") or ""
+        safe["wing_label"] = request.get("wing_label") or ""
+        safe["room_number"] = request.get("room_number") or ""
+    return safe
+
+
+def visible_join_requests(pool: dict, user_id: Optional[str], is_host_viewer: bool) -> list[dict]:
+    if is_host_viewer:
+        return [
+            req for req in (sanitize_join_request(request, host_view=True) for request in pool_join_requests(pool))
+            if req
+        ]
+    own_request = sanitize_join_request(find_join_request(pool, user_id))
+    return [own_request] if own_request else []
+
+
+async def pool_response(db, pool: dict, user_id: Optional[str]) -> dict:
+    response = dict(pool)
+    response["id"] = str(response.pop("_id"))
+    from app.core.security import _serialize_value
+    for k, v in list(response.items()):
+        response[k] = _serialize_value(v)
+    return await enrich_pool_document(db, response, user_id)
+
+
 async def resolve_payment_claim_roommate_name(
     db,
     pool: dict,
@@ -696,6 +845,23 @@ async def enrich_pool_document(db, p: dict, current_user_id: Optional[str] = Non
     
     items_cursor = db.cart_pool_items.find({"pool_id": pool_id})
     items = await items_cursor.to_list(length=200)
+    viewer_access = build_pool_viewer_access(p, items, current_user_id)
+    p["viewer_access"] = viewer_access
+    p["join_requests"] = visible_join_requests(p, current_user_id, is_host_viewer)
+    if not viewer_access["can_view_pool"]:
+        limited = limited_pool_view(p)
+        limited["viewer_access"] = viewer_access
+        limited["join_requests"] = p["join_requests"]
+        limited["host_phone"] = ""
+        limited["split_breakdown"] = {}
+        limited["payments"] = []
+        limited["reliability_scores"] = {}
+        limited["settlement_summary"] = {}
+        limited["wing_members"] = []
+        limited["host_android_status"] = public_host_android_status()
+        limited["visible_item_count"] = 0
+        return limited
+
     viewer_participant_keys = pool_participant_key_set(items, current_user_id)
     can_view_host_contact = is_host_viewer or bool(viewer_participant_keys)
     p["host_phone"] = host_user.get("phone_number", "") if host_user and can_view_host_contact else ""
@@ -850,7 +1016,11 @@ async def get_cart_pools(user_id: str = Depends(get_current_user)):
         
         items_cursor = db.cart_pool_items.find({"pool_id": p["id"]})
         items = await items_cursor.to_list(length=100)
-        p["items"] = map_docs(items)
+        p["items"] = (
+            map_docs([sanitize_pool_item_for_viewer(item, user_id, p.get("host_id")) for item in items])
+            if (p.get("viewer_access") or {}).get("can_view_pool")
+            else []
+        )
         enriched_pools.append(p)
 
     return enriched_pools
@@ -1002,6 +1172,7 @@ async def create_cart_pool(req: PoolReq, user_id: str = Depends(get_current_user
         "final_overhead": 0,
         "final_discount": 0,
         "payments": [],  # List of {name, utr, status, submitted_at}
+        "join_requests": [],
         "expires_at": parse_expires_at(req.expires_at),
         "auto_nudge_enabled": req.auto_nudge_enabled,
         "nudge_interval_hours": req.nudge_interval_hours,
@@ -1028,6 +1199,111 @@ async def get_pool(pool_id: str, user_id: Optional[str] = Depends(get_optional_c
         
     pool = await enrich_pool_document(db, pool, user_id)
     return pool
+
+@router.post("/{pool_id}/join-request")
+async def request_pool_join(pool_id: str, user_id: str = Depends(get_current_user)):
+    db = get_db()
+    pool = await db.cart_pools.find_one({"_id": pool_id})
+    if not pool:
+        raise HTTPException(status_code=404, detail="Pool not found")
+    pool = await expire_pool_if_needed(db, pool)
+    if pool.get("status") != "open":
+        raise HTTPException(status_code=400, detail="This pool is no longer accepting join requests")
+
+    items = await db.cart_pool_items.find({"pool_id": pool_id}).to_list(length=500)
+    access = build_pool_viewer_access(pool, items, user_id)
+    if access["state"] in {"host", "approved", "pending"}:
+        return await pool_response(db, pool, user_id)
+    if access["state"] == "rejected":
+        raise HTTPException(status_code=403, detail="The host declined this join request")
+
+    user = await db.users.find_one({"_id": user_id}) or {}
+    profile = await db.profiles.find_one({"_id": user_id}) or {}
+    now = utcnow().isoformat()
+    requests = pool_join_requests(pool)
+    requests.append({
+        "user_id": user_id,
+        "name": clean_text(user.get("full_name") or "Roommate", "Roommate name"),
+        "email": user.get("email") or "",
+        "wing_label": profile.get("wing_label") or "",
+        "room_number": profile.get("room_number") or "",
+        "status": "pending",
+        "requested_at": now,
+        "decided_at": None,
+        "decided_by": None,
+    })
+    await db.cart_pools.update_one(
+        {"_id": pool_id},
+        {"$set": {"join_requests": requests, "join_requests_updated_at": utcnow()}},
+    )
+    updated = await db.cart_pools.find_one({"_id": pool_id})
+    return await pool_response(db, updated, user_id)
+
+
+def apply_join_request_decision(pool: dict, request_user_id: str, action: str, host_user_id: str) -> list[dict]:
+    request_user_id = clean_text(request_user_id, "Requester")
+    if action not in {"approved", "rejected"}:
+        raise HTTPException(status_code=400, detail="Invalid join request action")
+    requests = pool_join_requests(pool)
+    now = utcnow().isoformat()
+    found = False
+    updated_requests = []
+    for request in requests:
+        current = dict(request)
+        if current.get("user_id") == request_user_id:
+            found = True
+            if current.get("status") == "approved" and action == "approved":
+                updated_requests.append(current)
+                continue
+            if current.get("status") == "approved" and action == "rejected":
+                raise HTTPException(status_code=400, detail="Approved participants cannot be rejected after approval")
+            current["status"] = action
+            current["decided_at"] = now
+            current["decided_by"] = host_user_id
+        updated_requests.append(current)
+    if not found:
+        raise HTTPException(status_code=404, detail="Join request not found")
+    return updated_requests
+
+
+@router.post("/{pool_id}/join-requests/approve")
+async def approve_pool_join_request(pool_id: str, req: JoinDecisionReq, user_id: str = Depends(get_current_user)):
+    db = get_db()
+    pool = await db.cart_pools.find_one({"_id": pool_id})
+    if not pool:
+        raise HTTPException(status_code=404, detail="Pool not found")
+    pool = await expire_pool_if_needed(db, pool)
+    if pool.get("host_id") != user_id:
+        raise HTTPException(status_code=403, detail="Only the pool host can approve join requests")
+    if not is_pool_open_for_join(pool):
+        raise HTTPException(status_code=400, detail="Join requests can be approved only while the pool is open")
+    requests = apply_join_request_decision(pool, req.user_id, "approved", user_id)
+    await db.cart_pools.update_one(
+        {"_id": pool_id},
+        {"$set": {"join_requests": requests, "join_requests_updated_at": utcnow()}},
+    )
+    updated = await db.cart_pools.find_one({"_id": pool_id})
+    return await pool_response(db, updated, user_id)
+
+
+@router.post("/{pool_id}/join-requests/reject")
+async def reject_pool_join_request(pool_id: str, req: JoinDecisionReq, user_id: str = Depends(get_current_user)):
+    db = get_db()
+    pool = await db.cart_pools.find_one({"_id": pool_id})
+    if not pool:
+        raise HTTPException(status_code=404, detail="Pool not found")
+    pool = await expire_pool_if_needed(db, pool)
+    if pool.get("host_id") != user_id:
+        raise HTTPException(status_code=403, detail="Only the pool host can reject join requests")
+    if not is_pool_open_for_join(pool):
+        raise HTTPException(status_code=400, detail="Join requests can be rejected only while the pool is open")
+    requests = apply_join_request_decision(pool, req.user_id, "rejected", user_id)
+    await db.cart_pools.update_one(
+        {"_id": pool_id},
+        {"$set": {"join_requests": requests, "join_requests_updated_at": utcnow()}},
+    )
+    updated = await db.cart_pools.find_one({"_id": pool_id})
+    return await pool_response(db, updated, user_id)
 
 @router.put("/{pool_id}")
 async def update_pool(pool_id: str, req: PoolUpdateReq, user_id: str = Depends(get_current_user)):
@@ -1327,6 +1603,9 @@ async def get_pool_items(pool_id: str, user_id: Optional[str] = Depends(get_opti
         raise HTTPException(status_code=404, detail="Pool not found")
     cursor = db.cart_pool_items.find({"pool_id": pool_id}).sort("created_at", 1)
     items = await cursor.to_list(length=500)
+    access = build_pool_viewer_access(pool, items, user_id)
+    if not access["can_view_pool"]:
+        return []
     safe_items = [
         sanitize_pool_item_for_viewer(item, user_id, pool.get("host_id"))
         for item in items
@@ -1367,6 +1646,15 @@ async def insert_pool_item(pool_id: str, req: PoolItemReq, user_id: str = Depend
         raise HTTPException(status_code=400, detail="This pool is no longer accepting items.")
     if is_pool_expired(pool):
         raise HTTPException(status_code=400, detail="This pool has expired.")
+
+    existing_items = await db.cart_pool_items.find({"pool_id": pool_id}).to_list(length=500)
+    access = build_pool_viewer_access(pool, existing_items, user_id)
+    if not access["can_add_item"]:
+        if access["state"] == "pending":
+            raise HTTPException(status_code=403, detail="Wait for the host to approve your join request before adding items")
+        if access["state"] == "rejected":
+            raise HTTPException(status_code=403, detail="The host declined this join request")
+        raise HTTPException(status_code=403, detail="Request host approval before adding items to this pool")
 
     # Robustness Limit Validation
     if req.estimated_price <= 0 or req.estimated_price > MAX_ITEM_PRICE_PAISE:

@@ -24,12 +24,16 @@ export function PlatformIcon({ platform, name, className = "h-5 w-5" }: { platfo
   } else if (normalized === "jiomart" || normalized.includes("jiomart")) {
     logoSrc = "/logos/platforms/jiomart.svg";
     shadowClass = "shadow-[0_2px_8px_rgba(227,5,19,0.15)]";
+  } else if (normalized === "zomato" || normalized.includes("zomato")) {
+    logoSrc = "/logos/platforms/zomato.png";
+    shadowClass = "shadow-[0_2px_8px_rgba(226,55,68,0.2)]";
   }
 
   if (logoSrc) {
     const isZepto = normalized === "zepto" || normalized.includes("zepto");
     const isJioMart = normalized === "jiomart" || normalized.includes("jiomart");
-    const paddingClass = (isZepto || isJioMart) ? "p-0" : "p-0.5";
+    const isZomato = normalized === "zomato" || normalized.includes("zomato");
+    const paddingClass = (isZepto || isJioMart || isZomato) ? "p-0" : "p-0.5";
     return (
       <div className={`flex items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-white shrink-0 ${shadowClass} ${paddingClass} ${className}`}>
         <img

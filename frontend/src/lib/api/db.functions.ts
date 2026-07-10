@@ -224,6 +224,26 @@ export async function updateCartPool({ id, data }: { id: string; data: any }) {
   });
 }
 
+export async function requestCartPoolJoin({ pool_id }: { pool_id: string }) {
+  return apiRequest(`/api/cart-pools/${pool_id}/join-request`, {
+    method: "POST",
+  });
+}
+
+export async function approveCartPoolJoin({ pool_id, user_id }: { pool_id: string; user_id: string }) {
+  return apiRequest(`/api/cart-pools/${pool_id}/join-requests/approve`, {
+    method: "POST",
+    body: JSON.stringify({ user_id }),
+  });
+}
+
+export async function rejectCartPoolJoin({ pool_id, user_id }: { pool_id: string; user_id: string }) {
+  return apiRequest(`/api/cart-pools/${pool_id}/join-requests/reject`, {
+    method: "POST",
+    body: JSON.stringify({ user_id }),
+  });
+}
+
 export async function getCartPoolItems({ data }: { data: { pool_id: string } }) {
   return apiRequest(`/api/cart-pools/${data.pool_id}/items`);
 }

@@ -258,25 +258,25 @@ function getSelectedTimeContext(selection: TravelTimeSelection, currentContext: 
 function SourceBadge({ label }: { label?: string }) {
   const l = label?.toLowerCase() || "";
   if (l === "stale")
-    return <Badge className="text-[8px] bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 py-0 px-1.5 font-medium shrink-0">Stale fares</Badge>;
+    return <Badge className="text-xs bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 py-1 px-2 font-medium shrink-0">Stale fares</Badge>;
   if (l === "community median" || l === "community" || l === "student_reports")
-    return <Badge className="text-[8px] bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-600 dark:text-indigo-400 py-0 px-1.5 font-medium shrink-0">Student reports</Badge>;
+    return <Badge className="text-xs bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-600 dark:text-indigo-400 py-1 px-2 font-medium shrink-0">Student reports</Badge>;
   if (l === "recent student report" || l === "recent report")
-    return <Badge className="text-[8px] bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-0 px-1.5 font-medium shrink-0">Recent report</Badge>;
+    return <Badge className="text-xs bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-1 px-2 font-medium shrink-0">Recent report</Badge>;
   if (l === "official")
-    return <Badge className="text-[8px] bg-green-500/10 border border-green-200 dark:border-green-500/20 text-green-600 dark:text-green-400 py-0 px-1.5 font-medium shrink-0">Verified</Badge>;
-  return <Badge className="text-[8px] bg-zinc-700/10 dark:bg-zinc-700/30 border border-zinc-200 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-500 py-0 px-1.5 font-medium shrink-0">Model estimate</Badge>;
+    return <Badge className="text-xs bg-green-500/10 border border-green-200 dark:border-green-500/20 text-green-600 dark:text-green-400 py-1 px-2 font-medium shrink-0">Verified</Badge>;
+  return <Badge className="text-xs bg-zinc-700/10 dark:bg-zinc-700/30 border border-zinc-200 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-500 py-1 px-2 font-medium shrink-0">Model estimate</Badge>;
 }
 
 function ConfidenceBadge({ confidence }: { confidence?: string }) {
   const c = confidence?.toLowerCase() || "low";
   if (c === "high") {
-    return <Badge className="text-[8px] bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 py-0 px-1.5 font-bold uppercase shrink-0">High Trust</Badge>;
+    return <Badge className="text-xs bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 py-1 px-2 font-bold uppercase shrink-0">High Trust</Badge>;
   }
   if (c === "medium") {
-    return <Badge className="text-[8px] bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 py-0 px-1.5 font-bold uppercase shrink-0">Medium Trust</Badge>;
+    return <Badge className="text-xs bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 py-1 px-2 font-bold uppercase shrink-0">Medium Trust</Badge>;
   }
-  return <Badge className="text-[8px] bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 text-amber-600 dark:text-amber-500/80 py-0 px-1.5 font-bold uppercase shrink-0">Low Trust</Badge>;
+  return <Badge className="text-xs bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 text-amber-600 dark:text-amber-500/80 py-1 px-2 font-bold uppercase shrink-0">Low Trust</Badge>;
 }
 
 function placeSourceLabel(source?: string) {
@@ -495,7 +495,7 @@ function PlaceSuggestionsDropdown({
       onPointerDown={(event) => event.preventDefault()}
       onMouseDown={(event) => event.preventDefault()}
       onClick={handleManualSelect}
-      className="mt-1 flex w-full items-center justify-between gap-2 rounded-md border border-dashed border-border bg-surface/60 px-2.5 py-2 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
+      className="mt-1 flex w-full items-center justify-between gap-2 rounded-md border border-dashed border-border bg-surface/60 px-2.5 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
     >
       <span className="min-w-0 truncate">Use "{typedQuery}" and verify while estimating</span>
       <Search className="h-3.5 w-3.5 shrink-0" />
@@ -505,7 +505,7 @@ function PlaceSuggestionsDropdown({
   if (loading) {
     return (
       <div className="absolute left-0 right-0 top-full z-[80] mt-1.5 rounded-lg border border-border bg-background p-2 shadow-2xl">
-        <p className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground">
+        <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
           Finding nearby places...
         </p>
       </div>
@@ -514,7 +514,7 @@ function PlaceSuggestionsDropdown({
   if (!suggestions.length) {
     return (
       <div className="absolute left-0 right-0 top-full z-[80] mt-1.5 rounded-lg border border-border bg-background p-2 shadow-2xl">
-        <p className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground">
+        <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
           No reliable match yet{query.trim() ? ` for "${query.trim()}"` : ""}. Add city or choose a nearby landmark.
         </p>
         {manualButton}
@@ -541,12 +541,12 @@ function PlaceSuggestionsDropdown({
               {suggestion.label}
             </span>
             {suggestion.secondary ? (
-              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                 {suggestion.secondary}
               </span>
             ) : null}
           </span>
-          <span className="shrink-0 rounded-full bg-surface px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="shrink-0 rounded-full bg-surface px-2 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {placeSourceLabel(suggestion.source)}
           </span>
         </button>
@@ -1361,7 +1361,7 @@ function TravelPage() {
           <div className="space-y-3 p-3 sm:space-y-4 sm:p-5 xl:p-6">
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] xl:items-start">
               <div className="min-w-0 space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Travel Guard</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Travel Guard</p>
                 <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-2xl">Plan a campus ride</h2>
                 <p className="max-w-3xl text-xs leading-relaxed text-muted-foreground">
                   Know the normal fare before you bargain. PocketBuddy maps the route, adjusts for timing, and gives a walk-away limit.
@@ -1374,7 +1374,7 @@ function TravelPage() {
                     className="h-12 w-full rounded-lg border-border bg-background px-3 py-2 text-left shadow-sm transition-colors hover:border-primary/30 hover:bg-surface focus:ring-1 focus:ring-primary/25 [&>span]:line-clamp-none"
                   >
                     <span className="min-w-0 text-left">
-                      <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Campus</span>
+                      <span className="block text-xs font-medium uppercase tracking-wider text-muted-foreground">Campus</span>
                       <SelectValue placeholder="Select campus" />
                     </span>
                   </SelectTrigger>
@@ -1414,7 +1414,7 @@ function TravelPage() {
                           setCustomCollegeDraft("");
                           setCampusEditorOpen(true);
                         }}
-                        className="w-fit rounded-md border border-amber-500/30 bg-background px-2.5 py-1.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-surface"
+                        className="w-fit rounded-md border border-amber-500/30 bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-surface"
                       >
                         Set campus
                       </button>
@@ -1425,7 +1425,7 @@ function TravelPage() {
                 <div ref={routeSearchRef} className="relative z-30 overflow-visible rounded-lg border border-border bg-background p-1.5 shadow-sm">
                   <div className="grid grid-cols-1 gap-1.5">
                     <div className={`relative rounded-md px-3 py-2 transition-colors hover:bg-surface/60 focus-within:bg-surface focus-within:ring-1 focus-within:ring-primary/20 ${originSuggestionsOpen ? "z-[70]" : "z-10"}`}>
-                      <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                         <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                         Pickup
                       </div>
@@ -1473,14 +1473,14 @@ function TravelPage() {
                         />
                       </div>
                       {selectedOriginPlace ? (
-                        <p className="mt-1 truncate text-[10px] font-medium text-primary">{selectedOriginPlace.label}</p>
+                        <p className="mt-1 truncate text-xs font-medium text-primary">{selectedOriginPlace.label}</p>
                       ) : manualOriginText && manualOriginText === dynamicOrigin.trim() ? (
-                        <p className="mt-1 truncate text-[10px] font-medium text-muted-foreground">Typed place. PocketBuddy will verify it while estimating.</p>
+                        <p className="mt-1 truncate text-xs font-medium text-muted-foreground">Typed place. PocketBuddy will verify it while estimating.</p>
                       ) : null}
                     </div>
 
                     <div className={`relative rounded-md px-3 py-2 transition-colors hover:bg-surface/60 focus-within:bg-surface focus-within:ring-1 focus-within:ring-primary/20 ${destinationSuggestionsOpen ? "z-[70]" : "z-10"}`}>
-                      <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                         Destination
                       </div>
@@ -1528,9 +1528,9 @@ function TravelPage() {
                         />
                       </div>
                       {selectedDestinationPlace ? (
-                        <p className="mt-1 truncate text-[10px] font-medium text-primary">{selectedDestinationPlace.label}</p>
+                        <p className="mt-1 truncate text-xs font-medium text-primary">{selectedDestinationPlace.label}</p>
                       ) : manualDestinationText && manualDestinationText === dynamicDestination.trim() ? (
-                        <p className="mt-1 truncate text-[10px] font-medium text-muted-foreground">Typed place. PocketBuddy will verify it while estimating.</p>
+                        <p className="mt-1 truncate text-xs font-medium text-muted-foreground">Typed place. PocketBuddy will verify it while estimating.</p>
                       ) : null}
                     </div>
 
@@ -1540,7 +1540,7 @@ function TravelPage() {
                     <Select value={fareTimeSelection} onValueChange={(value) => setFareTimeSelection(value as TravelTimeSelection)}>
                       <SelectTrigger className="h-10 rounded-md border-border bg-surface text-xs">
                         <span className="min-w-0 text-left">
-                          <span className="block text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Travel time</span>
+                          <span className="block text-xs font-medium uppercase tracking-wider text-muted-foreground">Travel time</span>
                           <SelectValue />
                         </span>
                       </SelectTrigger>
@@ -1572,7 +1572,7 @@ function TravelPage() {
                 <div className="rounded-xl border border-border bg-background p-3 shadow-sm">
                   <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                         <ShieldCheck className="h-3.5 w-3.5 text-primary" />
                         Current move
                       </div>
@@ -1584,29 +1584,29 @@ function TravelPage() {
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 sm:min-w-[116px] sm:flex-col sm:items-start sm:gap-0.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Anchor fare</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Anchor fare</span>
                       <span className="text-lg font-semibold tabular-nums text-foreground">{heroFareAnchor ? `₹${heroFareAnchor}` : "--"}</span>
                     </div>
                   </div>
 
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     <div className="rounded-lg border border-border/70 bg-surface px-3 py-1.5">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Time</p>
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Time</p>
                       <p className="mt-1 truncate text-xs font-semibold text-foreground">{timeContext.label}</p>
                     </div>
                     <div className="rounded-lg border border-border/70 bg-surface px-3 py-1.5">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Range</p>
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Range</p>
                       <p className="mt-1 truncate text-xs font-semibold text-foreground">{heroFareRange || "Pending"}</p>
                     </div>
                     <div className="rounded-lg border border-border/70 bg-surface px-3 py-1.5">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Limit</p>
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Limit</p>
                       <p className="mt-1 truncate text-xs font-semibold text-foreground">{heroAcceptLimit || "After quote"}</p>
                     </div>
                   </div>
 
                   {estimatedResult?.modes?.length ? (
                     <div className="mt-2">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Mode</p>
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mode</p>
                       <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {estimatedResult.modes.slice(0, 4).map((mode: any) => {
                           const modeStyle = travelModeStyle(mode.mode);
@@ -1616,14 +1616,14 @@ function TravelPage() {
                               key={mode.mode}
                               type="button"
                               onClick={() => setEstimatedModeOverride(mode.mode)}
-                              className={`rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                              className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
                                 isActive
                                   ? "border-primary/60 bg-primary/10 text-foreground ring-1 ring-primary/15"
                                   : "border-border/70 bg-surface text-muted-foreground hover:bg-surface-raised hover:text-foreground"
                               }`}
                             >
-                              <span className="block truncate text-[11px] font-semibold">{modeStyle.label}</span>
-                              <span className="mt-0.5 block truncate text-[10px] font-medium">₹{mode.min_fare}–₹{mode.max_fare}</span>
+                              <span className="block truncate text-xs font-bold leading-none">{modeStyle.label}</span>
+                              <span className="mt-1 block truncate text-sm font-black leading-none tnum">₹{mode.min_fare}–₹{mode.max_fare}</span>
                             </button>
                           );
                         })}
@@ -1651,7 +1651,7 @@ function TravelPage() {
             <div className="border-t border-border px-4 py-4 sm:px-5 lg:px-6 animate-[fadeIn_0.25s_ease-out]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Travel state</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Travel state</span>
                   <Select value={travelIntent} onValueChange={(value) => setTravelIntent(value as TravelIntent)}>
                     <SelectTrigger className="h-8 w-[112px] rounded-md border-border bg-surface text-xs">
                       <SelectValue />
@@ -1705,7 +1705,7 @@ function TravelPage() {
               </div>
 
               {estimatedResult.resolution_warning ? (
-                <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] font-medium leading-relaxed text-amber-700 dark:text-amber-300">
+                <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs font-medium leading-relaxed text-amber-700 dark:text-amber-300">
                   {estimatedResult.resolution_warning}
                 </div>
               ) : null}
@@ -1727,14 +1727,14 @@ function TravelPage() {
                             <span className={`h-2 w-2 rounded-full ${modeStyle.dotClassName}`} />
                             <p className="truncate text-xs font-semibold text-foreground">{modeStyle.label}</p>
                             {isBestValue ? (
-                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary">Best value</span>
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Best value</span>
                             ) : null}
                           </div>
-                          <p className="mt-1 text-[10px] text-muted-foreground">{fareSourceLabel(m)}. {modeStyle.note}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{fareSourceLabel(m)}. {modeStyle.note}</p>
                         </div>
                         <div className="text-right sm:text-left">
                           <p className={`text-sm font-semibold tracking-tight ${modeStyle.textClassName}`}>₹{m.min_fare} - ₹{m.max_fare}</p>
-                          <p className="text-[10px] text-muted-foreground">Expected range</p>
+                          <p className="text-xs text-muted-foreground">Expected range</p>
                         </div>
                         <div className="col-span-2 text-left sm:col-span-1 sm:text-right">
                           <p className="text-xs font-medium text-foreground">{fareTypicalLabel(m)} ₹{m.median_fare}</p>
@@ -1762,20 +1762,20 @@ function TravelPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <p className="text-sm font-semibold tracking-tight text-foreground">Campus routes</p>
-                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
                     {routes.length} routes
                   </span>
                 </div>
                 {selectedRouteParts ? (
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     Current: {selectedRouteParts.from} to {selectedRouteParts.to}
                   </p>
                 ) : (
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Pick a campus route for quote checks and coaching</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">Pick a campus route for quote checks and coaching</p>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="rounded-md border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground">
+                <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
                   {savedRoutesOpen ? "Hide" : "Change"}
                 </span>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${savedRoutesOpen ? "rotate-180" : ""}`} />
@@ -1818,7 +1818,7 @@ function TravelPage() {
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <p className={`truncate text-xs font-semibold ${isActiveRoute ? "text-primary" : "text-foreground"}`}>{parts.from}</p>
                           {isActiveRoute ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary">
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
                               <Check className="h-3 w-3" />
                               Viewing
                             </span>
@@ -1826,9 +1826,9 @@ function TravelPage() {
                             <SourceBadge label={r.source} />
                           )}
                         </div>
-                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Destination: {parts.to}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">Destination: {parts.to}</p>
                       </div>
-                      <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground sm:justify-end">
+                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground sm:justify-end">
                         <span>{r.distance_km ? `${r.distance_km} km` : "Distance pending"}</span>
                         {primaryMode ? <span className="font-medium text-foreground">{fareTypicalLabel(primaryMode)} ₹{primaryMode.median_fare}</span> : null}
                       </div>
@@ -1872,7 +1872,7 @@ function TravelPage() {
                 return (
                   <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(290px,0.68fr)_minmax(260px,0.6fr)] xl:items-center">
                     <div className="min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Selected route</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Selected route</p>
                       <div className="mt-2 flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />
@@ -1880,14 +1880,14 @@ function TravelPage() {
                             {selectedRouteParts?.from || "Saved route"}
                           </h2>
                         </div>
-                        <span className="hidden text-[11px] font-medium text-muted-foreground sm:inline">to</span>
+                        <span className="hidden text-xs font-medium text-muted-foreground sm:inline">to</span>
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-success" />
                           <p className="truncate text-sm font-medium text-foreground">{selectedRouteParts?.to || "Campus"}</p>
                         </div>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs font-medium text-muted-foreground">
                         {selectedRoute.distance_km ? (
                           <span className="rounded-full border border-border bg-background px-2 py-1">{selectedRoute.distance_km} km</span>
                         ) : null}
@@ -1918,8 +1918,8 @@ function TravelPage() {
                                 : "border-border bg-background text-muted-foreground hover:bg-surface-raised/45 hover:text-foreground"
                             }`}
                           >
-                            <span className="block text-[10px] font-semibold">{travelModeStyle(m.mode).label}</span>
-                            <span className="block text-[10px]">₹{m.min_fare}–{m.max_fare}</span>
+                            <span className="block text-xs font-bold leading-none">{travelModeStyle(m.mode).label}</span>
+                            <span className="mt-1 block text-sm font-black leading-none tnum">₹{m.min_fare}–₹{m.max_fare}</span>
                           </button>
                         );
                       })}
@@ -1928,22 +1928,22 @@ function TravelPage() {
                     <div className="rounded-lg border border-border bg-background/80 px-3 py-2.5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                             <Clock className="h-3 w-3" />
                             Fare timing
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <span className="text-sm font-semibold tabular-nums text-foreground">₹{peakEstimate}</span>
-                            <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-muted-foreground">
                               {modeLabel}
                             </span>
-                            <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-muted-foreground">
                               {timeContext.label}
                             </span>
                           </div>
                         </div>
                         <Select value={fareTimeSelection} onValueChange={(value) => setFareTimeSelection(value as TravelTimeSelection)}>
-                          <SelectTrigger className="h-8 w-[96px] shrink-0 rounded-md border-border bg-surface px-2 text-[10px]">
+                          <SelectTrigger className="h-8 w-[104px] shrink-0 rounded-md border-border bg-surface px-2 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-background border border-border text-foreground">
@@ -1956,7 +1956,7 @@ function TravelPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                      <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                         {isHighPeak
                           ? "High fare risk. Prefer a pre-booked ride or travel with classmates."
                           : isMildPeak
@@ -1980,7 +1980,7 @@ function TravelPage() {
                 { id: "reports" as const, icon: Users, label: "Reports" },
               ]).map(({ id, icon: Icon, label }, idx) => (
                 <button key={id} onClick={() => setActiveDetailTab(id)}
-                  className={`flex-1 py-2.5 text-[10px] font-medium transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${idx < 3 ? "border-r border-border " : ""}${activeDetailTab === id ? "bg-surface-raised text-foreground shadow-[inset_0_2px_0_var(--primary)]" : "text-muted-foreground hover:text-foreground hover:bg-surface/70"}`}>
+                  className={`flex-1 py-2.5 text-xs font-medium transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${idx < 3 ? "border-r border-border " : ""}${activeDetailTab === id ? "bg-surface-raised text-foreground shadow-[inset_0_2px_0_var(--primary)]" : "text-muted-foreground hover:text-foreground hover:bg-surface/70"}`}>
                   <Icon className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{label}</span>
                   <span className="sm:hidden">{label.split(" ")[0]}</span>
@@ -2004,7 +2004,7 @@ function TravelPage() {
                         <Info className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs font-medium text-muted-foreground">
                       <span className="max-w-full truncate rounded-full border border-border bg-background px-2 py-1 text-foreground">
                         {selectedRouteParts?.from || "Pickup"} to {selectedRouteParts?.to || "Destination"}
                       </span>
@@ -2020,8 +2020,8 @@ function TravelPage() {
                 </div>
 
                 {showCheckInfo && (
-                  <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-1.5 animate-[fadeIn_0.15s_ease-out] text-[11px] md:text-xs text-muted-foreground">
-                    <p className="font-semibold text-foreground text-[11px] md:text-xs">How the fair zone is calculated</p>
+                  <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-1.5 animate-[fadeIn_0.15s_ease-out] text-xs text-muted-foreground">
+                    <p className="font-semibold text-foreground text-xs">How the fair zone is calculated</p>
                     <ul className="list-disc pl-4 space-y-1">
                       <li>We calculate road distance from mapped routes when available.</li>
                       <li>We apply transparent campus-local fare rules based on distance and city context.</li>
@@ -2032,12 +2032,12 @@ function TravelPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] md:text-xs font-medium text-muted-foreground">Driver quote (₹)</label>
+                    <label className="text-xs font-medium text-muted-foreground">Driver quote (₹)</label>
                     <Input id="input-driver-quote" type="number" placeholder="e.g. 350" value={driverQuote}
                       onChange={(e) => setDriverQuote(e.target.value)} className="bg-surface-raised border-border text-sm font-bold h-11" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] md:text-xs font-medium text-muted-foreground">{timeContext.label} range for {selectedMode.split(" ")[0]}</label>
+                    <label className="text-xs font-medium text-muted-foreground">{timeContext.label} range for {selectedMode.split(" ")[0]}</label>
                     <div className="h-11 bg-surface-raised border border-border rounded-lg flex items-center px-3">
                       {(() => {
                         const md = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
@@ -2076,20 +2076,20 @@ function TravelPage() {
                         <div className="absolute top-0.5 bottom-0.5 w-1.5 rounded-full bg-white shadow"
                           style={{ left: `${Math.min(95, (parseFloat(driverQuote) / Math.max(parseFloat(driverQuote), overchargeAnalysis.normalMax + 50)) * 90)}%` }} />
                       </div>
-                      <div className="flex justify-between text-[9px] md:text-xs text-muted-foreground font-bold">
+                      <div className="flex justify-between text-xs text-muted-foreground font-bold">
                         <span>Fair zone ₹{overchargeAnalysis.normalMin}–₹{overchargeAnalysis.normalMax}</span>
                         <span>Your quote ₹{driverQuote}</span>
                       </div>
                     </div>
                     {overchargeAnalysis.isOvercharged && (
                       <div className="pt-2 border-t border-border/30">
-                        <p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">You negotiated it down?</p>
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">You negotiated it down?</p>
                         <div className="flex gap-2">
                           <Input id="input-negotiated-amount" type="number" placeholder="Amount you actually paid (₹)"
                             value={negotiatedAmount} onChange={(e) => setNegotiatedAmount(e.target.value)}
                             className="bg-background border-border text-xs h-9 flex-1" />
                           <Button id="btn-log-savings" disabled={!negotiatedAmount || logSavingsMutation.isPending} onClick={handleLogSavings}
-                            className="bg-green-600 text-white hover:bg-green-500 text-[10px] md:text-xs font-bold uppercase tracking-wider h-9 shrink-0">
+                            className="bg-green-600 text-white hover:bg-green-500 text-xs font-bold uppercase tracking-wider h-9 shrink-0">
                             Log Savings
                           </Button>
                         </div>
@@ -2110,17 +2110,17 @@ function TravelPage() {
                       return (
                         <div key={m.mode} className={`p-3.5 rounded-xl border transition-all ${isTarget ? "bg-primary/5 border-primary/40" : "bg-surface-raised border-border"}`}>
                           <div className="flex justify-between items-start gap-1">
-                            <p className="text-[11px] md:text-xs font-semibold text-foreground">{m.mode.split(" ")[0]}</p>
-                            {isTarget && <Badge className="text-[8px] bg-primary text-primary-foreground font-bold uppercase py-0 px-1 shrink-0">Active</Badge>}
+                            <p className="text-xs font-bold text-foreground">{m.mode.split(" ")[0]}</p>
+                            {isTarget && <Badge className="text-xs bg-primary text-primary-foreground font-bold uppercase py-0.5 px-2 shrink-0">Active</Badge>}
                           </div>
                           <div className="flex justify-between items-baseline mt-2">
                             <div>
-                              <p className="text-[10px] md:text-xs text-muted-foreground">Expected range</p>
-                              <p className="text-base font-black text-foreground font-mono">₹{m.min_fare} - ₹{m.max_fare}</p>
+                              <p className="text-xs text-muted-foreground">Expected range</p>
+                              <p className="text-lg font-black text-foreground tnum">₹{m.min_fare} - ₹{m.max_fare}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-[10px] md:text-xs text-muted-foreground font-medium">Suggested anchor</p>
-                              <p className="text-xs font-mono font-bold text-primary">₹{m.median_fare}</p>
+                              <p className="text-xs text-muted-foreground font-medium">Suggested anchor</p>
+                              <p className="text-sm font-mono font-black text-primary">₹{m.median_fare}</p>
                             </div>
                           </div>
                         </div>
@@ -2147,7 +2147,7 @@ function TravelPage() {
                         <div className="absolute w-2 h-2 bg-white border border-primary rounded-full top-0 -translate-x-1/2"
                           style={{ left: `${(m.median_fare / 800) * 100}%` }} />
                       </div>
-                      <div className="flex justify-between text-[9px] md:text-xs text-muted-foreground font-bold">
+                      <div className="flex justify-between text-xs text-muted-foreground font-bold">
                         <span>Min ₹{m.min_fare}</span><span>Typical ₹{m.median_fare}</span><span>Max ₹{m.max_fare}</span>
                       </div>
                     </div>
@@ -2202,7 +2202,7 @@ function TravelPage() {
                   </div>
                   {splitFareData && (
                     <div className="shrink-0 sm:text-right">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Standard split</p>
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Standard split</p>
                       <p className="text-3xl font-semibold tracking-tight text-primary">₹{splitFareData.perPerson}</p>
                     </div>
                   )}
@@ -2210,18 +2210,18 @@ function TravelPage() {
 
                 <div className="grid grid-cols-1 gap-4 border-y border-border/70 py-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-medium text-muted-foreground">Transport mode</label>
+                    <label className="text-xs font-medium text-muted-foreground">Transport mode</label>
                     <div className="flex flex-wrap gap-2">
                       {selectedRoute.modes.map((m) => (
                         <button key={m.mode} onClick={() => setSplitMode(m.mode)}
-                          className={`rounded-full px-3 py-1.5 text-[10px] font-medium transition-colors cursor-pointer ${splitMode === m.mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}>
+                          className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${splitMode === m.mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}>
                           {m.mode.split(" ")[0]}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-medium text-muted-foreground">People sharing</label>
+                    <label className="text-xs font-medium text-muted-foreground">People sharing</label>
                     <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-border bg-background">
                       {[2, 3, 4, 5].map((n, idx) => (
                         <button key={n} onClick={() => setSplitPeople(n)}
@@ -2261,7 +2261,7 @@ function TravelPage() {
                           <SplitSquareHorizontal className="h-4 w-4 text-primary" />
                           <h3 className="text-xs font-semibold tracking-tight text-foreground">Ride strategy</h3>
                         </div>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">Direct is simplest. Two-hop is only for familiar, public, busy transfer points.</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Direct is simplest. Two-hop is only for familiar, public, busy transfer points.</p>
                       </div>
 
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2293,7 +2293,7 @@ function TravelPage() {
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-xs font-semibold text-foreground">{option.title}</p>
-                                <p className="mt-0.5 text-[11px] text-muted-foreground">{option.note}</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">{option.note}</p>
                               </div>
                               <p className="shrink-0 text-sm font-semibold text-primary">₹{option.price}</p>
                             </div>
@@ -2304,8 +2304,8 @@ function TravelPage() {
                       {splitTravelType === "split" && (
                         <div className="rounded-2xl bg-background/45 p-2">
                           <div className="flex flex-col gap-1 px-1 pb-2 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Pick the hop style</p>
-                            <p className="text-[10px] text-muted-foreground">This changes route cost, not group size.</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Pick the hop style</p>
+                            <p className="text-xs text-muted-foreground">This changes route cost, not group size.</p>
                           </div>
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                             {[
@@ -2335,7 +2335,7 @@ function TravelPage() {
                                 <div className="flex items-start justify-between gap-2">
                                   <div>
                                     <p className="text-xs font-semibold">{option.title}</p>
-                                    <p className="mt-0.5 text-[10px] leading-relaxed">{option.note}</p>
+                                    <p className="mt-0.5 text-xs leading-relaxed">{option.note}</p>
                                   </div>
                                   <span className="shrink-0 text-xs font-semibold text-primary">₹{option.price}</span>
                                 </div>
@@ -2379,22 +2379,22 @@ function TravelPage() {
                         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-3">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Transfer point</p>
+                              <p className="text-xs font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Transfer point</p>
                               <p className="mt-0.5 text-sm font-semibold text-foreground">{splitInfo.stopName}</p>
-                              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{splitInfo.tip}</p>
+                              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{splitInfo.tip}</p>
                             </div>
-                            <Badge className="w-fit border border-emerald-500/20 bg-background text-[9px] text-emerald-600 dark:text-emerald-400">
+                            <Badge className="w-fit border border-emerald-500/20 bg-background text-xs text-emerald-600 dark:text-emerald-400">
                               {splitInfo.confidence || "medium"} confidence
                             </Badge>
                           </div>
                           {splitInfo.avoidWhen?.length ? (
-                            <p className="mt-2 text-[10px] text-muted-foreground">
+                            <p className="mt-2 text-xs text-muted-foreground">
                               Avoid when: {splitInfo.avoidWhen.join(", ")}.
                             </p>
                           ) : null}
                         </div>
                       ) : !splitInfo.available ? (
-                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3.5 py-3 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3.5 py-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
                           {splitInfo.tip}
                         </div>
                       ) : null}
@@ -2404,7 +2404,7 @@ function TravelPage() {
                           <p className="font-semibold text-foreground">
                             {splitTravelType === "split" ? hopStyleLabel : "Direct ride"} total: ₹{selectedStrategyFare}
                           </p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          <p className="mt-0.5 text-xs text-muted-foreground">
                             If {splitPeople} people share this option, each pays about ₹{selectedStrategyPerPerson}.
                           </p>
                         </div>
@@ -2418,20 +2418,20 @@ function TravelPage() {
                       {splitTravelType === "split" && (
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
                           <div className="border-l-2 border-emerald-500 pl-3">
-                            <p className="text-[10px] font-medium text-muted-foreground">Estimated saving</p>
+                            <p className="text-xs font-medium text-muted-foreground">Estimated saving</p>
                             <p className="text-lg font-semibold tracking-tight text-emerald-500">
                               {savings > 0 ? `₹${savings}` : "No saving"}
                             </p>
-                            <p className="text-[10px] text-muted-foreground">{savingsPct > 0 ? `${savingsPct}% vs direct` : "Choose direct if safer"}</p>
+                            <p className="text-xs text-muted-foreground">{savingsPct > 0 ? `${savingsPct}% vs direct` : "Choose direct if safer"}</p>
                           </div>
-                          <p className="text-[11px] leading-relaxed text-muted-foreground">{splitInfo.tip}</p>
+                          <p className="text-xs leading-relaxed text-muted-foreground">{splitInfo.tip}</p>
                         </div>
                       )}
                     </div>
                   );
                 })()}
 
-                <p className="border-t border-border/60 pt-3 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="border-t border-border/60 pt-3 text-xs leading-relaxed text-muted-foreground">
                   Use this estimate before booking so everyone sees the same fair share. Payment stays outside PocketBuddy.
                 </p>
               </Card>
@@ -2465,13 +2465,13 @@ function TravelPage() {
                           </div>
                           <p className="mt-0.5 text-xs text-muted-foreground">Turn the fare anchor into a polite counter-offer you can actually say.</p>
                         </div>
-                        <Badge className="w-fit border border-border bg-background text-[10px] font-medium text-muted-foreground">
+                        <Badge className="w-fit border border-border bg-background text-xs font-medium text-muted-foreground">
                           {timeContext.label} anchor ₹{selectedTimeAnchor || "—"} from {fareSourceLabel(activeMode)}
                         </Badge>
                       </div>
 
                       {showCoachInfo && (
-                        <div className="border-l-2 border-primary/50 pl-3 animate-[fadeIn_0.15s_ease-out] text-[11px] md:text-xs text-muted-foreground">
+                        <div className="border-l-2 border-primary/50 pl-3 animate-[fadeIn_0.15s_ease-out] text-xs text-muted-foreground">
                           <p className="font-semibold text-foreground">What it does</p>
                           <p className="mt-1 leading-relaxed">It compares the ride-app quote you enter with the mapped fare anchor, adds your situation, then prepares a short script plus safety-aware tactics.</p>
                         </div>
@@ -2479,12 +2479,12 @@ function TravelPage() {
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_minmax(0,1fr)_auto] sm:items-end">
                         <div className="space-y-1.5">
-                          <label className="text-[10px] md:text-xs font-medium text-muted-foreground">Ride-app quote, optional</label>
+                          <label className="text-xs font-medium text-muted-foreground">Ride-app quote, optional</label>
                           <Input id="input-ai-app-quote" type="number" placeholder="₹ shown in app"
                             value={appQuote} onChange={(e) => setAppQuote(e.target.value)} className="bg-background border-border text-xs h-10" />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] md:text-xs font-medium text-muted-foreground">Situation</label>
+                          <label className="text-xs font-medium text-muted-foreground">Situation</label>
                           <Input id="input-ai-situation" placeholder="Raining, luggage, late night..."
                             value={userSituation} onChange={(e) => setUserSituation(e.target.value)} className="bg-background border-border text-xs h-10" />
                         </div>
@@ -2507,7 +2507,7 @@ function TravelPage() {
                             <p className="text-xs font-semibold">
                               {quoteState === "high" ? "High quote" : quoteState === "mild" ? "Slightly high quote" : "Quote looks normal"}
                             </p>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            <p className="mt-0.5 text-xs text-muted-foreground">
                               {quoteRatio ? `${Math.round((quoteRatio - 1) * 100)}% compared with the ₹${selectedTimeAnchor} ${timeContext.label.toLowerCase()} anchor.` : null}
                             </p>
                           </div>
@@ -2517,7 +2517,7 @@ function TravelPage() {
                       {selectedRoute.negotiation_helper && !aiCoachResult && (
                         <div className="space-y-2 border-t border-border/70 pt-4 animate-[fadeIn_0.2s_ease-out]">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Quick pitch</span>
+                            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Quick pitch</span>
                             <button onClick={() => copyScriptToClipboard(selectedRoute.negotiation_helper)}
                               className="text-muted-foreground hover:text-foreground p-1.5 transition-all cursor-pointer">
                               {copiedScript ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -2532,19 +2532,19 @@ function TravelPage() {
                       {aiCoachResult && (
                         <div className="space-y-4 border-t border-border/70 pt-4 animate-[fadeIn_0.25s_ease-out]">
                           <div className="flex flex-wrap gap-1.5">
-                            <Badge className="bg-background border border-border text-muted-foreground text-[9px] md:text-xs py-0.5 px-1.5">
+                            <Badge className="bg-background border border-border text-muted-foreground text-xs py-0.5 px-2">
                               {aiCoachResult.source === "bedrock" ? "Context guide" : "Local fare guide"}
                             </Badge>
-                            <Badge className={`font-medium text-[9px] py-0.5 px-1.5 border ${aiCoachResult.surge_factor && aiCoachResult.surge_factor > 1.1 ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"}`}>
+                            <Badge className={`font-medium text-xs py-0.5 px-2 border ${aiCoachResult.surge_factor && aiCoachResult.surge_factor > 1.1 ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"}`}>
                               {aiCoachResult.surge_factor && aiCoachResult.surge_factor > 1.0 ? `${aiCoachResult.surge_factor}x vs anchor` : appQuote ? "Quote normal" : "No app quote"}
                             </Badge>
                             {aiCoachResult.fare_anchor ? (
-                              <Badge className="bg-background border border-border text-muted-foreground text-[9px] md:text-xs py-0.5 px-1.5">
+                              <Badge className="bg-background border border-border text-muted-foreground text-xs py-0.5 px-2">
                                 {aiCoachResult.fare_anchor_label || "Fare anchor"} ₹{aiCoachResult.fare_anchor}
                               </Badge>
                             ) : null}
                             {aiCoachResult.report_count !== undefined && (
-                              <Badge className="bg-background border border-border text-muted-foreground text-[9px] md:text-xs py-0.5 px-1.5">
+                              <Badge className="bg-background border border-border text-muted-foreground text-xs py-0.5 px-2">
                                 {aiCoachResult.report_count} reports
                               </Badge>
                             )}
@@ -2552,7 +2552,7 @@ function TravelPage() {
 
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Script to say</span>
+                              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Script to say</span>
                               <button onClick={() => copyScriptToClipboard(aiCoachResult.script)}
                                 className="text-muted-foreground hover:text-foreground p-1.5 transition-all cursor-pointer">
                                 {copiedScript ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -2566,14 +2566,14 @@ function TravelPage() {
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                             {aiCoachResult.tactics.map((tip, idx) => (
                               <div key={idx} className="border-l-2 border-primary/35 pl-3 text-xs text-foreground/85">
-                                <p className="mb-1 text-[10px] font-medium text-muted-foreground">Move {idx + 1}</p>
+                                <p className="mb-1 text-xs font-medium text-muted-foreground">Move {idx + 1}</p>
                                 <p className="leading-relaxed">{tip}</p>
                               </div>
                             ))}
                           </div>
 
                           {aiCoachResult.safety && (
-                            <div className="rounded-2xl bg-red-500/5 px-3 py-2.5 text-[11px] md:text-xs text-foreground">
+                            <div className="rounded-2xl bg-red-500/5 px-3 py-2.5 text-xs text-foreground">
                               <span className="font-semibold text-red-400 mr-1.5">Safety:</span>
                               {aiCoachResult.safety}
                             </div>
@@ -2618,19 +2618,19 @@ function TravelPage() {
                       <div className="grid grid-cols-3 divide-x divide-border rounded-2xl bg-background/55 text-center">
                         <div className="px-2 py-3">
                           <p className="text-sm font-semibold text-foreground">{reportList.length}</p>
-                          <p className="text-[10px] text-muted-foreground">Reports</p>
+                          <p className="text-xs text-muted-foreground">Reports</p>
                         </div>
                         <div className="px-2 py-3">
                           <p className="text-sm font-semibold text-foreground">{averagePaid ? `₹${averagePaid}` : "—"}</p>
-                          <p className="text-[10px] text-muted-foreground">Avg paid</p>
+                          <p className="text-xs text-muted-foreground">Avg paid</p>
                         </div>
                         <div className="px-2 py-3">
                           <p className="text-sm font-semibold text-foreground">{savedTotal ? `₹${savedTotal}` : "—"}</p>
-                          <p className="text-[10px] text-muted-foreground">Saved</p>
+                          <p className="text-xs text-muted-foreground">Saved</p>
                         </div>
                       </div>
 
-                      <p className="border-l-2 border-primary/40 pl-3 text-[11px] leading-relaxed text-muted-foreground">
+                      <p className="border-l-2 border-primary/40 pl-3 text-xs leading-relaxed text-muted-foreground">
                         One report is treated as signal, not truth. Aggregation protects the fare window from noisy or fake entries.
                       </p>
 
@@ -2642,12 +2642,12 @@ function TravelPage() {
                         <div className="space-y-2 rounded-2xl border border-primary/20 bg-primary/5 p-3.5">
                           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Synced ride payments</p>
-                              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-primary">Synced ride payments</p>
+                              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                                 PocketBuddy found recent travel-like payments from your companion sync. Confirm only the ones that match this route.
                               </p>
                             </div>
-                            <Badge className="w-fit border border-primary/20 bg-background text-[9px] text-primary">Auto-suggested</Badge>
+                            <Badge className="w-fit border border-primary/20 bg-background text-xs text-primary">Auto-suggested</Badge>
                           </div>
                           <div className="space-y-2">
                             {candidateList.map((candidate) => (
@@ -2656,7 +2656,7 @@ function TravelPage() {
                                   <p className="text-xs font-semibold text-foreground">
                                     ₹{candidate.amount_paid} · {candidate.merchant || candidate.mode || "Travel payment"}
                                   </p>
-                                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
                                     {candidate.reason || "Amount matches this route's trusted fare band."}
                                   </p>
                                 </div>
@@ -2672,7 +2672,7 @@ function TravelPage() {
                                       anonymous: true,
                                     },
                                   })}
-                                  className="h-8 shrink-0 bg-primary text-primary-foreground text-[10px] font-semibold"
+                                  className="h-8 shrink-0 bg-primary text-primary-foreground text-xs font-semibold"
                                 >
                                   Confirm fare
                                 </Button>
@@ -2691,7 +2691,7 @@ function TravelPage() {
                           <div className="px-4 py-8 text-center">
                             <Users className="mx-auto h-7 w-7 text-muted-foreground" />
                             <p className="mt-2 text-xs font-semibold text-foreground">No fares reported yet</p>
-                            <p className="mt-1 text-[11px] text-muted-foreground">Add the first fare after your ride so the next student has a fair anchor.</p>
+                            <p className="mt-1 text-xs text-muted-foreground">Add the first fare after your ride so the next student has a fair anchor.</p>
                           </div>
                         ) : (
                           <div className="divide-y divide-border/70">
@@ -2700,20 +2700,20 @@ function TravelPage() {
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <p className="text-xs font-semibold text-foreground">{r.mode.split(" ")[0]}</p>
-                                    <span className="text-[10px] text-muted-foreground">{r.time_of_day}</span>
-                                    {r.luggage && <Badge className="text-[8px] bg-primary/10 text-primary py-0 px-1">Luggage</Badge>}
+                                    <span className="text-xs text-muted-foreground">{r.time_of_day}</span>
+                                    {r.luggage && <Badge className="text-xs bg-primary/10 text-primary py-0.5 px-2">Luggage</Badge>}
                                     {r.counts_in_model ? (
-                                      <Badge className="text-[8px] border border-emerald-500/20 bg-emerald-500/10 py-0 px-1 text-emerald-500">Trusted signal</Badge>
+                                      <Badge className="text-xs border border-emerald-500/20 bg-emerald-500/10 py-0.5 px-2 text-emerald-500">Trusted signal</Badge>
                                     ) : (
-                                      <Badge className="text-[8px] border border-border bg-surface py-0 px-1 text-muted-foreground">Signal only</Badge>
+                                      <Badge className="text-xs border border-border bg-surface py-0.5 px-2 text-muted-foreground">Signal only</Badge>
                                     )}
                                   </div>
-                                  <p className="mt-0.5 text-[10px] text-muted-foreground">By {r.user_name}</p>
+                                  <p className="mt-0.5 text-xs text-muted-foreground">By {r.user_name}</p>
                                   <div className="mt-2 flex flex-wrap items-center gap-2">
                                     <button
                                       disabled={voteReportMutation.isPending || r.is_own_report}
                                       onClick={() => voteReportMutation.mutate({ reportId: r.id, voteType: "up" })}
-                                      className={`flex items-center gap-1 text-[9px] font-medium transition-colors cursor-pointer ${
+                                      className={`flex items-center gap-1 text-xs font-medium transition-colors cursor-pointer ${
                                         r.user_vote === "up" ? "text-emerald-500" : "text-muted-foreground hover:text-foreground"
                                       } disabled:cursor-not-allowed disabled:opacity-50`}
                                       title={r.is_own_report ? "You cannot vote on your own report" : "Agree with this fare"}
@@ -2724,7 +2724,7 @@ function TravelPage() {
                                     <button
                                       disabled={voteReportMutation.isPending || r.is_own_report}
                                       onClick={() => voteReportMutation.mutate({ reportId: r.id, voteType: "down" })}
-                                      className={`flex items-center gap-1 text-[9px] font-medium transition-colors cursor-pointer ${
+                                      className={`flex items-center gap-1 text-xs font-medium transition-colors cursor-pointer ${
                                         r.user_vote === "down" ? "text-red-400" : "text-muted-foreground hover:text-foreground"
                                       } disabled:cursor-not-allowed disabled:opacity-50`}
                                       title={r.is_own_report ? "You cannot vote on your own report" : "Dispute this fare"}
@@ -2737,7 +2737,7 @@ function TravelPage() {
                                 <div className="text-right">
                                   <p className="text-sm font-semibold tracking-tight text-foreground">₹{r.amount_paid}</p>
                                   {r.driver_quote > r.amount_paid && (
-                                    <p className="mt-0.5 text-[10px] font-medium text-emerald-500">Saved ₹{r.driver_quote - r.amount_paid}</p>
+                                    <p className="mt-0.5 text-xs font-medium text-emerald-500">Saved ₹{r.driver_quote - r.amount_paid}</p>
                                   )}
                                 </div>
                               </div>
@@ -2754,9 +2754,9 @@ function TravelPage() {
             {selectedRoute.campus_landmark && (
               <div className="flex gap-2.5 items-center p-3.5 bg-surface border border-border rounded-xl">
                   <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div><p className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest">Drop Point</p>
+                  <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Drop Point</p>
                   <p className="text-xs font-bold text-foreground">{selectedRoute.campus_landmark}</p>
-                  <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">Use your college's official emergency contact for campus security.</p></div>
+                  <p className="text-xs text-muted-foreground mt-0.5">Use your college's official emergency contact for campus security.</p></div>
                 </div>
             )}
           </div>
@@ -2781,7 +2781,7 @@ function TravelPage() {
               This helps PocketBuddy use the right campus area for route suggestions, campus routes, and student fare reports.
             </p>
             <div className="space-y-1.5">
-              <label htmlFor="input-custom-campus" className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <label htmlFor="input-custom-campus" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 College name
               </label>
               <Input
@@ -2821,16 +2821,16 @@ function TravelPage() {
           </DialogHeader>
           <form onSubmit={handlePostReport} className="space-y-4">
             <div className="rounded-xl border border-border bg-surface p-3">
-              <p className="text-[11px] text-muted-foreground">Route</p>
+              <p className="text-xs text-muted-foreground">Route</p>
               <p className="mt-0.5 text-xs font-medium text-foreground">{selectedRouteParts?.from || "Selected route"}</p>
               {selectedRouteParts?.to ? (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">Destination: {selectedRouteParts.to}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Destination: {selectedRouteParts.to}</p>
               ) : null}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground">Mode</label>
+                <label className="text-xs font-medium text-muted-foreground">Mode</label>
                 <Select value={reportMode} onValueChange={setReportMode}>
                   <SelectTrigger className="bg-surface border-border text-xs h-10">
                     <SelectValue />
@@ -2843,7 +2843,7 @@ function TravelPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground">Time</label>
+                <label className="text-xs font-medium text-muted-foreground">Time</label>
                 <Select value={reportTime} onValueChange={setReportTime}>
                   <SelectTrigger className="bg-surface border-border text-xs h-10">
                     <SelectValue />
@@ -2859,11 +2859,11 @@ function TravelPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground">Driver quote (₹)</label>
+                <label className="text-xs font-medium text-muted-foreground">Driver quote (₹)</label>
                 <Input type="number" min="1" value={reportQuote} onChange={(e) => setReportQuote(e.target.value)} className="bg-surface border-border text-xs h-10" required />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground">Amount paid (₹)</label>
+                <label className="text-xs font-medium text-muted-foreground">Amount paid (₹)</label>
                 <Input type="number" min="1" value={reportPaid} onChange={(e) => setReportPaid(e.target.value)} className="bg-surface border-border text-xs h-10" required />
               </div>
             </div>
@@ -2885,7 +2885,7 @@ function TravelPage() {
               </button>
             </div>
 
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Anonymous by default. Reports are used only in aggregate, and PocketBuddy shows report-backed fares only after enough trusted students confirm the same route.
             </p>
 

@@ -2987,16 +2987,16 @@ function Dashboard() {
                                       <span>Collect: <strong className="text-foreground">{rupees(rSummary.unpaidTotal)}</strong> pending ({rSummary.unpaidCount})</span>
                                     </div>
                                   ) : (
-                                    <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 px-2.5 py-1.5 rounded-xl text-[10px] text-green-500 font-bold">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                                    <div className="flex items-center gap-1.5 rounded-xl border border-success/25 bg-success/10 px-2.5 py-1.5 text-[10px] font-bold text-emerald-700 dark:text-success">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-700 shrink-0 dark:bg-success" />
                                       <span>All splits collected & verified!</span>
                                     </div>
                                   )
                                 ) : (
                                   rSummary.myOwed > 0 && (
                                     rSummary.myStatus === "verified" ? (
-                                      <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 px-2.5 py-1.5 rounded-xl text-[10px] text-green-500 font-bold">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                                      <div className="flex items-center gap-1.5 rounded-xl border border-success/25 bg-success/10 px-2.5 py-1.5 text-[10px] font-bold text-emerald-700 dark:text-success">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-700 shrink-0 dark:bg-success" />
                                         <span>Paid: <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong></span>
                                       </div>
                                     ) : rSummary.myStatus === "pending" ? (

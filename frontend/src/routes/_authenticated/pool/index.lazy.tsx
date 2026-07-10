@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { rupees } from "@/lib/format";
-import { Clock, AlertCircle, Check } from "lucide-react";
+import { Clock, AlertCircle, Check, ShieldCheck, Users } from "lucide-react";
 import { getProfile, getCartPools, insertCartPool, getCatalog, addCatalogItem } from "@/lib/api/db.functions";
 
 export const Route = createLazyFileRoute("/_authenticated/pool/")({
@@ -140,6 +140,14 @@ function PoolList() {
   const cancelledPools = (pools ?? []).filter(
     (p) => p.status === "cancelled" || p.status === "closed" || (p.status === "open" && new Date(p.expires_at).getTime() <= now),
   );
+  const hostedPendingRequests = (pools ?? [])
+    .filter((p) => user && p.host_id === user.id)
+    .reduce(
+      (total, p) => total + ((p.join_requests ?? []) as any[]).filter((request) => request.status === "pending").length,
+      0,
+    );
+  const collectionPools = activePools.filter((p) => p.status === "completed").length;
+  const wingName = profile?.wing_label?.trim() || "your wing";
 
   const tabOptions = [
     { key: "active", label: `Active (${activePools.length})` },
@@ -166,22 +174,116 @@ function PoolList() {
 
   return (
     <AppShell>
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/85 backdrop-blur-md px-6 md:px-10 lg:px-12">
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 md:-mx-10 md:-mt-8 lg:-mx-12 lg:-mt-10 mb-6 flex h-14 items-center justify-between border-b border-border bg-background/90 px-6 backdrop-blur-md md:px-10 lg:px-12">
         <div className="flex items-center gap-3 min-w-0">
           <MobileMenuButton />
           <h1 className="text-base sm:text-lg font-black tracking-wider text-foreground uppercase truncate">Cart Pools</h1>
         </div>
       </div>
       <div className="space-y-6 py-6">
-        <button
-          id="card-create-pool"
-          onClick={() => setOpen(true)}
-          className="w-full rounded-xl border border-dashed border-primary/30 hover:border-primary/60 bg-surface/50 p-6 text-center transition-all duration-200 hover:bg-surface-raised active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-lg hover:shadow-black/20"
-        >
-          <p className="text-xs font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors">
-            + Start a New Cart Pool
-          </p>
-        </button>
+        <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+            <div className="flex flex-col justify-between gap-4 p-4 sm:gap-7 sm:p-7">
+              <div className="max-w-2xl">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-primary">Wing cart pool</p>
+                <h2 className="mt-2 text-xl font-black leading-tight text-foreground sm:mt-3 sm:text-3xl">
+                  Host one shared order. Approve who joins.
+                </h2>
+                <p className="mt-2 text-sm font-medium leading-6 text-muted-foreground sm:hidden">
+                  Open a cart for <span className="font-bold text-foreground">{wingName}</span>, approve roommates, and track repayment after checkout.
+                </p>
+                <p className="mt-3 hidden text-sm font-medium leading-6 text-muted-foreground sm:block">
+                  For snacks, groceries, and room supplies: open one cart for <span className="font-bold text-foreground">{wingName}</span>, accept the roommates you know, and track who has paid after checkout.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+                <button
+                  id="card-create-pool"
+                  onClick={() => setOpen(true)}
+                  className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-xs font-black uppercase tracking-widest text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.98]"
+                >
+                  Start Cart Pool
+                </button>
+                <div className="hidden items-start gap-2 rounded-xl border border-border bg-background/70 px-3 py-2.5 text-xs font-semibold leading-5 text-muted-foreground sm:flex">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span>A shared link only requests access. The cart unlocks after host approval.</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 sm:hidden">
+                <div className="rounded-xl border border-border bg-background/70 px-3 py-2.5">
+                  <p className="text-base font-black text-foreground tnum">{activePools.length}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Live</p>
+                </div>
+                <div className="rounded-xl border border-border bg-background/70 px-3 py-2.5">
+                  <p className="text-base font-black text-foreground tnum">{hostedPendingRequests}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Requests</p>
+                </div>
+                <div className="rounded-xl border border-border bg-background/70 px-3 py-2.5">
+                  <p className="text-base font-black text-foreground tnum">{collectionPools}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Collecting</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden border-t border-border bg-background/45 p-5 sm:block sm:p-6 lg:border-l lg:border-t-0">
+              <div className="rounded-2xl border border-border bg-surface p-4">
+                <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-foreground">Current wing queue</p>
+                    <p className="mt-1 text-xs font-medium text-muted-foreground">Live pools, pending joins, and collections.</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 border-primary/25 bg-primary/10 text-primary">
+                    Host controlled
+                  </Badge>
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-border bg-background/70 px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-lg font-black text-foreground tnum">{activePools.length}</span>
+                    </div>
+                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Live</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-background/70 px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-lg font-black text-foreground tnum">{hostedPendingRequests}</span>
+                    </div>
+                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">To approve</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-background/70 px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-lg font-black text-foreground tnum">{collectionPools}</span>
+                    </div>
+                    <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Collecting</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {[
+                    ["Host opens the cart", "Pick app, cutoff, and target amount."],
+                    ["Roommates request access", "A leaked link cannot add items by itself."],
+                    ["Checkout becomes collection", "Splits and UTRs stay attached to each person."],
+                  ].map(([title, body], index) => (
+                    <div key={title} className="flex items-start gap-3">
+                      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[10px] font-black text-foreground">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wider text-foreground">{title}</p>
+                        <p className="mt-0.5 text-xs font-medium leading-5 text-muted-foreground">{body}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {isMobile ? (
           <Sheet open={open} onOpenChange={setOpen}>
@@ -349,6 +451,9 @@ function PoolCard({ pool }: { pool: Pool }) {
   }, [pool, user]);
 
   const itemsCount = pool.items?.length ?? 0;
+  const pendingRequestCount = user && pool.host_id === user.id
+    ? ((pool.join_requests ?? []) as any[]).filter((request) => request.status === "pending").length
+    : 0;
   const totalCartValue = useMemo(() => {
     return (pool.items ?? [])
       .filter((it: any) => it.is_purchased)
@@ -386,8 +491,8 @@ function PoolCard({ pool }: { pool: Pool }) {
               <span className={`inline-flex items-center gap-1.5 bg-white/5 border px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${
                 active
                   ? "border-[#16A34A]/30 text-[#16A34A]"
-                  : statusLabel === "completed"
-                  ? (isFullyPaid ? "border-green-500/30 text-green-400 bg-green-500/5" : "border-amber-500/30 text-amber-400 bg-amber-500/5")
+                : statusLabel === "completed"
+                  ? (isFullyPaid ? "border-success/25 bg-success/10 text-emerald-700 dark:text-success" : "border-amber-500/30 text-amber-400 bg-amber-500/5")
                   : statusLabel === "cancelled"
                   ? "border-rose-500/20 text-[#FF6B4A]"
                   : "border-zinc-500/20 text-zinc-400"
@@ -400,6 +505,13 @@ function PoolCard({ pool }: { pool: Pool }) {
               Host: <span className="font-semibold text-foreground capitalize">{pool.created_by_name || "—"}</span>
             </p>
 
+            {pendingRequestCount > 0 && (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-bold text-primary">
+                <Users className="h-4 w-4" />
+                <span>Review {pendingRequestCount} join request{pendingRequestCount === 1 ? "" : "s"}</span>
+              </div>
+            )}
+
             {rSummary && (
               <div className="mt-3">
                 {user && pool.host_id === user.id ? (
@@ -409,16 +521,16 @@ function PoolCard({ pool }: { pool: Pool }) {
                       <span>Collect: <strong className="text-foreground">{rupees(rSummary.unpaidTotal)}</strong> pending from {rSummary.unpaidCount} roommates</span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/25 px-3 py-2 rounded-xl text-xs text-green-400 font-bold shadow-sm shadow-black/25">
-                      <Check className="h-4 w-4 shrink-0 text-green-500" />
+                    <div className="flex items-center gap-2 rounded-xl border border-success/25 bg-success/10 px-3 py-2 text-xs font-bold text-emerald-700 shadow-sm shadow-black/10 dark:text-success dark:shadow-black/25">
+                      <Check className="h-4 w-4 shrink-0 text-emerald-700 dark:text-success" />
                       <span>All splits collected & verified!</span>
                     </div>
                   )
                 ) : (
                   rSummary.myOwed > 0 && (
                     rSummary.myStatus === "verified" ? (
-                      <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/25 px-3 py-2 rounded-xl text-xs text-green-400 font-bold shadow-sm shadow-black/25">
-                        <Check className="h-4 w-4 shrink-0 text-green-500" />
+                      <div className="flex items-center gap-2 rounded-xl border border-success/25 bg-success/10 px-3 py-2 text-xs font-bold text-emerald-700 shadow-sm shadow-black/10 dark:text-success dark:shadow-black/25">
+                        <Check className="h-4 w-4 shrink-0 text-emerald-700 dark:text-success" />
                         <span>You paid: <strong className="text-foreground">{rupees(rSummary.myOwed)}</strong> (verified)</span>
                       </div>
                     ) : rSummary.myStatus === "pending" ? (
@@ -460,8 +572,8 @@ function PoolCard({ pool }: { pool: Pool }) {
                     let textColor = "text-zinc-400";
                     let label = "Unpaid";
                     if (status === "verified") {
-                      dotColor = "bg-green-500";
-                      textColor = "text-green-400/90";
+                      dotColor = "bg-emerald-700 dark:bg-success";
+                      textColor = "text-emerald-700 dark:text-success";
                       label = details.settlement_mode === "settle_in_kind" ? "In-Kind" : "Paid";
                     } else if (status === "pending") {
                       dotColor = "bg-amber-500 animate-pulse";

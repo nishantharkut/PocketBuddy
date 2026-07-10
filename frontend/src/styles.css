@@ -332,4 +332,31 @@ html.dark { color-scheme: dark; }
     from { transform: translateX(-100%); }
     to { transform: translateX(0); }
   }
+  @keyframes slideUp {
+    from {
+      transform: translateY(12px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .pb-travel-marker {
+    display: block;
+    width: 22px;
+    height: 22px;
+    border-radius: 9999px;
+    border: 4px solid var(--surface);
+    box-shadow: 0 10px 24px rgb(0 0 0 / 0.26), 0 0 0 1px var(--border);
+  }
+
+  .pb-travel-marker-origin {
+    background: var(--primary);
+  }
+
+  .pb-travel-marker-destination {
+    background: var(--success);
+  }
 }

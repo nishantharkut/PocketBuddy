@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PocketBuddy Daily Guard Mockups</title>
+  <style>
+    :root {
+      --background: #111113;
+      --foreground: #f4f4f5;
+      --surface: #18181b;
+      --surface-raised: #1f1f23;
+      --surface-interactive: #27272a;
+      --muted-foreground: #a1a1aa;
+      --border: #27272a;
+      --primary: #f08a68;
+      --primary-foreground: #111113;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: 0;
+    }
+    button, input, select { font: inherit; }
+    h1, h2, h3, p { margin: 0; }
+
+    .mock-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(17, 17, 19, 0.94);
+      padding: 8px 14px;
+      backdrop-filter: blur(14px);
+    }
+    .mock-toolbar strong {
+      display: block;
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .mock-toolbar span {
+      color: var(--muted-foreground);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .tab {
+      min-height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted-foreground);
+      padding: 0 11px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .tab.active {
+      border-color: color-mix(in srgb, var(--primary) 58%, var(--border));
+      background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+      color: var(--foreground);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 256px minmax(0, 1fr);
+      min-height: calc(100vh - 57px);
+    }
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 24px 20px 10px;
+    }
+    .brand svg {
+      width: 32px;
+      height: 32px;
+      flex: 0 0 auto;
+      filter: drop-shadow(0 2px 8px rgba(255, 107, 0, 0.14));
+    }
+    .brand-name {
+      font-size: 17px;
+      font-weight: 850;
+      line-height: 1;
+    }
+    .brand-name span { color: var(--primary); }
+    .brand-kicker {
+      margin-top: 5px;
+      color: color-mix(in srgb, var(--muted-foreground) 72%, transparent);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .collapse {
+      margin: 6px 12px 16px;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+      padding: 8px 8px 16px;
+      color: var(--muted-foreground);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .log-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      margin: 0 12px 24px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--foreground);
+      color: var(--background);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .nav {
+      display: grid;
+      gap: 2px;
+      padding: 0 12px;
+    }
+    .nav-item {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 42px;
+      border-radius: 8px;
+      color: var(--muted-foreground);
+      padding: 0 12px;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .nav-item.active {
+      background: var(--surface-raised);
+      color: var(--foreground);
+    }
+    .nav-item.active::before {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 2px;
+      height: 20px;
+      border-radius: 0 4px 4px 0;
+      background: var(--primary);
+      content: "";
+      transform: translateY(-50%);
+    }
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      border: 1.5px solid currentColor;
+      border-radius: 5px;
+      opacity: 0.7;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      border-top: 1px solid var(--border);
+      padding: 12px;
+    }
+    .sync-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--surface-raised) 58%, transparent);
+      padding: 12px;
+    }
+    .sync-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted-foreground);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--success);
+    }
+    .sync-card p {
+      margin-top: 8px;
+      color: var(--muted-foreground);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .user-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      border-top: 1px solid var(--border);
+      padding: 12px 8px 2px;
+    }
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: var(--surface-raised);
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .user-card strong {
+      display: block;
+      font-size: 12px;
+    }
+    .user-card span {
+      display: block;
+      max-width: 165px;
+      overflow: hidden;
+      color: var(--muted-foreground);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 36px 44px 56px;
+    }
+    .page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .page-head h1 {
+      font-size: 23px;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .page-head p {
+      margin-top: 8px;
+      color: var(--muted-foreground);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .head-action {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted-foreground);
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .layout-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 18px;
+      align-items: start;
+    }
+    .layout-travel {
+      display: grid;
+      grid-template-columns: 420px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .stack { display: grid; gap: 18px; }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .card.pad { padding: 18px; }
+    .daily-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 230px;
+      gap: 18px;
+      padding: 20px;
+    }
+    .label {
+      color: var(--muted-foreground);
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.18em;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .decision {
+      margin-top: 12px;
+      font-size: 23px;
+      font-weight: 850;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+    .copy {
+      margin-top: 10px;
+      color: var(--muted-foreground);
+      font-size: 14px;
+      font-weight: 550;
+      line-height: 1.45;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--foreground);
+      padding: 0 13px;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .btn.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+    .btn.dark {
+      border-color: var(--foreground);
+      background: var(--foreground);
+      color: var(--background);
+    }
+    .guard-meter {
+      display: grid;
+      align-content: space-between;
+      border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+      padding: 14px;
+    }
+    .guard-meter strong {
+      display: block;
+      margin-top: 8px;
+      color: var(--primary);
+      font-size: 30px;
+      font-weight: 850;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+    }
+    .guard-meter span {
+      color: var(--muted-foreground);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .mini-bar {
+      overflow: hidden;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--surface-interactive);
+    }
+    .mini-bar i {
+      display: block;
+      width: var(--w);
+      height: 100%;
+      border-radius: inherit;
+      background: var(--primary);
+    }
+    .facts, .allocation {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .fact {
+      min-height: 96px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 14px;
+    }
+    .fact strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 23px;
+      font-weight: 850;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+    .fact span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted-foreground);
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .signal-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .signal {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 14px;
+    }
+    .signal p {
+      margin-top: 9px;
+      color: var(--foreground);
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.35;
+    }
+    .list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .list-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 42px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--background);
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .list-row small {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted-foreground);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .amount {
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .success { color: var(--success); }
+    .warning { color: var(--warning); }
+    .danger { color: var(--danger); }
+    .primary-text { color: var(--primary); }
+
+    .forecast-card {
+      display: grid;
+      gap: 18px;
+      padding: 20px;
+    }
+    .forecast-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 92px;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .days {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .days strong {
+      font-size: 52px;
+      font-weight: 850;
+      letter-spacing: -0.06em;
+      line-height: 0.94;
+      font-variant-numeric: tabular-nums;
+    }
+    .days span {
+      color: var(--muted-foreground);
+      font-size: 15px;
+      font-weight: 850;
+    }
+    .grade {
+      display: grid;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--border));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+      color: var(--warning);
+      font-size: 34px;
+      font-weight: 850;
+    }
+    .driver {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 12px;
+    }
+    .rank {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .driver strong, .choice strong {
+      display: block;
+      font-size: 13px;
+    }
+    .driver span, .choice span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted-foreground);
+      font-size: 12px;
+    }
+    .choice {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 13px;
+    }
+    .choice.selected {
+      border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+      background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+    }
+
+    .form-card, .fare-card {
+      display: grid;
+      gap: 12px;
+      padding: 18px;
+    }
+    .field {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--background);
+      padding: 12px;
+    }
+    .field label {
+      display: block;
+      color: var(--muted-foreground);
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .field strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 14px;
+      font-weight: 850;
+    }
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-raised);
+      padding: 4px;
+    }
+    .segmented span {
+      display: grid;
+      place-items: center;
+      min-height: 32px;
+      border-radius: 7px;
+      color: var(--muted-foreground);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .segmented .active {
+      background: var(--surface);
+      color: var(--foreground);
+    }
+    .fare-range {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: start;
+      border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+      padding: 16px;
+    }
+    .fare-range strong {
+      display: block;
+      margin-top: 7px;
+      color: var(--primary);
+      font-size: 30px;
+      font-weight: 850;
+      letter-spacing: -0.04em;
+      font-variant-numeric: tabular-nums;
+    }
+    .trust {
+      border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--success) 10%, var(--surface));
+      color: var(--success);
+      padding: 7px 10px;
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .quote-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 138px;
+      gap: 10px;
+      align-items: end;
+    }
+    .quote-result {
+      border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--border));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+      padding: 14px;
+    }
+    .quote-result strong {
+      display: block;
+      color: var(--warning);
+      font-size: 16px;
+      font-weight: 850;
+    }
+    .quote-result p {
+      margin-top: 6px;
+      color: var(--muted-foreground);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .mobile-nav { display: none; }
+
+    @media (max-width: 980px) {
+      .mock-toolbar {
+        position: static;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .tabs { justify-content: flex-start; }
+      .app {
+        display: block;
+        min-height: calc(100vh - 122px);
+      }
+      .sidebar { display: none; }
+      .main { padding: 22px 14px 24px; }
+      .page-head {
+        align-items: flex-start;
+        flex-direction: column;
+        margin-bottom: 18px;
+      }
+      .layout-2, .layout-travel, .daily-card, .forecast-top {
+        grid-template-columns: 1fr;
+      }
+      .facts, .allocation, .signal-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .decision { font-size: 20px; }
+      .quote-grid { grid-template-columns: 1fr; }
+      .mobile-nav {
+        position: static;
+        margin-top: 12px;
+        z-index: 40;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        border-top: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 92%, transparent);
+        backdrop-filter: blur(14px);
+      }
+      .mobile-nav span {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: 54px;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 750;
+      }
+      .mobile-nav .active { color: var(--primary); }
+      .mobile-nav .active::before {
+        position: absolute;
+        top: 0;
+        width: 34px;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--primary);
+        content: "";
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="mock-toolbar">
+    <div>
+      <strong>PocketBuddy Daily Guard</strong>
+      <span>Reference-led mockups, locked to current app theme</span>
+    </div>
+    <nav class="tabs" aria-label="Mockup tabs">
+      <button class="tab active" data-target="dashboard-safe">Dashboard safe</button>
+      <button class="tab" data-target="dashboard-risk">Dashboard risk</button>
+      <button class="tab" data-target="dashboard-meal">Meal + exam</button>
+      <button class="tab" data-target="runway">Runway</button>
+      <button class="tab" data-target="travel">Travel</button>
+    </nav>
+  </header>
+  <div id="app-root"></div>
+
+  <script>
+    const navItems = ["Dashboard", "Transactions", "Runway", "Pool", "Travel", "Settings", "Privacy"];
+
+    const states = {
+      "dashboard-safe": {
+        page: "Dashboard",
+        active: "Dashboard",
+        meta: "BH-2 Wing B · reset 1 Jul",
+        action: "Last sync 8 min ago",
+        variant: "dashboard",
+        decisionLabel: "Daily Guard",
+        decision: "Spend normally, stay under &#8377;238 today.",
+        copy: "Your allowance, recurring payments, and food pace are inside plan. No warning needed.",
+        primary: "Open Transactions",
+        secondary: "See Runway",
+        meterLabel: "Safe today",
+        meterValue: "&#8377;238",
+        meterNote: "normal pace",
+        meterWidth: "68%",
+        facts: [
+          ["Remaining", "&#8377;5,780", "until 1 Jul"],
+          ["Runway", "16d", "low case 12d"],
+          ["Reserved", "&#8377;486", "recurring + pool"],
+          ["Spent today", "&#8377;60", "2 entries"]
+        ],
+        signals: [
+          ["Meal signal", "Last food payment 5h ago. No check-in needed."],
+          ["Pool", "Zepto pool open. Your net balance is +&#8377;480."],
+          ["Recurring", "Spotify renews tomorrow. Amount already reserved."],
+          ["Travel", "Station route reports are normal for evening."]
+        ],
+        side: "safe"
+      },
+      "dashboard-risk": {
+        page: "Dashboard",
+        active: "Dashboard",
+        meta: "Shortfall risk · action first",
+        action: "Review today",
+        variant: "dashboard",
+        decisionLabel: "Daily Guard",
+        decisionTone: "danger",
+        decision: "Recover two days before ordering again.",
+        copy: "Food pace and pending pool recovery are the only two drivers that changed the forecast.",
+        primary: "Recover 2 days",
+        secondary: "View drivers",
+        primaryDark: true,
+        meterLabel: "Safe today",
+        meterValue: "&#8377;24",
+        meterTone: "danger",
+        meterNote: "tight until dues clear",
+        meterWidth: "18%",
+        facts: [
+          ["Remaining", "&#8377;480", "until 1 Jul"],
+          ["Runway", "1d", "low case", "danger"],
+          ["Food pace", "&#8377;182", "per day"],
+          ["Recoverable", "&#8377;620", "pool dues", "success"]
+        ],
+        signals: [
+          ["Meal signal", "Last food signal 14h ago. Ask before recommending delivery."],
+          ["Pool", "Collecting one verified split improves available cash."],
+          ["Recurring", "3 commitments are already reserved this cycle."],
+          ["Travel", "Station evening route is above normal in reports."]
+        ],
+        side: "risk"
+      },
+      "dashboard-meal": {
+        page: "Dashboard",
+        active: "Dashboard",
+        meta: "Exam mode · routine matters",
+        action: "Dismissible check-in",
+        variant: "dashboard",
+        decisionLabel: "Meal + Exam Signal",
+        decisionTone: "warning",
+        decision: "Check food first, then spend.",
+        copy: "No food transaction is visible for 17h during exam week. If you ate in mess, mark it once so the forecast does not push delivery.",
+        primary: "I ate in mess",
+        secondary: "Not now",
+        meterLabel: "Routine signal",
+        meterValue: "17h",
+        meterTone: "warning",
+        meterNote: "since food signal",
+        meterWidth: "82%",
+        facts: [
+          ["Runway", "8d", "with current pace"],
+          ["Safe meal", "&#8377;45", "BH-2 canteen"],
+          ["Exam buffer", "5d", "active", "warning"],
+          ["Late-night", "2", "signals this week"]
+        ],
+        signals: [
+          ["Food suggestion", "Egg paratha is verified and open late near BH-2."],
+          ["Tone rule", "This is a nudge, not a diagnosis or forced check-in."],
+          ["Recurring", "Prime renewal is already reserved."],
+          ["Travel", "No travel warning active right now."]
+        ],
+        side: "meal"
+      },
+      runway: {
+        page: "Runway",
+        active: "Runway",
+        meta: "Answer first · model details later",
+        action: "Details",
+        variant: "runway"
+      },
+      travel: {
+        page: "Travel",
+        active: "Travel",
+        meta: "Route first · quote check second",
+        action: "Add report",
+        variant: "travel"
+      }
+    };
+
+    function logo() {
+      return `
+        <svg viewBox="0 0 100 100" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="pocketTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FF9F43" /><stop offset="100%" stop-color="#FF6B00" /></linearGradient>
+            <linearGradient id="pocketSides" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#D97706" /><stop offset="100%" stop-color="#B45309" /></linearGradient>
+            <linearGradient id="pocketBottom" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FF6B00" /><stop offset="100%" stop-color="#D97706" /></linearGradient>
+            <linearGradient id="coinGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FFFFFF" /><stop offset="100%" stop-color="#E2E8F0" /></linearGradient>
+          </defs>
+          <path d="M20 38 L50 56 L20 72 Z" fill="url(#pocketSides)" opacity="0.85" />
+          <path d="M80 38 L50 56 L80 72 Z" fill="url(#pocketSides)" opacity="0.7" />
+          <path d="M50 56 L80 72 L50 85 L20 72 Z" fill="url(#pocketBottom)" />
+          <path d="M50 20 L80 38 H20 Z" fill="url(#pocketTop)" opacity="0.9" />
+          <circle cx="50" cy="52" r="14" fill="url(#coinGrad)" stroke="#FF6B00" stroke-width="1.5" />
+          <path d="M4 3.06h2.726c1.22 0 2.12.575 2.325 1.724H4v1.051h5.051C8.855 7.001 8 7.558 6.788 7.558H4v1.317L8.437 14h2.11L6.095 8.884h.855c2.316-.018 3.465-1.476 3.688-3.049H12V4.784h-1.345c-.08-.778-.357-1.335-.793-1.732H12V2H4z" transform="translate(40, 42) scale(1.25)" fill="#0F1219" />
+        </svg>`;
+    }
+
+    function nav(active) {
+      return `<nav class="nav">${navItems.map((item) => `<div class="nav-item${item === active ? " active" : ""}"><span class="nav-icon"></span>${item}</div>`).join("")}</nav>`;
+    }
+
+    function sidebar(active) {
+      return `
+        <aside class="sidebar">
+          <div class="brand">${logo()}<div><div class="brand-name">PocketBuddy<span>.</span></div><div class="brand-kicker">Campus Guard</div></div></div>
+          <div class="collapse">Collapse</div>
+          <button class="log-btn">+ Log transaction</button>
+          ${nav(active)}
+          <div class="sidebar-footer">
+            <div class="sync-card"><div class="sync-row"><span class="dot"></span> Companion linked</div><p>Last sync shown in Companion</p></div>
+            <div class="user-card"><div class="avatar">N</div><div><strong>Nishant</strong><span>harkutnishant27@gmail.com</span></div></div>
+          </div>
+        </aside>`;
+    }
+
+    function pageHead(s) {
+      return `<div class="page-head"><div><h1>${s.page}</h1><p>${s.meta}</p></div><div class="head-action">${s.action}</div></div>`;
+    }
+
+    function fact([label, value, note, tone = ""]) {
+      return `<div class="fact"><div class="label">${label}</div><strong class="${tone}">${value}</strong><span>${note}</span></div>`;
+    }
+
+    function signal([label, text]) {
+      return `<div class="signal"><div class="label">${label}</div><p>${text}</p></div>`;
+    }
+
+    function recentSync() {
+      return `
+        <section class="card pad">
+          <h3 class="label">Recent sync</h3>
+          <div class="list">
+            <div class="list-row"><span>BH-2 Night Canteen<small>food</small></span><span class="amount">&#8377;45</span></div>
+            <div class="list-row"><span>Campus Store<small>stationery</small></span><span class="amount">&#8377;154</span></div>
+            <div class="list-row"><span>Spotify<small>recurring</small></span><span class="amount">&#8377;59</span></div>
+          </div>
+        </section>`;
+    }
+
+    function foodCard() {
+      return `
+        <section class="card pad">
+          <h3 class="label">Campus food</h3>
+          <p class="copy">Verified low-cost options open near the hostel.</p>
+          <div class="list">
+            <div class="list-row"><span>Egg paratha<small>BH-2 Night Canteen</small></span><span class="amount">&#8377;45</span></div>
+            <div class="list-row"><span>Tea<small>verified item</small></span><span class="amount">&#8377;10</span></div>
+          </div>
+        </section>`;
+    }
+
+    function sideRail(s) {
+      if (s.side === "risk") {
+        return `
+          <aside class="stack">
+            <section class="card pad">
+              <h3 class="label">Why this changed</h3>
+              <div class="list">
+                <div class="list-row"><span>Food pace<small>delivery and snacks</small></span><span class="amount">&#8377;182/d</span></div>
+                <div class="list-row"><span>Pool dues<small>not yet received</small></span><span class="amount success">&#8377;620</span></div>
+                <div class="list-row"><span>Subscriptions<small>reserved, not surprise</small></span><span class="amount">&#8377;337</span></div>
+              </div>
+            </section>
+            <section class="card pad"><h3 class="label">Next safe spend</h3><p class="copy">Pick mess or confirmed canteen first. Keep the recommendation practical, not moral.</p></section>
+          </aside>`;
+      }
+      return `<aside class="stack">${s.side === "meal" ? foodCard() + recentSync() : recentSync() + foodCard()}</aside>`;
+    }
+
+    function dashboard(s) {
+      const meterBar = s.meterTone === "danger" ? "var(--danger)" : s.meterTone === "warning" ? "var(--warning)" : "var(--primary)";
+      return `
+        <div class="layout-2">
+          <div class="stack">
+            <section class="card daily-card">
+              <div>
+                <div class="label ${s.decisionTone || ""}">${s.decisionLabel}</div>
+                <h2 class="decision">${s.decision}</h2>
+                <p class="copy">${s.copy}</p>
+                <div class="actions">
+                  <button class="btn ${s.primaryDark ? "dark" : "primary"}">${s.primary}</button>
+                  <button class="btn">${s.secondary}</button>
+                </div>
+              </div>
+              <div class="guard-meter">
+                <div><div class="label">${s.meterLabel}</div><strong class="${s.meterTone || ""}">${s.meterValue}</strong><span>${s.meterNote}</span></div>
+                <div class="mini-bar"><i style="--w:${s.meterWidth}; background:${meterBar}"></i></div>
+              </div>
+            </section>
+            <section class="facts">${s.facts.map(fact).join("")}</section>
+            <section class="signal-grid">${s.signals.map(signal).join("")}</section>
+          </div>
+          ${sideRail(s)}
+        </div>`;
+    }
+
+    function runway() {
+      return `
+        <div class="layout-2">
+          <div class="stack">
+            <section class="card forecast-card">
+              <div class="forecast-top">
+                <div><div class="label">Forecast answer</div><div class="days"><strong>8</strong><span>days expected</span></div><p class="copy">Likely safe only if food pace drops this week. Low case reaches 3 days before reset.</p></div>
+                <div class="grade">C</div>
+              </div>
+              <section class="allocation">
+                ${[["Safe/day", "&#8377;124", "after reserves"], ["Low case", "3d", "spike scenario", "warning"], ["Shortfall", "31%", "current pace", "warning"], ["Reset", "1 Jul", "cycle day"]].map(fact).join("")}
+              </section>
+            </section>
+            <section class="card pad">
+              <h3 class="label">Top drivers</h3>
+              <div class="list">
+                <div class="driver"><div class="rank">1</div><div><strong>Food pace is above plan</strong><span>Repeated delivery and snacks raised daily estimate.</span></div><span class="amount">+&#8377;72/d</span></div>
+                <div class="driver"><div class="rank">2</div><div><strong>Pool dues are recoverable</strong><span>One verified split improves available cash.</span></div><span class="amount success">&#8377;620</span></div>
+                <div class="driver"><div class="rank">3</div><div><strong>Recurring commitments are reserved</strong><span>Spotify, YouTube, and Prime are expected.</span></div><span class="amount">&#8377;337</span></div>
+              </div>
+            </section>
+          </div>
+          <aside class="stack">
+            <section class="card pad">
+              <h3 class="label">Try one change</h3>
+              <div class="list">
+                <div class="choice selected"><strong>Switch one delivery to mess</strong><span>Recovers about 2 days without touching fixed costs.</span></div>
+                <div class="choice"><strong>Collect one pool split</strong><span>Adds &#8377;140 once Android sync or UTR verifies repayment.</span></div>
+                <div class="choice"><strong>Pause a non-essential renewal</strong><span>Only shown when renewal is actually upcoming.</span></div>
+              </div>
+            </section>
+            <section class="card pad"><h3 class="label">Model details</h3><p class="copy">EWMA pace, weekday factors, pool dues, recurring commitments, exam buffer, and confidence live behind this details entry.</p></section>
+          </aside>
+        </div>`;
+    }
+
+    function travel() {
+      return `
+        <div class="layout-travel">
+          <section class="card form-card">
+            <div><h2 class="decision" style="font-size:20px;">Plan a campus ride</h2><p class="copy">Fare guidance starts with route, time, and intent.</p></div>
+            <div class="field"><label>From</label><strong>ABV-IIITM Main Gate</strong></div>
+            <div class="field"><label>To</label><strong>Gwalior Railway Station</strong></div>
+            <div class="field"><label>When</label><strong>Evening, 6 PM to 9 PM</strong></div>
+            <div class="segmented"><span>Fastest</span><span class="active">Cheapest</span><span>Safer</span></div>
+            <button class="btn primary">Estimate fair fare</button>
+          </section>
+          <section class="card fare-card">
+            <div class="fare-range">
+              <div><div class="label">Fair range for selected route</div><strong>&#8377;140-&#8377;180</strong><p class="copy">18 recent student reports plus route distance model. Freshness: 3 days.</p></div>
+              <span class="trust">High trust</span>
+            </div>
+            <div class="quote-grid"><div class="field"><label>Driver quote for this route</label><strong>&#8377;240</strong></div><button class="btn dark">Check quote</button></div>
+            <div class="quote-result"><strong>High for this route</strong><p>Counter near &#8377;170. If the driver refuses, switch to direct app ride or wait near the main gate where reports are stronger.</p></div>
+            <section class="signal-grid">${[["Community proof", "Recent reports agree. No stale warning."], ["Runway impact", "After this ride: &#8377;340 remaining this cycle."]].map(signal).join("")}</section>
+          </section>
+        </div>`;
+    }
+
+    function mobileNav(active) {
+      return `<nav class="mobile-nav">${["Dashboard", "Txn", "Runway", "Pool", "Travel"].map((item) => `<span class="${item === active || (active === "Transactions" && item === "Txn") ? "active" : ""}">${item}</span>`).join("")}</nav>`;
+    }
+
+    function render(target) {
+      const s = states[target] || states["dashboard-safe"];
+      const content = s.variant === "runway" ? runway() : s.variant === "travel" ? travel() : dashboard(s);
+      document.getElementById("app-root").innerHTML = `
+        <div class="app">
+          ${sidebar(s.active)}
+          <main class="main">${pageHead(s)}${content}</main>
+        </div>
+        ${mobileNav(s.active)}
+      `;
+      document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.target === target));
+      history.replaceState(null, "", `#${target}`);
+    }
+
+    document.querySelectorAll(".tab").forEach((tab) => tab.addEventListener("click", () => render(tab.dataset.target)));
+    const initial = location.hash.replace("#", "");
+    render(initial && states[initial] ? initial : "dashboard-safe");
+  </script>
+</body>
+</html>

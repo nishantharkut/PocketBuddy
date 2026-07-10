@@ -1,0 +1,16 @@
+{
+    "cookies":  [
+
+                ],
+    "origins":  [
+                    {
+                        "localStorage":  [
+                                             {
+                                                 "value":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3ZWRmMjYwZi0xOTBjLTQ4ZjAtYTBhZS1mYjY0NDQ2MmQ0N2MiLCJpYXQiOjE3ODM2MTk5NTAsImV4cCI6MTc4NDIyNDc1MH0.hqwnpAb8zPVGpgEskdDqdjoqiYzta1FNpwXkwLShs2Y",
+                                                 "name":  "pb_session_token"
+                                             }
+                                         ],
+                        "origin":  "http://127.0.0.1:5173"
+                    }
+                ]
+}

@@ -15,6 +15,41 @@ export async function getTransactions() {
   return apiRequest("/api/transactions");
 }
 
+export async function previewStatementImport({ data }: { data: FormData }) {
+  return apiRequest("/api/statement-import/preview", {
+    method: "POST",
+    body: data,
+  });
+}
+
+export async function commitStatementImport({ data }: { data: any }) {
+  return apiRequest("/api/statement-import/commit", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getStatementImportBatches() {
+  return apiRequest("/api/statement-import/batches");
+}
+
+export async function rollbackStatementImportBatch({ batchId }: { batchId: string }) {
+  return apiRequest(`/api/statement-import/batches/${encodeURIComponent(batchId)}/rollback`, {
+    method: "POST",
+  });
+}
+
+export async function applyStatementVendorCategory({
+  data,
+}: {
+  data: { group_key: string; category: string; display_name?: string };
+}) {
+  return apiRequest("/api/statement-import/vendor-category", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function insertTransaction({ data }: { data: any }) {
   return apiRequest("/api/transactions", {
     method: "POST",
@@ -432,7 +467,7 @@ export async function logTravelSavings({ data }: { data: { amount_saved: number;
   });
 }
 
-export async function createTravelRoute({ data }: { data: { name: string; description?: string; distance_km: number; campus_landmark?: string; college?: string; duration_mins?: number; routing_provider?: string; eta_confidence?: string; split_suggestion?: any } }) {
+export async function createTravelRoute({ data }: { data: { name: string; description?: string; distance_km: number; campus_landmark?: string; college?: string; duration_mins?: number; routing_provider?: string; eta_confidence?: string; split_suggestion?: any; source?: string; routing_cache_hit?: boolean; origin_coords?: number[]; dest_coords?: number[]; geometry?: number[][] } }) {
   return apiRequest("/api/travel/routes", {
     method: "POST",
     body: JSON.stringify(data),

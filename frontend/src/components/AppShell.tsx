@@ -16,7 +16,8 @@ import {
   LogOut,
   Compass,
   ShieldCheck,
-  Activity
+  Activity,
+  UploadCloud
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { getProfile } from "@/lib/api/db.functions";
@@ -322,6 +323,10 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [fabOpen, setFabOpen] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     const v = localStorage.getItem("pb_sidebar_collapsed");
@@ -359,6 +364,30 @@ export function AppShell({
     localStorage.setItem("pb_theme", next);
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(next);
+  };
+
+  const openQuickTransaction = () => {
+    setFabOpen(false);
+    if (pathname === "/dashboard") {
+      window.dispatchEvent(new Event("pocketbuddy:open-log-transaction"));
+      return;
+    }
+    navigate({
+      to: "/dashboard",
+      search: (prev: any) => ({ ...prev, log: true }),
+    });
+  };
+
+  const openStatementImport = () => {
+    setFabOpen(false);
+    if (pathname === "/transactions") {
+      window.dispatchEvent(new Event("pocketbuddy:open-statement-import"));
+      return;
+    }
+    navigate({
+      to: "/transactions",
+      search: (prev: any) => ({ ...prev, import: true }),
+    });
   };
 
   if (hideNav) {
@@ -416,6 +445,75 @@ export function AppShell({
       <div className="md:hidden">
         <BottomNav />
       </div>
+
+      {user && (
+        <div className="md:hidden">
+          {fabOpen && (
+            <div
+              className="fixed inset-0 z-40 bg-black/15 transition-opacity animate-[fadeIn_0.15s_ease-out]"
+              onClick={() => setFabOpen(false)}
+            />
+          )}
+
+          <div className="relative">
+            {fabOpen && (
+              <div
+                id="mobile-quick-actions-menu"
+                role="menu"
+                className="fixed bottom-36 right-4 z-50 flex min-w-[220px] flex-col gap-1 rounded-xl border border-border bg-surface p-1.5 shadow-xl shadow-black/20 animate-[slideUp_0.2s_ease-out]"
+              >
+                <div className="mb-1 border-b border-border/40 px-3 py-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+                </div>
+
+                <button
+                  id="btn-mobile-quick-txn"
+                  type="button"
+                  role="menuitem"
+                  onClick={openQuickTransaction}
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-foreground transition-colors hover:bg-surface-raised active:bg-surface-raised"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
+                    <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-bold text-foreground">Log quick transaction</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">Manually enter a payment</span>
+                  </span>
+                </button>
+
+                <button
+                  id="btn-mobile-import-statement"
+                  type="button"
+                  role="menuitem"
+                  onClick={openStatementImport}
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-foreground transition-colors hover:bg-surface-raised active:bg-surface-raised"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-sky-500/10 text-sky-600 dark:text-sky-300">
+                    <UploadCloud className="h-3.5 w-3.5 stroke-[2.5]" />
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-bold text-foreground">Import bank statement</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">Upload PDF or CSV file</span>
+                  </span>
+                </button>
+              </div>
+            )}
+
+            <button
+              id="btn-mobile-fab"
+              type="button"
+              onClick={() => setFabOpen((open) => !open)}
+              className="fixed bottom-20 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-primary/25 bg-primary text-primary-foreground shadow-lg shadow-black/20 transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              aria-label="Open quick actions menu"
+              aria-expanded={fabOpen}
+              aria-controls="mobile-quick-actions-menu"
+            >
+              <Plus className={`h-6 w-6 transition-transform duration-200 ${fabOpen ? "rotate-45" : ""}`} />
+            </button>
+          </div>
+        </div>
+      )}
     </SidebarCtx.Provider>
   );
 }

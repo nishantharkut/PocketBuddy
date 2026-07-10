@@ -676,6 +676,11 @@ class CustomRouteCreateReq(BaseModel):
     routing_provider: Optional[str] = None
     eta_confidence: Optional[str] = None
     split_suggestion: Optional[dict[str, Any]] = None
+    source: Optional[str] = None
+    routing_cache_hit: Optional[bool] = False
+    origin_coords: Optional[list[float]] = None
+    dest_coords: Optional[list[float]] = None
+    geometry: Optional[list[list[float]]] = None
 
 class ReportSubmitReq(BaseModel):
     route_id: str
@@ -1161,6 +1166,29 @@ async def create_custom_route(req: CustomRouteCreateReq, user_id: str = Depends(
     route_desc = _clean_text(req.description, 180)
     campus_landmark = _clean_text(req.campus_landmark, 60) or "Main Gate"
 
+    def clean_point(value: Any) -> Optional[list[float]]:
+        if not isinstance(value, (list, tuple)) or len(value) < 2:
+            return None
+        try:
+            lat = float(value[0])
+            lon = float(value[1])
+        except (TypeError, ValueError):
+            return None
+        if lat < -90 or lat > 90 or lon < -180 or lon > 180:
+            return None
+        return [round(lat, 7), round(lon, 7)]
+
+    origin_coords = clean_point(req.origin_coords)
+    dest_coords = clean_point(req.dest_coords)
+    geometry: list[list[float]] = []
+    if isinstance(req.geometry, list):
+        for point in req.geometry[:1200]:
+            cleaned = clean_point(point)
+            if cleaned:
+                geometry.append(cleaned)
+    if len(geometry) < 3:
+        geometry = []
+
     if len(route_name) < 3:
         raise HTTPException(status_code=400, detail="Route name is too short")
 
@@ -1177,6 +1205,9 @@ async def create_custom_route(req: CustomRouteCreateReq, user_id: str = Depends(
     if d <= 0 or d > 250:
         raise HTTPException(status_code=400, detail="Distance must be positive and less than 250 km")
     modes = estimate_fares_by_city(d, college)
+    route_source = _clean_text(req.source, 40)
+    if route_source not in {"osrm_route", "tomtom_traffic_route", "haversine_estimate"}:
+        route_source = "distance_model"
 
     route_id = f"{uuid.uuid4().hex[:8]}_custom"
 
@@ -1192,14 +1223,21 @@ async def create_custom_route(req: CustomRouteCreateReq, user_id: str = Depends(
         "safety_score_night": "Stick to app-based rides late at night.",
         "scam_warnings": "If you have a ride-app quote, compare it before negotiating flat prices.",
         "campus_landmark": campus_landmark,
-        "source": "distance_model",
+        "source": route_source,
         "confidence": "low",
         "distance_km": d,
         "duration_mins": req.duration_mins,
         "routing_provider": _clean_text(req.routing_provider, 40),
         "eta_confidence": _clean_text(req.eta_confidence, 20),
         "split_suggestion": req.split_suggestion if isinstance(req.split_suggestion, dict) else None,
+        "routing_cache_hit": bool(req.routing_cache_hit),
     }
+    if origin_coords:
+        r_doc["origin_coords"] = origin_coords
+    if dest_coords:
+        r_doc["dest_coords"] = dest_coords
+    if geometry:
+        r_doc["geometry"] = geometry
 
     await db.travel_routes.insert_one(r_doc)
     return _to_dict(r_doc)

@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PocketBuddy Low-Fidelity Wireframes</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #161616;
+      --muted: #666;
+      --line: #c9c9c9;
+      --soft: #f6f4ef;
+      --panel: #fff;
+      --risk: #b42318;
+      --ok: #047857;
+      --exam: #5b21b6;
+      --accent: #d96f32;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #ebe7df;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.35;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 16px 28px;
+      background: rgba(255, 255, 255, 0.92);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .note {
+      margin-top: 4px;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      padding: 8px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .tab.active {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: #fff;
+    }
+
+    main {
+      width: min(1320px, calc(100% - 36px));
+      margin: 24px auto 56px;
+    }
+
+    .frame {
+      display: none;
+      border: 2px solid var(--ink);
+      background: var(--soft);
+      min-height: 760px;
+      scroll-margin-top: 160px;
+    }
+
+    .frame.active { display: block; }
+
+    .frame-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 2px solid var(--ink);
+      background: #fff;
+    }
+
+    .frame-title h2 {
+      font-size: 22px;
+      letter-spacing: -0.02em;
+    }
+
+    .purpose {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      min-height: 704px;
+    }
+
+    .sidebar {
+      border-right: 2px solid var(--ink);
+      background: #fff;
+      padding: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 900;
+      margin-bottom: 28px;
+    }
+
+    .mark {
+      width: 28px;
+      height: 28px;
+      border: 2px solid var(--ink);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #ffe1c6;
+      font-weight: 900;
+    }
+
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav-item {
+      border: 1px solid var(--line);
+      background: #fafafa;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .nav-item.active {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .sidebar-note {
+      margin-top: 28px;
+      border: 1px dashed var(--line);
+      padding: 12px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .content {
+      padding: 22px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .stack { display: grid; gap: 16px; }
+
+    .card {
+      border: 2px solid var(--ink);
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .soft-card {
+      border: 1px solid var(--line);
+      background: #fafafa;
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .primary-card {
+      min-height: 210px;
+      display: grid;
+      gap: 18px;
+      align-content: space-between;
+      border-width: 3px;
+    }
+
+    .state-ok { border-color: var(--ok); }
+    .state-risk { border-color: var(--risk); }
+    .state-exam { border-color: var(--exam); }
+
+    .label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .headline {
+      margin-top: 8px;
+      max-width: 780px;
+      font-size: clamp(36px, 5vw, 70px);
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+
+    .reason {
+      max-width: 780px;
+      color: #333;
+      font-size: 16px;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .primary-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      border: 2px solid var(--ink);
+      background: var(--ink);
+      color: #fff;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font-size: 14px;
+      font-weight: 900;
+      white-space: normal;
+    }
+
+    .secondary-action {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .money-strip, .signal-strip, .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 14px;
+      padding: 12px;
+      min-height: 76px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 6px;
+      font-variant-numeric: tabular-nums;
+      font-size: 22px;
+      letter-spacing: -0.03em;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+    }
+
+    .rail {
+      display: grid;
+      gap: 12px;
+    }
+
+    .rail-card {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .rail-card h3 {
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .rail-card p, .soft-card p {
+      color: #444;
+      font-size: 13px;
+    }
+
+    .list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .list-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-size: 14px;
+    }
+
+    .modal-zone {
+      border: 2px dashed var(--risk);
+      background: #fff8f7;
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .modal-zone h3 {
+      color: var(--risk);
+      margin-bottom: 8px;
+      font-size: 18px;
+    }
+
+    .summary-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 18px;
+    }
+
+    .forecast-number {
+      display: flex;
+      align-items: end;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .forecast-number strong {
+      font-size: clamp(64px, 9vw, 112px);
+      line-height: 0.85;
+      letter-spacing: -0.08em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .forecast-number span {
+      color: var(--muted);
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .driver {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .rank {
+      width: 34px;
+      height: 34px;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+    }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .field {
+      border: 2px solid var(--ink);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .segment {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 800;
+      background: #fff;
+    }
+
+    .segment.active {
+      border: 2px solid var(--ink);
+      background: #f2ede4;
+    }
+
+    .fare-result {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 0.75fr);
+      gap: 14px;
+    }
+
+    .quote-box {
+      border: 2px solid var(--risk);
+      background: #fff8f7;
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .annotations {
+      margin-top: 16px;
+      border-top: 1px dashed var(--line);
+      padding-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .annotations strong {
+      color: var(--ink);
+    }
+
+    @media (max-width: 980px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .two-col, .summary-layout, .flow-grid, .fare-result { grid-template-columns: 1fr; }
+      .money-strip, .signal-strip, .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .purpose { text-align: left; }
+    }
+
+    @media (max-width: 560px) {
+      main { width: min(100% - 20px, 1320px); margin-top: 12px; }
+      .content, .frame-title { padding: 14px; }
+      .money-strip, .signal-strip, .metric-grid, .segmented { grid-template-columns: 1fr; }
+      .headline { font-size: 38px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>PocketBuddy low-fidelity wireframes</h1>
+      <p class="note">Purpose: verify product hierarchy before visual polish. These are intentionally plain.</p>
+    </div>
+    <nav class="tabs" aria-label="Wireframe sections">
+      <button class="tab active" data-target="dash-healthy">Dashboard A</button>
+      <button class="tab" data-target="dash-shortfall">Dashboard B</button>
+      <button class="tab" data-target="dash-stressed">Dashboard C</button>
+      <button class="tab" data-target="dash-exam">Dashboard D</button>
+      <button class="tab" data-target="runway">Runway</button>
+      <button class="tab" data-target="travel">Travel</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="frame active" id="dash-healthy">
+      <div class="frame-title">
+        <div>
+          <h2>Dashboard A: Healthy Day</h2>
+          <p class="note">Primary question: what should I do today?</p>
+        </div>
+        <p class="purpose">Reference influence: YNAB one money answer + Apple Health highlights</p>
+      </div>
+      <div class="app-shell">
+        <Sidebar active="Dashboard"></Sidebar>
+        <div class="content two-col">
+          <div class="stack">
+            <section class="card primary-card state-ok">
+              <div>
+                <div class="label">Today</div>
+                <h3 class="headline">You can spend normally today.</h3>
+                <p class="reason">Your allowance, recent spend, meal signal, and companion sync are all inside normal range.</p>
+              </div>
+              <div class="action-row">
+                <span class="primary-action">Stay under Rs.238</span>
+                <span class="secondary-action">Open transactions</span>
+              </div>
+            </section>
+
+            <section class="money-strip">
+              <div class="metric"><span class="label">Remaining</span><strong>Rs.4,758</strong><small>until Jul 1</small></div>
+              <div class="metric"><span class="label">Safe today</span><strong>Rs.238</strong><small>flexible spend</small></div>
+              <div class="metric"><span class="label">Runway</span><strong>12 days</strong><small>expected</small></div>
+              <div class="metric"><span class="label">Food pace</span><strong>Rs.182</strong><small>daily average</small></div>
+            </section>
+
+            <section class="signal-strip">
+              <div class="soft-card"><span class="label">Meal signal</span><p>Last food/payment signal was 4h ago.</p></div>
+              <div class="soft-card"><span class="label">Sync</span><p>Android connector synced 2 recent payments.</p></div>
+              <div class="soft-card"><span class="label">Pool</span><p>Net +Rs.480 across active room pools.</p></div>
+              <div class="soft-card"><span class="label">Travel</span><p>No urgent fare warning right now.</p></div>
+            </section>
+          </div>
+
+          <aside class="rail">
+            <section class="rail-card"><h3>Recent sync</h3><div class="list"><div class="list-row"><span>BH-2 Night Canteen</span><strong>Rs.45</strong></div><div class="list-row"><span>Campus Store</span><strong>Rs.154</strong></div></div></section>
+            <section class="rail-card"><h3>Campus food</h3><p>Main canteen veg thali fits today's food cap. Avoid delivery unless late-night study runs long.</p></section>
+            <section class="rail-card"><h3>Wing netting</h3><p>Rahul: you owe Rs.140. Abhishek owes you Rs.620.</p></section>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="frame" id="dash-shortfall">
+      <div class="frame-title">
+        <div>
+          <h2>Dashboard B: Shortfall Risk</h2>
+          <p class="note">Same dashboard, different priority. Money risk takes over.</p>
+        </div>
+        <p class="purpose">No panic language. One recovery action first.</p>
+      </div>
+      <div class="app-shell">
+        <Sidebar active="Dashboard"></Sidebar>
+        <div class="content two-col">
+          <div class="stack">
+            <section class="card primary-card state-risk">
+              <div>
+                <div class="label">Today</div>
+                <h3 class="headline">This month is drifting short.</h3>
+                <p class="reason">At the current pace, the low case can miss reset. The fastest fix is food spend, not more charts.</p>
+              </div>
+              <div class="action-row">
+                <span class="primary-action">Recover 2 days: switch one delivery to mess</span>
+                <span class="secondary-action">See why</span>
+              </div>
+            </section>
+
+            <section class="money-strip">
+              <div class="metric"><span class="label">Remaining</span><strong>Rs.480</strong><small>until Jul 1</small></div>
+              <div class="metric"><span class="label">Safe today</span><strong>Rs.24</strong><small>very tight</small></div>
+              <div class="metric"><span class="label">Runway</span><strong>1 day</strong><small>low case</small></div>
+              <div class="metric"><span class="label">Food pace</span><strong>Rs.182</strong><small>main driver</small></div>
+            </section>
+
+            <section class="signal-strip">
+              <div class="soft-card"><span class="label">Meal signal</span><p>Last signal 14h ago. Ask before recommending delivery.</p></div>
+              <div class="soft-card"><span class="label">Recurring</span><p>3 subscriptions already reserved this cycle.</p></div>
+              <div class="soft-card"><span class="label">Pool</span><p>Collecting Rs.620 improves available cash.</p></div>
+              <div class="soft-card"><span class="label">Travel</span><p>Station route is above normal in evening reports.</p></div>
+            </section>
+          </div>
+
+          <aside class="rail">
+            <section class="rail-card"><h3>Why this changed</h3><div class="list"><div class="list-row"><span>Food pace</span><strong>Rs.182/day</strong></div><div class="list-row"><span>Subscriptions</span><strong>Rs.337</strong></div><div class="list-row"><span>Pool dues</span><strong>Rs.140</strong></div></div></section>
+            <section class="rail-card"><h3>Next safe spend</h3><p>Pick mess/canteen before quick-commerce. Do not show a moral warning.</p></section>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="frame" id="dash-stressed">
+      <div class="frame-title">
+        <div>
+          <h2>Dashboard C: Stressed + Meal Check-in</h2>
+          <p class="note">Wellness changes the next action. The app asks first, then gives money advice.</p>
+        </div>
+        <p class="purpose">Apple Health pattern: careful signal, no diagnosis.</p>
+      </div>
+      <div class="app-shell">
+        <Sidebar active="Dashboard"></Sidebar>
+        <div class="content two-col">
+          <div class="stack">
+            <section class="card primary-card state-risk">
+              <div>
+                <div class="label">Today</div>
+                <h3 class="headline">Check food first, then spend.</h3>
+                <p class="reason">There is no food signal for 21h and runway is already tight. If you ate in mess, log that without creating a fake expense.</p>
+              </div>
+              <div class="action-row">
+                <span class="primary-action">Update meal signal</span>
+                <span class="secondary-action">Not now</span>
+              </div>
+            </section>
+
+            <section class="modal-zone">
+              <h3>Dismissible meal check-in</h3>
+              <p>Did you eat in mess, cook/share food, or skip/delay? This updates wellness and food recommendations only. It does not mark spending.</p>
+              <div class="action-row" style="margin-top: 12px;">
+                <span class="secondary-action">Ate in mess</span>
+                <span class="secondary-action">Cooked/shared</span>
+                <span class="secondary-action">Skipped/delayed</span>
+                <span class="secondary-action">Not now</span>
+              </div>
+            </section>
+
+            <section class="money-strip">
+              <div class="metric"><span class="label">Remaining</span><strong>Rs.80</strong><small>until Jul 1</small></div>
+              <div class="metric"><span class="label">Safe today</span><strong>Rs.6</strong><small>collision</small></div>
+              <div class="metric"><span class="label">Meal gap</span><strong>21h</strong><small>needs context</small></div>
+              <div class="metric"><span class="label">Runway</span><strong>0 days</strong><small>low case</small></div>
+            </section>
+          </div>
+
+          <aside class="rail">
+            <section class="rail-card"><h3>Copy rule</h3><p>Do not say burnout, sleep deprivation, unhealthy, or bad spending. Use observable signals only.</p></section>
+            <section class="rail-card"><h3>After check-in</h3><p>Show the cheapest campus meal that fits the remaining food cap, or suggest asking a roommate/pool.</p></section>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="frame" id="dash-exam">
+      <div class="frame-title">
+        <div>
+          <h2>Dashboard D: Exam Mode</h2>
+          <p class="note">Exam mode is not a banner. It changes the recommendation priority.</p>
+        </div>
+        <p class="purpose">Routine protection before generic spend analytics.</p>
+      </div>
+      <div class="app-shell">
+        <Sidebar active="Dashboard"></Sidebar>
+        <div class="content two-col">
+          <div class="stack">
+            <section class="card primary-card state-exam">
+              <div>
+                <div class="label">Exam week</div>
+                <h3 class="headline">Protect routine this week.</h3>
+                <p class="reason">Food gaps and late-night activity are weighted more heavily while exams are active. The safest financial choice may be the predictable meal, not the cheapest one.</p>
+              </div>
+              <div class="action-row">
+                <span class="primary-action">Plan next meal before late-night study</span>
+                <span class="secondary-action">View runway</span>
+              </div>
+            </section>
+
+            <section class="money-strip">
+              <div class="metric"><span class="label">Remaining</span><strong>Rs.4,758</strong><small>healthy</small></div>
+              <div class="metric"><span class="label">Safe today</span><strong>Rs.238</strong><small>normal</small></div>
+              <div class="metric"><span class="label">Exam reserve</span><strong>Rs.700</strong><small>protected</small></div>
+              <div class="metric"><span class="label">Meal signal</span><strong>6h</strong><small>watch tonight</small></div>
+            </section>
+
+            <section class="signal-strip">
+              <div class="soft-card"><span class="label">Food</span><p>Prefer predictable mess/canteen before study block.</p></div>
+              <div class="soft-card"><span class="label">Travel</span><p>Exam route travel should be planned before peak hour.</p></div>
+              <div class="soft-card"><span class="label">Subscriptions</span><p>Pause non-essential fixed costs only if runway worsens.</p></div>
+              <div class="soft-card"><span class="label">Sync</span><p>Connector active. No setup task today.</p></div>
+            </section>
+          </div>
+
+          <aside class="rail">
+            <section class="rail-card"><h3>Campus intelligence</h3><p>BH-2 night canteen is active. Prefer known options during exam week.</p></section>
+            <section class="rail-card"><h3>Why this matters</h3><p>Exam context changes the recommendation from "cheapest" to "safe, predictable, still affordable".</p></section>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="frame" id="runway">
+      <div class="frame-title">
+        <div>
+          <h2>Runway Summary</h2>
+          <p class="note">Primary question: will I make it to reset, and what changes that?</p>
+        </div>
+        <p class="purpose">Default view is summary. Model details are secondary.</p>
+      </div>
+      <div class="app-shell">
+        <Sidebar active="Runway"></Sidebar>
+        <div class="content">
+          <div class="summary-layout">
+            <section class="stack">
+              <article class="card primary-card state-risk">
+                <div>
+                  <div class="label">Forecast answer</div>
+                  <h3 class="headline">Projected shortfall.</h3>
+                  <p class="reason">At current pace, the low case runs out before reset. The expected case is recoverable if one food and one fixed-cost decision changes.</p>
+                </div>
+                <div class="metric-grid">
+                  <div class="metric"><span class="label">Expected</span><strong>12d</strong><small>current pace</small></div>
+                  <div class="metric"><span class="label">Low case</span><strong>1d</strong><small>high spend band</small></div>
+                  <div class="metric"><span class="label">Safe/day</span><strong>Rs.24</strong><small>flexible spend</small></div>
+                  <div class="metric"><span class="label">Confidence</span><strong>Med</strong><small>14 active days</small></div>
+                </div>
+              </article>
+
+              <article class="card">
+                <div class="label">Why it changed</div>
+                <div class="list" style="margin-top: 12px;">
+                  <div class="driver"><span class="rank">1</span><div><strong>Food pace</strong><p class="note">Delivery is the largest flexible driver.</p></div><strong>Rs.182/day</strong></div>
+                  <div class="driver"><span class="rank">2</span><div><strong>Recurring commitments</strong><p class="note">Subscriptions already reserved this cycle.</p></div><strong>Rs.337</strong></div>
+                  <div class="driver"><span class="rank">3</span><div><strong>Pool dues</strong><p class="note">Outstanding roommate splits are included.</p></div><strong>Rs.140</strong></div>
+                </div>
+              </article>
+            </section>
+
+            <aside class="stack">
+              <article class="card">
+                <div class="label">Try one change</div>
+                <div class="list" style="margin-top: 12px;">
+                  <div class="list-row"><span>Replace two deliveries with mess meals</span><strong>+2d</strong></div>
+                  <div class="list-row"><span>Pause one subscription</span><strong>+1d</strong></div>
+                  <div class="list-row"><span>Collect pending pool dues</span><strong>+3d</strong></div>
+                </div>
+              </article>
+              <article class="rail-card">
+                <h3>Details stay behind tabs</h3>
+                <p>EWMA, weekday factor, model confidence, and horizon tables are useful but should not be the first view.</p>
+              </article>
+              <article class="rail-card">
+                <h3>Copy brief</h3>
+                <p>Let the student share a short runway brief with themselves or family only after they understand the forecast.</p>
+              </article>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frame" id="travel">
+      <div class="frame-title">
+        <div>
+          <h2>Travel Route + Quote Flow</h2>
+          <p class="note">Primary question: what is a fair ride for this route and time?</p>
+        </div>
+        <p class="purpose">Uber pattern: route first, fare second, quote third.</p>
+      </div>
+      <div class="app-shell">
+        <Sidebar active="Travel"></Sidebar>
+        <div class="content flow-grid">
+          <section class="card stack">
+            <div>
+              <div class="label">Plan a campus ride</div>
+              <p class="note">Quote checking should never appear without route and time context.</p>
+            </div>
+            <div class="field">
+              <span class="label">From</span>
+              <strong>Gwalior Railway Station</strong>
+            </div>
+            <div class="field">
+              <span class="label">To</span>
+              <strong>ABV-IIITM Main Gate</strong>
+            </div>
+            <div>
+              <span class="label">When</span>
+              <div class="segmented" style="margin-top: 8px;">
+                <div class="segment">Morning</div>
+                <div class="segment">Afternoon</div>
+                <div class="segment active">Evening</div>
+                <div class="segment">Late night</div>
+              </div>
+            </div>
+            <div>
+              <span class="label">Intent</span>
+              <div class="segmented" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
+                <div class="segment">Fastest</div>
+                <div class="segment active">Cheapest</div>
+                <div class="segment">Safer</div>
+              </div>
+            </div>
+            <span class="primary-action" style="width: max-content;">Check route</span>
+          </section>
+
+          <section class="stack">
+            <article class="card">
+              <div class="fare-result">
+                <div>
+                  <div class="label">Fair fare result</div>
+                  <h3 class="headline" style="font-size: 44px;">Rs.140-Rs.180</h3>
+                  <p class="reason">For Station -> ABV-IIITM, evening window. Based on route estimate and recent confirmed student reports.</p>
+                </div>
+                <div class="metric-grid" style="grid-template-columns: 1fr;">
+                  <div class="metric"><span class="label">Trust</span><strong>High</strong><small>28 reports</small></div>
+                  <div class="metric"><span class="label">Distance</span><strong>7.8 km</strong><small>route estimate</small></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="quote-box">
+              <div class="label">Check a driver quote</div>
+              <h3 style="margin-top: 8px;">Route locked: Station -> ABV-IIITM, evening</h3>
+              <div class="field" style="margin-top: 12px;">
+                <span class="label">Quoted amount</span>
+                <strong>Rs.220</strong>
+              </div>
+              <div class="soft-card" style="margin-top: 12px;">
+                <strong style="color: var(--risk);">High quote</strong>
+                <p>Ask for Rs.160-Rs.180 or match with another student. Do not invent a new fare number.</p>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="label">AI coach opens after quote result</div>
+              <p class="reason">Use only computed fair range and report count. Keep script short, local, and safety-aware.</p>
+              <div class="soft-card" style="margin-top: 12px;">
+                <p>"Bhaiya, station se IIITM tak students usually Rs.160-Rs.180 dete hain. Agar meter nahi hai, Rs.170 final kar dete hain."</p>
+              </div>
+            </article>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <div class="annotations">
+      <strong>Approval test:</strong> if a judge or user sees only the top third of each screen, they should still know the page's answer. Styling comes later.
+    </div>
+  </main>
+
+  <script>
+    class Sidebar extends HTMLElement {
+      connectedCallback() {
+        const active = this.getAttribute("active") || "Dashboard";
+        const items = ["Dashboard", "Transactions", "Runway", "Pool", "Travel", "Settings"];
+        this.outerHTML = `
+          <aside class="sidebar">
+            <div class="brand"><span class="mark">P</span><span>PocketBuddy</span></div>
+            <div class="nav">
+              ${items.map((item) => `<div class="nav-item ${item === active ? "active" : ""}">${item}</div>`).join("")}
+            </div>
+            <div class="sidebar-note">Sidebar is intentionally quiet. Main page should carry the daily decision.</div>
+          </aside>
+        `;
+      }
+    }
+    customElements.define("pb-sidebar", Sidebar);
+
+    document.querySelectorAll("Sidebar").forEach((el) => {
+      const replacement = document.createElement("pb-sidebar");
+      replacement.setAttribute("active", el.getAttribute("active") || "Dashboard");
+      el.replaceWith(replacement);
+    });
+
+    const tabs = document.querySelectorAll(".tab");
+    const frames = document.querySelectorAll(".frame");
+    function showFrame(id) {
+      tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.target === id));
+      frames.forEach((frame) => frame.classList.toggle("active", frame.id === id));
+      history.replaceState(null, "", `#${id}`);
+    }
+
+    tabs.forEach((tab) => tab.addEventListener("click", () => showFrame(tab.dataset.target)));
+    const initial = location.hash.replace("#", "");
+    if (initial && document.getElementById(initial)) showFrame(initial);
+  </script>
+</body>
+</html>

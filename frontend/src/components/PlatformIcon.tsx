@@ -1,4 +1,4 @@
-import { ShoppingBag, ShoppingBasket, ShoppingCart, Store } from "lucide-react";
+import { Coffee, Package, ShoppingBag, ShoppingBasket, ShoppingCart, Store } from "lucide-react";
 
 export function PlatformIcon({ platform, name, className = "h-5 w-5" }: { platform: string; name?: string; className?: string }) {
   const normalized = platform.toLowerCase();
@@ -41,29 +41,22 @@ export function PlatformIcon({ platform, name, className = "h-5 w-5" }: { platfo
     );
   }
 
-  // Fallback for custom platforms - generate a beautiful initials badge with deterministic gradient
-  const displayName = name || platform || "Custom";
-  const initial = displayName.trim().charAt(0).toUpperCase() || "?";
-  
-  let hash = 0;
-  for (let i = 0; i < displayName.length; i++) {
-    hash = displayName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  const gradients = [
-    "from-[#EC4899] to-[#F43F5E]", // pink-rose
-    "from-[#8B5CF6] to-[#D946EF]", // violet-fuchsia
-    "from-[#3B82F6] to-[#06B6D4]", // blue-cyan
-    "from-[#10B981] to-[#3B82F6]", // emerald-blue
-    "from-[#F59E0B] to-[#EF4444]", // amber-red
-    "from-[#6366F1] to-[#8B5CF6]", // indigo-violet
-  ];
-  
-  const gradient = gradients[Math.abs(hash) % gradients.length];
-  
+  const label = `${name || ""} ${platform || ""}`.toLowerCase();
+  const FallbackIcon = label.match(/food|canteen|mess|cafe|coffee|chai|juice|stall|restaurant|snack/)
+    ? Coffee
+    : label.match(/grocery|grocer|basket|mart|kirana|blinkit|zepto|instamart/)
+      ? ShoppingBasket
+      : label.match(/cart|checkout|order|pool/)
+        ? ShoppingCart
+        : label.match(/store|shop|market|merchant/)
+          ? Store
+          : label.match(/delivery|bag/)
+            ? ShoppingBag
+            : Package;
+
   return (
-    <div className={`flex items-center justify-center rounded-xl bg-gradient-to-br ${gradient} text-white font-black text-[9px] tracking-wider shrink-0 shadow-md ${className}`}>
-      {initial}
+    <div className={`flex items-center justify-center rounded-xl border border-border bg-surface-raised text-muted-foreground shrink-0 ${className}`}>
+      <FallbackIcon className="h-[58%] w-[58%]" strokeWidth={2.1} />
     </div>
   );
 }

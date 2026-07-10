@@ -13,8 +13,6 @@ interface TravelRouteMapProps {
   destinationLabel?: string;
   distanceKm?: number | string | null;
   durationMins?: number | string | null;
-  routeSource?: string | null;
-  cacheHit?: boolean;
   className?: string;
 }
 
@@ -63,8 +61,6 @@ export function TravelRouteMap({
   destinationLabel,
   distanceKm,
   durationMins,
-  routeSource,
-  cacheHit,
   className = "",
 }: TravelRouteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -82,6 +78,7 @@ export function TravelRouteMap({
     [destination, origin, routeGeometry, shouldDrawRoute],
   );
   const hasMapData = Boolean(origin || destination || routeGeometry.length >= 2);
+  const hasRouteLabels = Boolean(originLabel || destinationLabel);
   const distanceLabel = formatDistance(distanceKm);
   const durationLabel = formatDuration(durationMins);
 
@@ -161,9 +158,18 @@ export function TravelRouteMap({
         <div className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-surface text-muted-foreground">
           <MapPin className="h-4 w-4" />
         </div>
-        <p className="mt-3 text-sm font-semibold text-foreground">Select pickup and destination</p>
+        <p className="mt-3 text-sm font-semibold text-foreground">
+          {hasRouteLabels ? "Route selected" : "Select pickup and destination"}
+        </p>
+        {hasRouteLabels ? (
+          <p className="mt-1 max-w-[20rem] text-xs font-medium leading-relaxed text-foreground">
+            {originLabel || "Pickup"} to {destinationLabel || "Destination"}
+          </p>
+        ) : null}
         <p className="mt-1 max-w-[18rem] text-xs leading-relaxed text-muted-foreground">
-          The route preview appears after PocketBuddy resolves the places.
+          {hasRouteLabels
+            ? "Run an estimate once to attach road geometry and draw the mapped path."
+            : "The route preview appears after PocketBuddy resolves the places."}
         </p>
       </div>
     );
@@ -181,11 +187,6 @@ export function TravelRouteMap({
         {durationLabel ? (
           <span className="rounded-full border border-border bg-surface/95 px-2 py-1 text-[10px] font-semibold text-foreground shadow-sm">
             {durationLabel}
-          </span>
-        ) : null}
-        {routeSource ? (
-          <span className="rounded-full border border-border bg-surface/95 px-2 py-1 text-[10px] font-semibold text-muted-foreground shadow-sm">
-            {cacheHit ? "Cached" : routeSource}
           </span>
         ) : null}
       </div>

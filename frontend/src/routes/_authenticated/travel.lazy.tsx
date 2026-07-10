@@ -1,5 +1,5 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell, MobileMenuButton } from "@/components/AppShell";
@@ -52,7 +52,6 @@ import {
   getTravelReports,
   getTravelReportCandidates,
   confirmTravelReportCandidate,
-  getTravelSavings,
   logTravelSavings,
   createTravelRoute,
   getProfile,
@@ -256,58 +255,6 @@ function getSelectedTimeContext(selection: TravelTimeSelection, currentContext: 
   return { ...choice, apiValue: choice.id, selectorLabel: choice.label };
 }
 
-function routeSourceDisplay(result: any) {
-  const source = String(result?.source || "").toLowerCase();
-  if (source === "osrm_route" || source === "tomtom_traffic_route") {
-    return result?.routing_cache_hit ? "Mapped road route, cached" : "Mapped road route";
-  }
-  if (source === "haversine_estimate") return "Fallback distance estimate";
-  return result?.routing_provider || "Route estimate";
-}
-
-function FareEvidencePanel({ mode, routeResult, compact = false }: { mode?: any; routeResult?: any; compact?: boolean }) {
-  const explanation = mode?.fare_explanation;
-  const runway = mode?.runway_impact;
-  if (!explanation && !runway) return null;
-
-  const facts = [
-    explanation?.route_source_label || (routeResult ? routeSourceDisplay(routeResult) : null),
-    explanation?.fare_source_label,
-    explanation?.reports_label,
-    explanation?.timing_label,
-  ].filter(Boolean);
-
-  return (
-    <div className={`rounded-xl border border-border bg-background/50 ${compact ? "px-3 py-2" : "px-3.5 py-3"}`}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Why this fare?</p>
-          {facts.length ? (
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {facts.slice(0, 4).map((fact) => (
-                <span key={fact} className="rounded-full border border-border bg-surface px-2 py-1 text-[10px] font-medium text-muted-foreground">
-                  {fact}
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        {runway?.remaining_after_fare_rs !== undefined ? (
-          <div className="shrink-0 rounded-lg bg-primary/5 px-3 py-2 text-left sm:text-right">
-            <p className="text-[10px] text-muted-foreground">After this ride</p>
-            <p className="text-sm font-semibold text-foreground">₹{runway.remaining_after_fare_rs}</p>
-          </div>
-        ) : null}
-      </div>
-      {runway?.summary ? (
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{runway.summary}</p>
-      ) : explanation?.pricing_disclaimer ? (
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{explanation.pricing_disclaimer}</p>
-      ) : null}
-    </div>
-  );
-}
-
 function SourceBadge({ label }: { label?: string }) {
   const l = label?.toLowerCase() || "";
   if (l === "stale")
@@ -413,10 +360,14 @@ function fareTypicalLabel(mode: any) {
   return "Model estimate";
 }
 
-function findModeByIntent(modes: any[] = [], intent: TravelIntent, splitSuggestion?: SplitSuggestion | null) {
+function findModeByIntent(modes: any[] = [], intent: TravelIntent, splitSuggestion?: SplitSuggestion | null, preferredMode?: string | null) {
   if (!modes.length) return null;
   const byMedian = [...modes].sort((a, b) => Number(a.median_fare || 0) - Number(b.median_fare || 0));
   const modeBy = (...terms: string[]) => modes.find((m) => terms.some((term) => String(m.mode || "").toLowerCase().includes(term)));
+  if (preferredMode) {
+    const selected = modes.find((m) => String(m.mode || "").toLowerCase() === preferredMode.toLowerCase());
+    if (selected) return selected;
+  }
 
   if (intent === "save") {
     return modeBy("shared", "tempo", "bus") || modeBy("bike") || byMedian[0];
@@ -433,14 +384,16 @@ function buildDecision({
   durationMins,
   timeContext,
   splitSuggestion,
+  preferredMode,
 }: {
   intent: TravelIntent;
   modes: any[];
   durationMins?: number;
   timeContext: ReturnType<typeof getTimeOfDaySurge>;
   splitSuggestion?: SplitSuggestion | null;
+  preferredMode?: string | null;
 }) {
-  const mode = findModeByIntent(modes, intent, splitSuggestion);
+  const mode = findModeByIntent(modes, intent, splitSuggestion, preferredMode);
   if (!mode) return null;
   const median = Number(mode.median_fare || 0);
   const max = Number(mode.max_fare || median);
@@ -452,10 +405,11 @@ function buildDecision({
     return {
       label: useSplit ? "Take the split route" : `Take ${String(mode.mode || "shared option").split(" ")[0]}`,
       fare: useSplit ? splitSuggestion?.split_fare || median : median,
+      mode: mode.mode,
       eta,
       action: useSplit
-        ? splitSuggestion?.reason || `Use the curated transfer option via ${splitSuggestion?.transfer_label}. Avoid it if the area is empty, it is late, or you have luggage.`
-        : "Use the lowest reliable mode. Do not force a two-hop route without a known busy transfer point.",
+        ? splitSuggestion?.reason || `Use the transfer via ${splitSuggestion?.transfer_label}; avoid it late or with luggage.`
+        : "Use the lowest reliable mode. Avoid empty transfer points.",
       acceptUpTo,
       tone: "emerald",
     };
@@ -465,8 +419,9 @@ function buildDecision({
     return {
       label: `Use ${String(mode.mode || "direct ride").split(" ")[0]} direct`,
       fare: median,
+      mode: mode.mode,
       eta,
-      action: "Avoid unknown shared autos and two-hop transfers. Prefer a direct pickup/drop, especially after dark or with luggage.",
+      action: "Prefer direct pickup and drop, especially after dark or with luggage.",
       acceptUpTo,
       tone: "indigo",
     };
@@ -475,8 +430,9 @@ function buildDecision({
   return {
     label: `Use ${String(mode.mode || "direct ride").split(" ")[0]} now`,
     fare: median,
+    mode: mode.mode,
     eta,
-    action: "Do one quick counter-offer near the fair fare. If the driver refuses, switch to app/direct ride instead of spending time negotiating.",
+    action: "Counter once near this fare. If refused, switch to app or direct ride.",
     acceptUpTo,
     tone: "neutral",
   };
@@ -604,6 +560,8 @@ function TravelPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const routeSearchRef = useRef<HTMLDivElement | null>(null);
+  const hydratedEstimateKeyRef = useRef<string>("");
+  const autoEstimateKeyRef = useRef<string>("");
 
   const [selectedCollege, setSelectedCollege] = useState<string>("");
   const [campusEditorOpen, setCampusEditorOpen] = useState<boolean>(false);
@@ -655,6 +613,9 @@ function TravelPage() {
   const [destinationSuggestionsOpen, setDestinationSuggestionsOpen] = useState(false);
   const [isEstimating, setIsEstimating] = useState<boolean>(false);
   const [estimatedResult, setEstimatedResult] = useState<any>(null);
+  const [estimatedModeOverride, setEstimatedModeOverride] = useState<string | null>(null);
+  const [travelMemoryHydrated, setTravelMemoryHydrated] = useState<boolean>(false);
+  const [pendingAutoEstimate, setPendingAutoEstimate] = useState<boolean>(false);
   const [showCheckInfo, setShowCheckInfo] = useState<boolean>(false);
   const [showCoachInfo, setShowCoachInfo] = useState<boolean>(false);
   const [savedRoutesOpen, setSavedRoutesOpen] = useState<boolean>(false);
@@ -698,6 +659,21 @@ function TravelPage() {
   }, [selectedCollege, profile]);
 
   const isFallbackCampus = activeCollege.toLowerCase().includes("pocketbuddy");
+  const selectedRouteStorageKey = useMemo(() => {
+    const userKey = user?.id || "guest";
+    const campusKey = activeCollege.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "campus";
+    return `pocketbuddy.travel.selectedRoute.${userKey}.${campusKey}`;
+  }, [activeCollege, user?.id]);
+  const lastEstimateStorageKey = useMemo(() => {
+    const userKey = user?.id || "guest";
+    const campusKey = activeCollege.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "campus";
+    return `pocketbuddy.travel.lastEstimate.${userKey}.${campusKey}`;
+  }, [activeCollege, user?.id]);
+  const lastDraftStorageKey = useMemo(() => {
+    const userKey = user?.id || "guest";
+    const campusKey = activeCollege.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "campus";
+    return `pocketbuddy.travel.lastDraft.${userKey}.${campusKey}`;
+  }, [activeCollege, user?.id]);
 
   const campusOptions = useMemo(() => {
     const options = [
@@ -722,6 +698,16 @@ function TravelPage() {
     setSelectedCollege(nextCollege);
     setCampusEditorOpen(false);
     setSelectedRouteId("");
+    setEstimatedResult(null);
+    setEstimatedModeOverride(null);
+    setDynamicOrigin("");
+    setDynamicDestination("");
+    setSelectedOriginPlace(null);
+    setSelectedDestinationPlace(null);
+    setManualOriginText("");
+    setManualDestinationText("");
+    setPendingAutoEstimate(false);
+    setTravelMemoryHydrated(false);
     if (options.persist !== false && nextCollege !== profile?.college_name?.trim()) {
       updateCollegeMutation.mutate(nextCollege);
     }
@@ -750,6 +736,16 @@ function TravelPage() {
 
     setSelectedCollege(nextCollege);
     setSelectedRouteId("");
+    setEstimatedResult(null);
+    setEstimatedModeOverride(null);
+    setDynamicOrigin("");
+    setDynamicDestination("");
+    setSelectedOriginPlace(null);
+    setSelectedDestinationPlace(null);
+    setManualOriginText("");
+    setManualDestinationText("");
+    setPendingAutoEstimate(false);
+    setTravelMemoryHydrated(false);
     updateCollegeMutation.mutate(nextCollege, {
       onSuccess: () => setCampusEditorOpen(false),
     });
@@ -818,12 +814,106 @@ function TravelPage() {
   const destinationSuggestions: TravelPlaceSuggestion[] = destinationSuggestionData?.suggestions ?? [];
 
   useEffect(() => {
-    if (routes && routes.length > 0 && (!selectedRouteId || !routes.some((r: any) => r.id === selectedRouteId))) {
-      setSelectedRouteId(routes[0].id);
-    } else if (routes && routes.length === 0 && selectedRouteId) {
-      setSelectedRouteId("");
+    if (typeof window === "undefined" || !user?.id || isFallbackCampus) return;
+    if (hydratedEstimateKeyRef.current === lastEstimateStorageKey) return;
+    hydratedEstimateKeyRef.current = lastEstimateStorageKey;
+    setTravelMemoryHydrated(false);
+    setPendingAutoEstimate(false);
+
+    const rawEstimate = window.localStorage.getItem(lastEstimateStorageKey);
+    if (!rawEstimate) {
+      const rawDraft = window.localStorage.getItem(lastDraftStorageKey);
+      if (rawDraft) {
+        try {
+          const draft = JSON.parse(rawDraft);
+          const origin = typeof draft?.origin === "string" ? draft.origin.trim() : "";
+          const destination = typeof draft?.destination === "string" ? draft.destination.trim() : "";
+          if (origin && destination) {
+            setDynamicOrigin(origin);
+            setDynamicDestination(destination);
+            setSelectedOriginPlace(null);
+            setSelectedDestinationPlace(null);
+            setManualOriginText("");
+            setManualDestinationText("");
+            setEstimatedResult(null);
+            setEstimatedModeOverride(null);
+
+            const allowedTimeSelections = new Set(["now", ...TRAVEL_TIME_CHOICES.map((choice) => choice.id)]);
+            if (typeof draft?.fareTimeSelection === "string" && allowedTimeSelections.has(draft.fareTimeSelection)) {
+              setFareTimeSelection(draft.fareTimeSelection as TravelTimeSelection);
+            }
+            setPendingAutoEstimate(true);
+            setTravelMemoryHydrated(true);
+            return;
+          }
+        } catch {
+          window.localStorage.removeItem(lastDraftStorageKey);
+        }
+      }
+
+      setEstimatedResult(null);
+      setEstimatedModeOverride(null);
+      setDynamicOrigin("");
+      setDynamicDestination("");
+      setSelectedOriginPlace(null);
+      setSelectedDestinationPlace(null);
+      setManualOriginText("");
+      setManualDestinationText("");
+      setTravelMemoryHydrated(true);
+      return;
     }
-  }, [routes, selectedRouteId]);
+
+    try {
+      const saved = JSON.parse(rawEstimate);
+      const origin = typeof saved?.origin === "string" ? saved.origin.trim() : "";
+      const destination = typeof saved?.destination === "string" ? saved.destination.trim() : "";
+      const result = saved?.result && Array.isArray(saved.result?.modes) ? saved.result : null;
+
+      if (!origin || !destination || !result) {
+        window.localStorage.removeItem(lastEstimateStorageKey);
+        setTravelMemoryHydrated(true);
+        return;
+      }
+
+      setDynamicOrigin(origin);
+      setDynamicDestination(destination);
+      setSelectedOriginPlace(null);
+      setSelectedDestinationPlace(null);
+      setManualOriginText("");
+      setManualDestinationText("");
+      setEstimatedResult(result);
+      setPendingAutoEstimate(false);
+
+      const allowedTimeSelections = new Set(["now", ...TRAVEL_TIME_CHOICES.map((choice) => choice.id)]);
+      if (typeof saved?.fareTimeSelection === "string" && allowedTimeSelections.has(saved.fareTimeSelection)) {
+        setFareTimeSelection(saved.fareTimeSelection as TravelTimeSelection);
+      }
+      setTravelMemoryHydrated(true);
+    } catch {
+      window.localStorage.removeItem(lastEstimateStorageKey);
+      setTravelMemoryHydrated(true);
+    }
+  }, [isFallbackCampus, lastDraftStorageKey, lastEstimateStorageKey, user?.id]);
+
+  useEffect(() => {
+    if (!routes) return;
+
+    if (routes.length === 0) {
+      if (selectedRouteId) setSelectedRouteId("");
+      return;
+    }
+
+    if (selectedRouteId && routes.some((r: any) => r.id === selectedRouteId)) return;
+
+    const storedRouteId = typeof window !== "undefined" ? window.localStorage.getItem(selectedRouteStorageKey) : null;
+    const storedRoute = storedRouteId ? routes.find((r: any) => r.id === storedRouteId) : null;
+    setSelectedRouteId(storedRoute?.id || routes[0].id);
+  }, [routes, selectedRouteId, selectedRouteStorageKey]);
+
+  useEffect(() => {
+    if (!selectedRouteId || !routes?.some((r: any) => r.id === selectedRouteId) || typeof window === "undefined") return;
+    window.localStorage.setItem(selectedRouteStorageKey, selectedRouteId);
+  }, [routes, selectedRouteId, selectedRouteStorageKey]);
 
   const { data: reports, isLoading: reportsLoading } = useQuery({
     queryKey: ["travel-reports", selectedRouteId],
@@ -835,12 +925,6 @@ function TravelPage() {
     queryKey: ["travel-report-candidates", selectedRouteId],
     enabled: !!user && !!selectedRouteId,
     queryFn: () => getTravelReportCandidates(selectedRouteId),
-  });
-
-  const { data: savings } = useQuery({
-    queryKey: ["travel-savings", user?.id],
-    enabled: !!user,
-    queryFn: () => getTravelSavings(),
   });
 
   const selectedRoute = useMemo(() => {
@@ -1054,44 +1138,171 @@ function TravelPage() {
       .catch(() => toast.error("Could not copy script. Select and copy it manually."));
   };
 
-  const handleEstimateRoute = async () => {
-    const origin = dynamicOrigin.trim();
-    const destination = dynamicDestination.trim();
+  const runRouteEstimate = useCallback(async (
+    originInput: string,
+    destinationInput: string,
+    options: { silent?: boolean; useSelectedPlaces?: boolean } = {},
+  ) => {
+    const origin = originInput.trim();
+    const destination = destinationInput.trim();
     if (!origin || !destination) {
-      toast.error("Enter both origin and destination.");
-      return;
+      if (!options.silent) toast.error("Enter both origin and destination.");
+      return false;
     }
     if (isFallbackCampus) {
-      toast.error("Set your college first so fares are estimated near the right campus.");
-      setCustomCollegeDraft("");
-      setCampusEditorOpen(true);
-      return;
+      if (!options.silent) {
+        toast.error("Set your college first so fares are estimated near the right campus.");
+        setCustomCollegeDraft("");
+        setCampusEditorOpen(true);
+      }
+      return false;
     }
     if (origin.toLowerCase() === destination.toLowerCase()) {
-      toast.error("Origin and destination must be different.");
-      return;
+      if (!options.silent) toast.error("Origin and destination must be different.");
+      return false;
     }
+
     setIsEstimating(true);
     setEstimatedResult(null);
+    setEstimatedModeOverride(null);
     try {
       const result = await getTravelRouteEstimate(origin, destination, activeCollege, {
-        origin_lat: selectedOriginPlace?.lat,
-        origin_lon: selectedOriginPlace?.lon,
-        origin_place_id: selectedOriginPlace?.place_id,
-        destination_lat: selectedDestinationPlace?.lat,
-        destination_lon: selectedDestinationPlace?.lon,
-        destination_place_id: selectedDestinationPlace?.place_id,
+        origin_lat: options.useSelectedPlaces ? selectedOriginPlace?.lat : undefined,
+        origin_lon: options.useSelectedPlaces ? selectedOriginPlace?.lon : undefined,
+        origin_place_id: options.useSelectedPlaces ? selectedOriginPlace?.place_id : undefined,
+        destination_lat: options.useSelectedPlaces ? selectedDestinationPlace?.lat : undefined,
+        destination_lon: options.useSelectedPlaces ? selectedDestinationPlace?.lon : undefined,
+        destination_place_id: options.useSelectedPlaces ? selectedDestinationPlace?.place_id : undefined,
         time_context: timeContext.apiValue,
       });
+
       setEstimatedResult(result);
+      if (typeof window !== "undefined") {
+        const payload = {
+          version: 1,
+          campus: activeCollege,
+          origin,
+          destination,
+          fareTimeSelection,
+          savedAt: Date.now(),
+        };
+        window.localStorage.setItem(lastDraftStorageKey, JSON.stringify(payload));
+        window.localStorage.setItem(
+          lastEstimateStorageKey,
+          JSON.stringify({
+            ...payload,
+            result,
+          }),
+        );
+      }
+      return true;
     } catch (error) {
-      toast.error(routeEstimateErrorMessage(error));
+      if (!options.silent) toast.error(routeEstimateErrorMessage(error));
+      return false;
     } finally {
       setIsEstimating(false);
     }
+  }, [
+    activeCollege,
+    fareTimeSelection,
+    isFallbackCampus,
+    lastDraftStorageKey,
+    lastEstimateStorageKey,
+    selectedDestinationPlace,
+    selectedOriginPlace,
+    timeContext.apiValue,
+  ]);
+
+  const handleEstimateRoute = async () => {
+    await runRouteEstimate(dynamicOrigin, dynamicDestination, { useSelectedPlaces: true });
   };
 
   const selectedRouteParts = selectedRoute ? splitRouteName(selectedRoute.name) : null;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !user?.id || !travelMemoryHydrated || isFallbackCampus) return;
+
+    const origin = dynamicOrigin.trim();
+    const destination = dynamicDestination.trim();
+    const timer = window.setTimeout(() => {
+      if (!origin && !destination) {
+        window.localStorage.removeItem(lastDraftStorageKey);
+        return;
+      }
+
+      window.localStorage.setItem(
+        lastDraftStorageKey,
+        JSON.stringify({
+          version: 1,
+          campus: activeCollege,
+          origin,
+          destination,
+          fareTimeSelection,
+          savedAt: Date.now(),
+        }),
+      );
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeCollege,
+    dynamicDestination,
+    dynamicOrigin,
+    fareTimeSelection,
+    isFallbackCampus,
+    lastDraftStorageKey,
+    travelMemoryHydrated,
+    user?.id,
+  ]);
+
+  useEffect(() => {
+    if (!travelMemoryHydrated || estimatedResult || pendingAutoEstimate || dynamicOrigin.trim() || dynamicDestination.trim()) return;
+    if (!selectedRouteParts?.from || !selectedRouteParts?.to) return;
+
+    setDynamicOrigin(selectedRouteParts.from);
+    setDynamicDestination(selectedRouteParts.to);
+    setSelectedOriginPlace(null);
+    setSelectedDestinationPlace(null);
+    setManualOriginText("");
+    setManualDestinationText("");
+    setPendingAutoEstimate(true);
+  }, [
+    dynamicDestination,
+    dynamicOrigin,
+    estimatedResult,
+    pendingAutoEstimate,
+    selectedRouteParts,
+    travelMemoryHydrated,
+  ]);
+
+  useEffect(() => {
+    if (!pendingAutoEstimate || !travelMemoryHydrated || estimatedResult || isEstimating) return;
+
+    const origin = dynamicOrigin.trim();
+    const destination = dynamicDestination.trim();
+    if (!origin || !destination) return;
+
+    const estimateKey = `${lastEstimateStorageKey}:${origin}:${destination}:${fareTimeSelection}`;
+    if (autoEstimateKeyRef.current === estimateKey) {
+      setPendingAutoEstimate(false);
+      return;
+    }
+
+    autoEstimateKeyRef.current = estimateKey;
+    setPendingAutoEstimate(false);
+    void runRouteEstimate(origin, destination, { silent: true, useSelectedPlaces: false });
+  }, [
+    dynamicDestination,
+    dynamicOrigin,
+    estimatedResult,
+    fareTimeSelection,
+    isEstimating,
+    lastEstimateStorageKey,
+    pendingAutoEstimate,
+    runRouteEstimate,
+    travelMemoryHydrated,
+  ]);
+
   const estimatedDecision = useMemo(() => {
     if (!estimatedResult?.modes?.length) return null;
     return buildDecision({
@@ -1100,72 +1311,36 @@ function TravelPage() {
       durationMins: estimatedResult.duration_mins,
       timeContext,
       splitSuggestion: estimatedResult.split_suggestion,
+      preferredMode: estimatedModeOverride,
     });
-  }, [estimatedResult, timeContext, travelIntent]);
+  }, [estimatedModeOverride, estimatedResult, timeContext, travelIntent]);
 
-  const selectedDecision = useMemo(() => {
-    if (!selectedRoute?.modes?.length) return null;
-    return buildDecision({
-      intent: travelIntent,
-      modes: selectedRoute.modes,
-      durationMins: selectedRoute.duration_mins,
-      timeContext,
-      splitSuggestion: selectedRoute.split_suggestion,
-    });
-  }, [selectedRoute, timeContext, travelIntent]);
-
-  const heroDecision = estimatedDecision || selectedDecision;
-  const heroRoute = estimatedResult || selectedRoute;
-  const heroMode = estimatedResult?.modes?.[0] || selectedActiveMode;
+  const heroDecision = estimatedDecision;
+  const heroRoute = estimatedResult;
+  const heroMode = estimatedResult?.modes?.find((mode: any) => mode.mode === heroDecision?.mode) || estimatedResult?.modes?.[0] || null;
+  const activeEstimatedMode = estimatedModeOverride || heroDecision?.mode || heroMode?.mode || null;
   const heroFareRange = heroMode
     ? `₹${Math.round(heroMode.min_fare * timeContext.factor)}–₹${Math.round(heroMode.max_fare * timeContext.factor)}`
     : null;
   const heroFareAnchor = heroDecision?.fare
     || (heroMode?.median_fare ? Math.round(heroMode.median_fare * timeContext.factor) : null);
   const heroAcceptLimit = heroDecision?.acceptUpTo ? `₹${heroDecision.acceptUpTo}` : null;
-  const heroSourceLabel = heroRoute
-    ? routeSourceDisplay(heroRoute)
-      .replace("Mapped road route, cached", "Road route, cached")
-      .replace("Mapped road route", "Road route")
-      .replace("Fallback distance estimate", "Distance estimate")
-    : "Map route";
-  const heroTrustLabel = heroRoute
-    ? (String(heroRoute.confidence || "").toLowerCase() === "high"
-      ? "High trust"
-      : String(heroRoute.confidence || "").toLowerCase() === "medium"
-        ? "Medium trust"
-        : "Needs reports")
-    : "Pending";
-
   const selectedOriginCoords = selectedOriginPlace?.lat != null && selectedOriginPlace?.lon != null
     ? [selectedOriginPlace.lat, selectedOriginPlace.lon]
     : null;
   const selectedDestinationCoords = selectedDestinationPlace?.lat != null && selectedDestinationPlace?.lon != null
     ? [selectedDestinationPlace.lat, selectedDestinationPlace.lon]
     : null;
-  const plannerHasDraft = Boolean(
-    dynamicOrigin.trim()
-      || dynamicDestination.trim()
-      || selectedOriginPlace
-      || selectedDestinationPlace
-      || manualOriginText
-      || manualDestinationText,
-  );
-  const mapRoute = estimatedResult || (!plannerHasDraft ? selectedRoute : null);
-  const mapSavedRouteParts = mapRoute === selectedRoute ? selectedRouteParts : null;
+  const mapRoute = estimatedResult;
   const mapOriginCoords = estimatedResult?.origin_coords
-    || selectedOriginCoords
-    || (mapRoute === selectedRoute ? selectedRoute?.origin_coords : null);
+    || selectedOriginCoords;
   const mapDestinationCoords = estimatedResult?.dest_coords
-    || selectedDestinationCoords
-    || (mapRoute === selectedRoute ? selectedRoute?.dest_coords : null);
+    || selectedDestinationCoords;
   const mapOriginLabel = estimatedResult?.origin_resolved_label
     || selectedOriginPlace?.label
-    || mapSavedRouteParts?.from
     || dynamicOrigin;
   const mapDestinationLabel = estimatedResult?.destination_resolved_label
     || selectedDestinationPlace?.label
-    || mapSavedRouteParts?.to
     || dynamicDestination;
 
   return (
@@ -1179,22 +1354,10 @@ function TravelPage() {
             <span className="truncate sm:whitespace-nowrap">Campus Fare Guard</span>
           </h1>
         </div>
-        <div className="hidden">
-          <div className={`hidden items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider sm:flex ${timeContext.color}`}>
-            <Clock className="h-3.5 w-3.5" />
-            <span>{timeContext.label}</span>
-          </div>
-            {savings && savings.total_saved > 0 && (
-              <Badge variant="outline" className="flex items-center gap-1 border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-mono font-bold text-emerald-600 dark:bg-emerald-500/5 dark:text-emerald-400">
-                <TrendingDown className="h-3 w-3" />
-                <span className="text-xs">Saved ₹{savings.total_saved}</span>
-              </Badge>
-            )}
-          </div>
         </div>
 
       <div className="pb-24 space-y-5">
-        <Card className="relative z-10 overflow-visible rounded-2xl border-border bg-surface">
+        <Card className="relative z-10 overflow-visible rounded-2xl border-border bg-surface/95 shadow-sm">
           <div className="space-y-3 p-3 sm:space-y-4 sm:p-5 xl:p-6">
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] xl:items-start">
               <div className="min-w-0 space-y-1">
@@ -1243,7 +1406,7 @@ function TravelPage() {
                   <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="leading-relaxed">
-                        Add your college once so places, saved routes, and fare reports are searched near the right campus.
+                        Add your college once so places, campus routes, and fare reports are searched near the right campus.
                       </p>
                       <button
                         type="button"
@@ -1276,6 +1439,8 @@ function TravelPage() {
                           onChange={(e) => {
                             setDynamicOrigin(e.target.value);
                             setEstimatedResult(null);
+                            setEstimatedModeOverride(null);
+                            setPendingAutoEstimate(false);
                             setSelectedOriginPlace(null);
                             setManualOriginText("");
                             setOriginSuggestionsOpen(true);
@@ -1291,12 +1456,16 @@ function TravelPage() {
                           onSelect={(suggestion) => {
                             setDynamicOrigin(suggestion.label);
                             setEstimatedResult(null);
+                            setEstimatedModeOverride(null);
+                            setPendingAutoEstimate(false);
                             setSelectedOriginPlace(suggestion);
                             setManualOriginText("");
                             setOriginSuggestionsOpen(false);
                           }}
                           onUseTypedPlace={() => {
                             setEstimatedResult(null);
+                            setEstimatedModeOverride(null);
+                            setPendingAutoEstimate(false);
                             setManualOriginText(dynamicOrigin.trim());
                             setSelectedOriginPlace(null);
                             setOriginSuggestionsOpen(false);
@@ -1325,6 +1494,8 @@ function TravelPage() {
                           onChange={(e) => {
                             setDynamicDestination(e.target.value);
                             setEstimatedResult(null);
+                            setEstimatedModeOverride(null);
+                            setPendingAutoEstimate(false);
                             setSelectedDestinationPlace(null);
                             setManualDestinationText("");
                             setDestinationSuggestionsOpen(true);
@@ -1340,12 +1511,16 @@ function TravelPage() {
                           onSelect={(suggestion) => {
                             setDynamicDestination(suggestion.label);
                             setEstimatedResult(null);
+                            setEstimatedModeOverride(null);
+                            setPendingAutoEstimate(false);
                             setSelectedDestinationPlace(suggestion);
                             setManualDestinationText("");
                             setDestinationSuggestionsOpen(false);
                           }}
                           onUseTypedPlace={() => {
                             setEstimatedResult(null);
+                            setEstimatedModeOverride(null);
+                            setPendingAutoEstimate(false);
                             setManualDestinationText(dynamicDestination.trim());
                             setSelectedDestinationPlace(null);
                             setDestinationSuggestionsOpen(false);
@@ -1397,60 +1572,65 @@ function TravelPage() {
                 <div className="rounded-xl border border-border bg-background p-3 shadow-sm">
                   <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                         <ShieldCheck className="h-3.5 w-3.5 text-primary" />
                         Current move
                       </div>
                       <p className="mt-1 truncate text-base font-semibold text-foreground">
                         {heroDecision?.label || (heroRoute ? "Fare range ready" : "Estimate a route")}
                       </p>
-                      <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      <p className="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
                         {heroDecision?.action || "Enter pickup and destination to get a route-specific fare window."}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 sm:min-w-[116px] sm:flex-col sm:items-start sm:gap-0.5">
-                      <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Anchor fare</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Anchor fare</span>
                       <span className="text-lg font-semibold tabular-nums text-foreground">{heroFareAnchor ? `₹${heroFareAnchor}` : "--"}</span>
                     </div>
                   </div>
 
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     <div className="rounded-lg border border-border/70 bg-surface px-3 py-1.5">
-                      <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Time</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Time</p>
                       <p className="mt-1 truncate text-xs font-semibold text-foreground">{timeContext.label}</p>
                     </div>
                     <div className="rounded-lg border border-border/70 bg-surface px-3 py-1.5">
-                      <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Range</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Range</p>
                       <p className="mt-1 truncate text-xs font-semibold text-foreground">{heroFareRange || "Pending"}</p>
                     </div>
                     <div className="rounded-lg border border-border/70 bg-surface px-3 py-1.5">
-                      <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Limit</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Limit</p>
                       <p className="mt-1 truncate text-xs font-semibold text-foreground">{heroAcceptLimit || "After quote"}</p>
                     </div>
                   </div>
 
-                  <div className="mt-2 flex items-center gap-2 rounded-lg border border-border/70 bg-surface px-3 py-2">
-                    <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Evidence</p>
-                      <p className="mt-0.5 text-xs font-semibold text-foreground">{heroTrustLabel} · {heroSourceLabel}</p>
+                  {estimatedResult?.modes?.length ? (
+                    <div className="mt-2">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Mode</p>
+                      <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {estimatedResult.modes.slice(0, 4).map((mode: any) => {
+                          const modeStyle = travelModeStyle(mode.mode);
+                          const isActive = activeEstimatedMode === mode.mode;
+                          return (
+                            <button
+                              key={mode.mode}
+                              type="button"
+                              onClick={() => setEstimatedModeOverride(mode.mode)}
+                              className={`rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                                isActive
+                                  ? "border-primary/60 bg-primary/10 text-foreground ring-1 ring-primary/15"
+                                  : "border-border/70 bg-surface text-muted-foreground hover:bg-surface-raised hover:text-foreground"
+                              }`}
+                            >
+                              <span className="block truncate text-[11px] font-semibold">{modeStyle.label}</span>
+                              <span className="mt-0.5 block truncate text-[10px] font-medium">₹{mode.min_fare}–₹{mode.max_fare}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
 
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    <div className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface/70 px-3 py-2">
-                      <MapPin className="h-3 w-3 shrink-0 text-primary" />
-                      <p className="truncate text-[10px] font-semibold text-foreground">Route first</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface/70 px-3 py-2">
-                      <Clock className="h-3 w-3 shrink-0 text-primary" />
-                      <p className="truncate text-[10px] font-semibold text-foreground">Timing aware</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-surface/70 px-3 py-2">
-                      <ShieldCheck className="h-3 w-3 shrink-0 text-primary" />
-                      <p className="truncate text-[10px] font-semibold text-foreground">Walk-away limit</p>
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -1462,8 +1642,6 @@ function TravelPage() {
                 destinationLabel={mapDestinationLabel}
                 distanceKm={mapRoute?.distance_km}
                 durationMins={mapRoute?.duration_mins}
-                routeSource={mapRoute ? routeSourceDisplay(mapRoute) : null}
-                cacheHit={Boolean(mapRoute?.routing_cache_hit)}
                 className="h-[240px] sm:h-[300px] lg:h-full lg:min-h-[410px]"
               />
             </div>
@@ -1471,43 +1649,22 @@ function TravelPage() {
 
           {estimatedResult && (
             <div className="border-t border-border px-4 py-4 sm:px-5 lg:px-6 animate-[fadeIn_0.25s_ease-out]">
-              {estimatedDecision && (
-                <div className="rounded-lg bg-background/60 px-3.5 py-3 ring-1 ring-border/80">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="text-sm font-semibold text-foreground">{estimatedDecision.label}</span>
-                        <span className="text-xs font-medium text-muted-foreground">₹{estimatedDecision.fare} around</span>
-                        {estimatedDecision.eta ? (
-                          <span className="text-xs font-medium text-muted-foreground">{estimatedDecision.eta}</span>
-                        ) : null}
-                        <span className="text-xs font-medium text-muted-foreground">{estimatedResult.distance_km} km</span>
-                      </div>
-                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{estimatedDecision.action}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                      <div className="text-left sm:text-right">
-                        <p className="text-[9px] text-muted-foreground">Walk away above</p>
-                        <p className="text-sm font-semibold text-foreground">₹{estimatedDecision.acceptUpTo}</p>
-                      </div>
-                      <Select value={travelIntent} onValueChange={(value) => setTravelIntent(value as TravelIntent)}>
-                        <SelectTrigger className="h-8 w-[108px] rounded-md border-border bg-surface text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-background border border-border text-foreground">
-                          {TRAVEL_INTENTS.map((intent) => (
-                            <SelectItem key={intent.id} value={intent.id} className="text-xs">
-                              {intent.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Travel state</span>
+                  <Select value={travelIntent} onValueChange={(value) => setTravelIntent(value as TravelIntent)}>
+                    <SelectTrigger className="h-8 w-[112px] rounded-md border-border bg-surface text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background border border-border text-foreground">
+                      {TRAVEL_INTENTS.map((intent) => (
+                        <SelectItem key={intent.id} value={intent.id} className="text-xs">
+                          {intent.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   disabled={estimatedResult.needs_review}
                   onClick={() => {
@@ -1542,7 +1699,7 @@ function TravelPage() {
                       }
                     });
                   }}
-                  className="h-8 rounded-md border border-border bg-surface px-3 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50">
+                  className="h-8 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50">
                   {estimatedResult.needs_review ? "Select exact places to save" : "Save this route"}
                 </button>
               </div>
@@ -1550,42 +1707,6 @@ function TravelPage() {
               {estimatedResult.resolution_warning ? (
                 <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] font-medium leading-relaxed text-amber-700 dark:text-amber-300">
                   {estimatedResult.resolution_warning}
-                </div>
-              ) : null}
-
-              {estimatedResult.routing_provider ? (
-                <div className="mt-3 rounded-lg border border-border bg-background/50 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-foreground">Route source: {routeSourceDisplay(estimatedResult)}</span>
-                    {estimatedResult.routing_cache_hit ? (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary">Cached</span>
-                    ) : null}
-                    {estimatedResult.eta_confidence ? (
-                      <span>{String(estimatedResult.eta_confidence).toUpperCase()} ETA confidence</span>
-                    ) : null}
-                  </div>
-                  {estimatedResult.routing_source_note ? (
-                    <p className="mt-1">{estimatedResult.routing_source_note}</p>
-                  ) : estimatedResult.eta_basis ? (
-                    <p className="mt-1">{estimatedResult.eta_basis}</p>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {estimatedResult.modes?.length ? (
-                <div className="mt-3">
-                  <FareEvidencePanel mode={estimatedResult.modes[0]} routeResult={estimatedResult} />
-                </div>
-              ) : null}
-
-              {(estimatedResult.origin_resolved_label || estimatedResult.destination_resolved_label) ? (
-                <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-                  {estimatedResult.origin_resolved_label ? (
-                    <span className="rounded-full bg-background px-2 py-1">From: {estimatedResult.origin_resolved_label}</span>
-                  ) : null}
-                  {estimatedResult.destination_resolved_label ? (
-                    <span className="rounded-full bg-background px-2 py-1">To: {estimatedResult.destination_resolved_label}</span>
-                  ) : null}
                 </div>
               ) : null}
 
@@ -1632,7 +1753,7 @@ function TravelPage() {
             <Skeleton className="h-10 rounded-xl" />
           </section>
         ) : routes && routes.length > 0 ? (
-          <section className="overflow-hidden border-y border-border bg-surface/60 sm:rounded-2xl sm:border">
+          <section className="overflow-hidden border-y border-border bg-surface/80 shadow-sm sm:rounded-2xl sm:border">
             <button
               type="button"
               onClick={() => setSavedRoutesOpen((open) => !open)}
@@ -1640,9 +1761,9 @@ function TravelPage() {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold tracking-tight text-foreground">Saved routes</p>
+                  <p className="text-sm font-semibold tracking-tight text-foreground">Campus routes</p>
                   <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    {routes.length} saved
+                    {routes.length} routes
                   </span>
                 </div>
                 {selectedRouteParts ? (
@@ -1650,7 +1771,7 @@ function TravelPage() {
                     Current: {selectedRouteParts.from} to {selectedRouteParts.to}
                   </p>
                 ) : (
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Pick a saved route for quote checks and coaching</p>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Pick a campus route for quote checks and coaching</p>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -1675,6 +1796,7 @@ function TravelPage() {
                       onClick={() => {
                         setSelectedRouteId(r.id);
                         setEstimatedResult(null);
+                        setEstimatedModeOverride(null);
                         setDynamicOrigin("");
                         setDynamicDestination("");
                         setSelectedOriginPlace(null);
@@ -1716,12 +1838,30 @@ function TravelPage() {
               </div>
             )}
           </section>
-        ) : null}
+        ) : (
+          <section className="rounded-2xl border border-border bg-surface/80 px-4 py-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-semibold tracking-tight text-foreground">No campus routes yet</p>
+                </div>
+                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                  This campus has no saved student routes. Estimate a pickup and destination above, then save it to unlock quote check, split fare, coach, and fare reports for this campus.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground">
+                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                <span>{estimatedResult ? "Save this estimate" : "Start with an estimate"}</span>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Route Detail Tabs */}
         {selectedRoute && (
           <div className="space-y-4 animate-[fadeIn_0.2s_ease-out]">
-            <Card className="bg-surface border border-border p-3 sm:p-4">
+            <Card className="border-border bg-surface/95 p-3 shadow-sm sm:p-4">
               {(() => {
                 const modeDetails = selectedRoute.modes.find((m: any) => m.mode.toLowerCase().includes(selectedMode.toLowerCase())) || selectedRoute.modes[0];
                 const peakEstimate = Math.round(modeDetails.median_fare * timeContext.factor);
@@ -1730,13 +1870,13 @@ function TravelPage() {
                 const modeLabel = travelModeStyle(modeDetails.mode).label;
 
                 return (
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)_minmax(220px,0.58fr)] xl:items-center">
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(290px,0.68fr)_minmax(260px,0.6fr)] xl:items-center">
                     <div className="min-w-0">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Selected route</p>
                       <div className="mt-2 flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />
-                          <h2 className="truncate text-base font-semibold tracking-tight text-foreground">
+                          <h2 className="truncate text-[15px] font-semibold tracking-tight text-foreground sm:text-base">
                             {selectedRouteParts?.from || "Saved route"}
                           </h2>
                         </div>
@@ -1766,37 +1906,44 @@ function TravelPage() {
 
                     <div className="grid grid-cols-3 gap-2">
                       {selectedRoute.modes.map((m) => {
-                        const modeStyle = travelModeStyle(m.mode);
                         const isActive = selectedMode === m.mode;
                         return (
                           <button
                             key={m.mode}
                             type="button"
                             onClick={() => setSelectedMode(m.mode)}
-                            className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                            className={`min-h-[54px] rounded-lg border px-3 py-2 text-left transition-colors ${
                               isActive
-                                ? `${modeStyle.className} ${modeStyle.textClassName} ring-1 ring-primary/20`
+                                ? "border-primary/60 bg-primary/10 text-foreground ring-1 ring-primary/15"
                                 : "border-border bg-background text-muted-foreground hover:bg-surface-raised/45 hover:text-foreground"
                             }`}
                           >
-                            <span className="block text-[10px] font-semibold">{modeStyle.label}</span>
+                            <span className="block text-[10px] font-semibold">{travelModeStyle(m.mode).label}</span>
                             <span className="block text-[10px]">₹{m.min_fare}–{m.max_fare}</span>
                           </button>
                         );
                       })}
                     </div>
 
-                    <div className="rounded-lg border border-border bg-background px-3 py-2.5">
+                    <div className="rounded-lg border border-border bg-background/80 px-3 py-2.5">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                             <Clock className="h-3 w-3" />
                             Fare timing
                           </div>
-                          <p className="mt-0.5 text-sm font-semibold leading-snug text-foreground">₹{peakEstimate} · {modeLabel} · {timeContext.label}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <span className="text-sm font-semibold tabular-nums text-foreground">₹{peakEstimate}</span>
+                            <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {modeLabel}
+                            </span>
+                            <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {timeContext.label}
+                            </span>
+                          </div>
                         </div>
                         <Select value={fareTimeSelection} onValueChange={(value) => setFareTimeSelection(value as TravelTimeSelection)}>
-                          <SelectTrigger className="h-8 w-[92px] rounded-md border-border bg-surface px-2 text-[10px]">
+                          <SelectTrigger className="h-8 w-[96px] shrink-0 rounded-md border-border bg-surface px-2 text-[10px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-background border border-border text-foreground">
@@ -1825,7 +1972,7 @@ function TravelPage() {
 
 
             {/* Tab Bar */}
-            <div className="flex gap-0 bg-surface rounded-xl border border-border overflow-hidden">
+            <div className="flex gap-0 overflow-hidden rounded-xl border border-border bg-surface/80 shadow-sm">
               {([
                 { id: "check" as const, icon: Zap, label: "Quote Check" },
                 { id: "split" as const, icon: SplitSquareHorizontal, label: "Split Fare" },
@@ -1833,7 +1980,7 @@ function TravelPage() {
                 { id: "reports" as const, icon: Users, label: "Reports" },
               ]).map(({ id, icon: Icon, label }, idx) => (
                 <button key={id} onClick={() => setActiveDetailTab(id)}
-                  className={`flex-1 py-2.5 text-[10px] font-medium transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${idx < 3 ? "border-r border-border " : ""}${activeDetailTab === id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-background/60"}`}>
+                  className={`flex-1 py-2.5 text-[10px] font-medium transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${idx < 3 ? "border-r border-border " : ""}${activeDetailTab === id ? "bg-surface-raised text-foreground shadow-[inset_0_2px_0_var(--primary)]" : "text-muted-foreground hover:text-foreground hover:bg-surface/70"}`}>
                   <Icon className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{label}</span>
                   <span className="sm:hidden">{label.split(" ")[0]}</span>
@@ -1843,7 +1990,7 @@ function TravelPage() {
 
             {/* Quote Checker Tab */}
             {activeDetailTab === "check" && (
-              <Card className="bg-surface border-border p-4 space-y-5 animate-[fadeIn_0.2s_ease-out] sm:p-5">
+              <Card className="space-y-5 border-border bg-surface/95 p-4 shadow-sm animate-[fadeIn_0.2s_ease-out] sm:p-5">
                 <div className="flex flex-col gap-2">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -1882,10 +2029,6 @@ function TravelPage() {
                     </ul>
                   </div>
                 )}
-
-                {selectedActiveMode ? (
-                  <FareEvidencePanel mode={selectedActiveMode} routeResult={selectedRoute} compact />
-                ) : null}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -2635,7 +2778,7 @@ function TravelPage() {
             }}
           >
             <p className="text-xs leading-relaxed text-muted-foreground">
-              This helps PocketBuddy use the right campus area for route suggestions, saved routes, and student fare reports.
+              This helps PocketBuddy use the right campus area for route suggestions, campus routes, and student fare reports.
             </p>
             <div className="space-y-1.5">
               <label htmlFor="input-custom-campus" className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">

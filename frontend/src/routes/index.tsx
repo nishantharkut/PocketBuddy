@@ -2,11 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Sparkles, User, ShoppingBag, Link as LinkIcon, ChevronRight, Sun, Moon, Menu, X,
-  Smartphone, Map, Zap, ShoppingCart, CalendarCheck, Bell,
+  Smartphone, Map, Zap, ShoppingCart, CalendarCheck,
   LayoutDashboard, List, Compass, Settings, Car, Bus, Footprints, Wallet, Calendar,
-  Banknote, Utensils, Lock, Brain, Handshake, GraduationCap, WifiOff,
-  Globe, Server, Database, HardDrive, Network, Layers, Leaf,
-  Check, Star, ArrowRight,
+  Banknote, Utensils, Lock, GraduationCap, WifiOff,
+  Globe, Layers,
+  Check, Star, ArrowRight, ArrowDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -1016,10 +1016,13 @@ function DashboardMockup() {
 function FeatureCard({ icon: Icon, title, description, accent, delay }: { icon: LucideIcon; title: string; description: string; accent: string; delay: number }) {
   const { ref, inView } = useInView();
   return (
-    <div ref={ref} className="relative bg-card border border-border rounded-xl p-5 md:p-6 overflow-hidden transition-all duration-300" style={{ borderTop: `2px solid ${accent}`, opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(28px)", transition: `opacity 0.7s ease ${delay}ms, transform 0.7s ease ${delay}ms` }}>
-      <div className="absolute top-0 left-0 right-0 h-24 pointer-events-none" style={{ background: `radial-gradient(ellipse at 50% -20%, ${accent}15, transparent 70%)` }} />
-      <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: `${accent}1a`, color: accent }}><Icon className="h-5 w-5" /></div>
-      <h3 className="text-sm font-bold text-foreground mb-2 tracking-tight">{title}</h3>
+    <div ref={ref} className="relative bg-card border border-border rounded-xl p-5 md:p-6 overflow-hidden transition-all duration-300 hover:border-[#C27D56]/35" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(28px)", transition: `opacity 0.7s ease ${delay}ms, transform 0.7s ease ${delay}ms` }}>
+      <div className="mb-4 flex items-start gap-3">
+        <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background/70" style={{ color: accent }}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <h3 className="text-sm sm:text-base font-black text-foreground tracking-tight leading-tight">{title}</h3>
+      </div>
       <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
     </div>
   );
@@ -1067,6 +1070,29 @@ function FlowPath({ label, nodes, accent }: { label: string; nodes: string[]; ac
   );
 }
 
+function AwsServiceCard({ layer, tech, icon, badge }: { layer: string; tech: string; icon: string; badge: "live" | "ingest" }) {
+  const { ref, inView } = useInView();
+  const isLive = badge === "live";
+  return (
+    <div
+      ref={ref}
+      className="bg-card border border-border rounded-xl p-4 transition-all duration-600 hover:border-[#C27D56]/40"
+      style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(18px)" }}
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background/70">
+          <img src={icon} alt={`${tech} AWS architecture icon`} className="h-7 w-7 object-contain" loading="lazy" />
+        </div>
+        <span className={`rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider ${isLive ? "border-pb-green/25 bg-pb-green/10 text-pb-green" : "border-border bg-surface-raised text-muted-foreground"}`}>
+          {isLive ? "live" : "ingest"}
+        </span>
+      </div>
+      <div className="text-[9px] text-muted-foreground tracking-wider font-mono uppercase mb-1">{layer}</div>
+      <div className="text-xs sm:text-sm font-bold text-foreground leading-tight">{tech}</div>
+    </div>
+  );
+}
+
 // ── Main landing page ──────────────────────────────────────────────────────
 function LandingPage() {
   const [scrollY, setScrollY] = useState(0);
@@ -1076,6 +1102,10 @@ function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeLoopStep, setActiveLoopStep] = useState(0);
+  const [activeProofTab, setActiveProofTab] = useState("sandbox");
+  const [ctaAllowance, setCtaAllowance] = useState(5000);
+  const [ctaDailySpend, setCtaDailySpend] = useState(150);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("pb_theme") as "light" | "dark" | null;
@@ -1101,39 +1131,39 @@ function LandingPage() {
   }, []);
 
   const features = [
-    { icon: Smartphone, title: "Privacy-first Instant UPI Sync", description: "The optional Android connector parses supported payment alerts on-device and sends only transaction facts ── never raw notification text.", accent: "#8C7853", delay: 0 },
-    { icon: Map, title: "Crowdsourced Merchant Mapping", description: "Raw strings like SHREE_BALAJI_ENT resolve into 'Hostel 1 Night Canteen' via 1-tap crowd classification, shared globally across campus.", accent: "#C27D56", delay: 100 },
-    { icon: Zap, title: "Campus Intelligence", description: "Turns runway, commitments, routine signals, and trusted campus prices into one practical next step.", accent: "#D9A05B", delay: 200 },
-    { icon: ShoppingCart, title: "Wing Cart Pooler", description: "Open a Blinkit/Zepto pool, share it on WhatsApp, let roommates add items ── delivery fees split automatically. No install needed.", accent: "#F7EC13", delay: 0 },
-    { icon: CalendarCheck, title: "Exam-Week Check-In", description: "If no food transaction is detected for 16+ hours during exam week, PocketBuddy pings you and suggests the nearest open campus canteen.", accent: "#5E17EB", delay: 100 },
-    { icon: Bell, title: "Subscription Collision Guard", description: "Auto-detects recurring Spotify, YouTube & gaming debits, then flags exact days when they tighten your food runway.", accent: "#FC8019", delay: 200 },
+    { icon: Smartphone, title: "Android Auto-Sync + Statements", description: "Supported Android alerts are parsed on-device. PDF/CSV bank statements and manual entry keep the product usable when passive sync is not available.", accent: "#C27D56", delay: 0 },
+    { icon: Utensils, title: "Food Guard", description: "Meal gaps, repeated campus vendors, menu scans, and crowd-verified prices turn food spend into concrete low-cost choices.", accent: "#C27D56", delay: 100 },
+    { icon: ShoppingCart, title: "Wing Cart Pools", description: "Hosts approve joins, roommates add items, balances are netted, Twilio reminders are sent, and repayments can be verified from credit alerts or UTR fallback.", accent: "#C27D56", delay: 200 },
+    { icon: Map, title: "Travel Fare Guard", description: "Campus routes use mapped distance, fare bands, saved routes, and crowd reports so students negotiate with a fair anchor.", accent: "#C27D56", delay: 0 },
+    { icon: CalendarCheck, title: "Runway Simulator", description: "Allowance, pace, fixed commitments, exam windows, pool debt, and recurring debits become safe-spend and can-I-afford-this decisions.", accent: "#C27D56", delay: 100 },
+    { icon: Lock, title: "Privacy Review Center", description: "Weak parses, disputed campus data, consent sandbox activity, connector pairing, masked corrections, and account purge stay visible to the user.", accent: "#C27D56", delay: 200 },
   ];
 
   const faqs = [
-    { q: "Does PocketBuddy access my bank account or UPI password?", a: "Absolutely not. PocketBuddy never asks for bank login, MPIN, OTP, or payment credentials. Optional Instant UPI Sync parses supported payment alerts locally on your phone and uploads only transaction facts like amount, direction, merchant, source app, and a masked preview." },
-    { q: "What if I don't have the Android companion app?", a: "You can still use PocketBuddy in full manual mode ── log transactions in one tap, get AI food suggestions, join Wing Cart Pools, and track subscriptions. The companion just makes it passive and offline-syncing." },
-    { q: "How does the crowdsourced merchant mapping work?", a: "When a new merchant string appears (e.g. SHREE_BALAJI_ENT), you get a 1-tap prompt to classify it. Once classified, it's immediately resolved for every student on your campus ── your 10 seconds of effort saves hundreds of others the same friction." },
-    { q: "Is this only for one campus?", a: "No. PocketBuddy works for any residential campus. The campus food database is seeded per college and grows through crowdsourcing, so each university can start with its own menus and routes." },
-    { q: "How is the Routine Signal Score calculated?", a: "It uses spending, meal check-ins, runway, exam dates, spend velocity, and after-hours payment signals. It is a budget and routine indicator, not a medical or mental-health score." },
+    { q: "Does PocketBuddy access my bank account or UPI password?", a: "No. PocketBuddy never asks for bank login, MPIN, OTP, or payment credentials. Android sync parses supported alerts locally, and statement imports become structured transaction rows rather than stored raw documents." },
+    { q: "What if I don't have the Android connector?", a: "You can still use statement import, manual logging, food recommendations, pools, travel guard, runway, and privacy review. The Android connector is the smoothest path for passive capture, not the only path." },
+    { q: "How does campus verification work?", a: "Repeated unknown vendors, scanned menu items, and fare reports go through confirmation before they become trusted campus intelligence. Disputed entries stay out of recommendations until reviewed." },
+    { q: "Is this only for one campus?", a: "No. PocketBuddy starts with a campus seed and improves through local food, pool, travel, and vendor signals. A new college needs its own baseline data, but the product loop stays the same." },
+    { q: "Is this a medical or mental-health score?", a: "No. PocketBuddy only uses practical routine signals such as meal gaps, after-hours spending, runway pressure, exam windows, and pool activity. It is a financial-wellness assistant, not a diagnosis tool." },
   ];
 
   const comparisons = [
-    { feature: "Zero manual tracking", us: true, fi: false, mint: false, splitwise: false },
-    { feature: "UPI push notification ingestion", us: true, fi: false, mint: false, splitwise: false },
-    { feature: "Campus-specific food intelligence", us: true, fi: false, mint: false, splitwise: false },
-    { feature: "Crowdsourced merchant mapping", us: true, fi: false, mint: false, splitwise: false },
-    { feature: "Routine signal index", us: true, fi: false, mint: false, splitwise: false },
-    { feature: "Delivery fee split pooling", us: true, fi: false, mint: false, splitwise: true },
-    { feature: "Subscription collision alerts", us: true, fi: true, mint: true, splitwise: false },
-    { feature: "Exam-period food monitoring", us: true, fi: false, mint: false, splitwise: false },
+    { feature: "Android sync plus statement fallback", us: true, fi: false, mint: false, splitwise: false },
+    { feature: "Review inbox for weak transaction parses", us: true, fi: false, mint: false, splitwise: false },
+    { feature: "Campus food and menu intelligence", us: true, fi: false, mint: false, splitwise: false },
+    { feature: "Crowd-verified vendors, menus, and fares", us: true, fi: false, mint: false, splitwise: false },
+    { feature: "Runway forecast tied to exam weeks", us: true, fi: false, mint: false, splitwise: false },
+    { feature: "Host-approved roommate pools", us: true, fi: false, mint: false, splitwise: true },
+    { feature: "Recurring commitment detection", us: true, fi: true, mint: true, splitwise: false },
+    { feature: "Campus route fare guard", us: true, fi: false, mint: false, splitwise: false },
     { feature: "Works without bank login", us: true, fi: false, mint: false, splitwise: true },
   ];
 
   const problems = [
-    { icon: Banknote, stat: "120", sub: "avg units wasted monthly on delivery surge fees by dorm students", color: "#FC8019" },
-    { icon: Utensils, stat: "3 in 5", sub: "students report missing a meal during exam week because budgets get tight", color: "#ef4444" },
-    { icon: Smartphone, stat: "94%", sub: "of students abandon manual finance apps within 2 weeks", color: "#f59e0b" },
-    { icon: Moon, stat: "80", sub: "spent late-night per month on impulse delivery orders", color: "#5E17EB" },
+    { icon: Banknote, title: "Small taps become runway shocks", signal: "Canteen, snacks, subscriptions", sub: "Students rarely go broke from one purchase. The damage is repeated low-value spending that becomes visible only after the allowance is already tight." },
+    { icon: Utensils, title: "Food decisions break during pressure weeks", signal: "Meal gaps and exam windows", sub: "When exams start, students skip mess timing, order late, and lose the cheapest food path exactly when money discipline matters most." },
+    { icon: ShoppingCart, title: "Shared spending creates social friction", signal: "Roommate pools and repayments", sub: "Cart splits look simple until someone joins late, forgets to pay, or disputes the amount. Students need approval, reminders, and proof." },
+    { icon: Map, title: "Campus travel is negotiated blind", signal: "Station rides and gate autos", sub: "Without a fair fare band and route evidence, students either overpay or waste time bargaining when they are already in a hurry." },
   ];
 
   const testimonials = [
@@ -1278,15 +1308,18 @@ function LandingPage() {
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
             <SectionLabel text="The Problem We Solve" />
-            <SectionHeading>Campus and dorm students are financially<br /><span className="text-muted-foreground/60">flying blind, every single month.</span></SectionHeading>
+            <SectionHeading>Campus spending is not one ledger.<br /><span className="text-muted-foreground/70">It is six decisions happening at once.</span></SectionHeading>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {problems.map(({ icon: Icon, stat, sub, color }) => {
+            {problems.map(({ icon: Icon, title, signal, sub }) => {
               const { ref, inView } = useInView();
               return (
-                <div key={stat} ref={ref} className="bg-card border border-border rounded-2xl p-6 text-center transition-all duration-700" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(24px)" }}>
-                  <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: `${color}1a`, color }}><Icon className="h-5 w-5" /></div>
-                  <div className="text-3xl font-extrabold tracking-tight mb-2 leading-none" style={{ color }}>{stat}</div>
+                <div key={title} ref={ref} className="bg-card border border-border rounded-2xl p-5 sm:p-6 text-left transition-all duration-700 hover:border-[#C27D56]/35" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(24px)" }}>
+                  <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background/70 text-[#C27D56]">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="text-[10px] text-[#C27D56] font-mono font-black uppercase tracking-wider mb-2">{signal}</div>
+                  <div className="text-sm sm:text-base font-black tracking-tight mb-2 leading-tight text-foreground">{title}</div>
                   <p className="text-xs text-muted-foreground leading-relaxed">{sub}</p>
                 </div>
               );
@@ -1294,9 +1327,9 @@ function LandingPage() {
           </div>
           <div className="mt-12 bg-card border border-border border-l-4 border-l-[#C27D56] rounded-2xl p-6 sm:p-8 max-w-[780px] mx-auto shadow-sm">
             <p className="text-sm sm:text-base text-foreground leading-relaxed font-medium italic">
-              "Existing apps demand active manual entry or complex bank PDF parsing. Students try them for 3 days and abandon them. Meanwhile, they keep running out of money mid-month during exams and lose track of basic food planning."
+              "A student does not need another finance ledger. They need PocketBuddy to catch the campus moments where money, food, friends, travel, and exam pressure collide."
             </p>
-            <p className="text-[10px] text-[#C27D56] mt-4 font-black tracking-widest uppercase font-mono">PocketBuddy Campus Research Snapshot</p>
+            <p className="text-[10px] text-[#C27D56] mt-4 font-black tracking-widest uppercase font-mono">PocketBuddy Thesis</p>
           </div>
         </div>
       </section>
@@ -1321,20 +1354,221 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* ── STATS ────────────────────────────────────────────────────────── */}
-      <section ref={statsRef} className="py-14 px-4 sm:px-6 bg-gradient-to-b from-transparent to-primary/2 via-transparent border-t border-b border-border">
-        <div className="max-w-[960px] mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10">
-          {[
-            { value: "0", label: "MANUAL ENTRIES NEEDED" },
-            { value: "16+h", label: "MEAL SIGNAL CHECK-IN WINDOW" },
-            { value: "75%", label: "TOKEN COST REDUCTION VIA RAG" },
-            { value: "∞", label: "CAMPUS MERCHANTS MAPPABLE" },
-          ].map(({ value, label }) => (
-            <div key={label} className="text-center transition-all duration-800" style={{ opacity: statsInView ? 1 : 0, transform: statsInView ? "scale(1)" : "scale(0.85)" }}>
-              <div className="text-3xl sm:text-4xl md:text-5xl font-black bg-gradient-to-r from-[#8C7853] to-[#D9A05B] bg-clip-text text-transparent leading-none">{value}</div>
-              <div className="text-[9px] text-muted-foreground mt-2.5 tracking-wider font-mono uppercase">{label}</div>
+      {/* ── INTERACTIVE PRODUCT LOOP ────────────────────────────────────────── */}
+      <section ref={statsRef} className="py-20 px-4 sm:px-6 border-t border-b border-border bg-gradient-to-b from-surface-raised/40 to-background">
+        <div className="max-w-[1040px] mx-auto">
+          <div className="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#C27D56]">The Engine Cycle</p>
+              <h3 className="text-xl sm:text-3xl font-black uppercase tracking-tight text-foreground">The Continuous Feedback Loop</h3>
+              <p className="max-w-[480px] text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                Watch how PocketBuddy turns passive signals into active financial security. Click any stage to inspect the process.
+              </p>
             </div>
-          ))}
+
+            <div className="flex items-center gap-2 bg-card border border-border/80 px-4 py-2.5 rounded-full w-fit">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pb-green opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-pb-green"></span>
+              </span>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">Engine Status: Grounded</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+            {/* Left side: Interactive Selector Steps */}
+            <div className="lg:col-span-5 flex flex-col justify-center gap-3">
+              {[
+                { step: 0, num: "01", title: "Passive Ingestion", subtitle: "UPI / SMS, Manual, or Statements", body: "Transaction alerts are captured directly or uploaded as structured statement data.", chips: ["Android v2", "PDF/CSV", "Zero-auth"] },
+                { step: 1, num: "02", title: "Context Mapping", subtitle: "Adding campus metadata", body: "Every row is wrapped with meal schedules, roommates, exam week flags, and allowance resets.", chips: ["Canteen Match", "Route Finder", "Shared Pools"] },
+                { step: 2, num: "03", title: "Decisions & Runway", subtitle: "Real-time forecast checks", body: "PocketBuddy computes safe daily spend limits and projects if you will hit a mid-month shortfall.", chips: ["Safe Daily", "Auto-debit Alert", "Snoozing"] },
+                { step: 3, num: "04", title: "Consensus Tuning", subtitle: "Crowd intelligence checks", body: "Disputed price flags and menu changes go to community voting, training the parser for next time.", chips: ["Consensus", "Confidence Score", "Typo Fixing"] },
+              ].map(({ step, num, title, subtitle, body }) => {
+                const isActive = activeLoopStep === step;
+                return (
+                  <button
+                    key={step}
+                    type="button"
+                    onClick={() => setActiveLoopStep(step)}
+                    className={`text-left rounded-2xl border p-4 sm:p-5 transition-all duration-300 flex items-start gap-4 cursor-pointer outline-none ${
+                      isActive
+                        ? "border-[#C27D56]/50 bg-gradient-to-r from-card to-[#C27D56]/5 shadow-lg shadow-[#C27D56]/5"
+                        : "border-border/60 bg-card/45 hover:border-border hover:bg-card/75"
+                    }`}
+                  >
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-xs font-black font-mono transition-all duration-300 ${
+                      isActive
+                        ? "border-[#C27D56] bg-[#C27D56] text-[#0A0A0A] shadow-md shadow-[#C27D56]/20"
+                        : "border-border bg-surface-raised text-muted-foreground"
+                    }`}>
+                      {num}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-muted-foreground">{subtitle}</span>
+                        {isActive && (
+                          <span className="text-[9px] font-black tracking-widest text-[#C27D56] uppercase animate-pulse">active</span>
+                        )}
+                      </div>
+                      <h4 className="text-sm sm:text-base font-black text-foreground mt-0.5">{title}</h4>
+                      {isActive && (
+                        <p className="text-[11px] sm:text-xs text-muted-foreground mt-2 leading-relaxed animate-[fadeIn_0.3s_ease-out]">
+                          {body}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right side: The Interactive Product Mock Monitor */}
+            <div className="lg:col-span-7 flex flex-col">
+              <div className="flex-1 rounded-3xl border border-border/80 bg-gradient-to-b from-card to-background dark:from-[#13131A] dark:to-[#0D0D11] p-5 sm:p-7 shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[360px] lg:min-h-[440px]">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(194,125,86,0.12),transparent_70%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.01)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none" />
+
+                <div className="flex items-center justify-between border-b border-border/60 pb-3 relative z-10">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-pb-red/75" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-pb-amber/75" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-pb-green/75" />
+                  </div>
+                  <span className="text-[10px] font-mono tracking-widest text-muted-foreground uppercase bg-surface-raised border border-border/50 px-2 py-0.5 rounded-md">
+                    {activeLoopStep === 0 && "INGEST_MONITOR"}
+                    {activeLoopStep === 1 && "CONTEXT_MAPPING"}
+                    {activeLoopStep === 2 && "DECISION_SIMULATOR"}
+                    {activeLoopStep === 3 && "CROWD_CONSENSUS"}
+                  </span>
+                </div>
+
+                <div className="flex-1 flex flex-col justify-center items-center my-6 relative z-10 py-4">
+                  {activeLoopStep === 0 && (
+                    <div className="w-full max-w-[340px] space-y-4 animate-[fadeIn_0.4s_ease-out]">
+                      <div className="bg-card/95 border border-border/80 rounded-2xl p-4 shadow-xl relative overflow-hidden group">
+                        <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#C27D56] animate-pulse" />
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <Smartphone className="h-3.5 w-3.5 text-[#C27D56]" /> SMS Ingestion
+                          </span>
+                          <span className="text-[9px] text-muted-foreground">Just Now</span>
+                        </div>
+                        <p className="text-xs text-foreground font-mono leading-normal">
+                          "Debited: Rs.150 at Hostl_Canten. Bal: Rs.3400. UPI Ref 388910..."
+                        </p>
+                      </div>
+
+                      <div className="flex justify-center">
+                        <ArrowDown className="h-5 w-5 text-muted-foreground/60 animate-bounce my-1.5" />
+                      </div>
+
+                      <div className="bg-zinc-100 dark:bg-[#0A0A0E] border border-border/50 rounded-2xl p-4 flex flex-col gap-2.5 shadow-inner">
+                        <div className="flex justify-between items-center text-[10px] font-mono text-muted-foreground">
+                          <span>PARSING PAYLOAD</span>
+                          <span className="text-pb-green font-bold">CONFIDENCE: 92%</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                          <div className="bg-background border border-border/30 p-2 rounded-lg">
+                            <span className="block text-[9px] text-muted-foreground">Amount</span>
+                            <span className="font-extrabold text-foreground">₹150.00</span>
+                          </div>
+                          <div className="bg-background border border-border/30 p-2 rounded-lg">
+                            <span className="block text-[9px] text-muted-foreground">Merchant Raw</span>
+                            <span className="font-extrabold text-foreground truncate block">Hostl_Canten</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeLoopStep === 1 && (
+                    <div className="w-full max-w-[340px] space-y-4 animate-[fadeIn_0.4s_ease-out]">
+                      <div className="bg-card border border-border p-4 rounded-2xl shadow-xl space-y-3">
+                        <div className="flex items-center justify-between border-b border-border pb-2">
+                          <span className="text-[10px] font-black uppercase text-foreground">Extracted Event</span>
+                          <span className="text-[9px] text-muted-foreground font-mono">₹150.00 at Hostl_Canten</span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="block text-[9px] text-muted-foreground uppercase font-bold tracking-wider">Applied Rules & Metadata</span>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between bg-surface/80 border border-border/50 px-2.5 py-1.5 rounded-xl">
+                              <span className="text-xs text-foreground font-medium flex items-center gap-1.5">
+                                <Utensils className="h-3.5 w-3.5 text-[#C27D56]" /> Merchant Mapping
+                              </span>
+                              <span className="text-[10px] font-extrabold text-pb-green bg-pb-green/10 border border-pb-green/20 px-2 py-0.5 rounded-full">Hostel Canteen</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-surface/80 border border-border/50 px-2.5 py-1.5 rounded-xl">
+                              <span className="text-xs text-foreground font-medium flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5 text-blue-400" /> Canteen Schedule
+                              </span>
+                              <span className="text-[10px] font-extrabold text-blue-400 bg-blue-400/10 border border-blue-400/20 px-2 py-0.5 rounded-full">Dinner Hour</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-surface/80 border border-border/50 px-2.5 py-1.5 rounded-xl">
+                              <span className="text-xs text-foreground font-medium flex items-center gap-1.5">
+                                <Sparkles className="h-3.5 w-3.5 text-purple-400 animate-pulse" /> College Calendar
+                              </span>
+                              <span className="text-[10px] font-extrabold text-purple-400 bg-purple-400/10 border border-purple-400/20 px-2 py-0.5 rounded-full">Midterms Week</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeLoopStep === 2 && (
+                    <div className="w-full max-w-[340px] space-y-4 animate-[fadeIn_0.4s_ease-out]">
+                      <div className="bg-card border border-border p-4 rounded-2xl shadow-xl flex flex-col items-center">
+                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-wider mb-2">Simulated Runway Guard</span>
+
+                        <div className="h-28 w-28 rounded-full border-4 border-pb-amber/20 border-t-pb-amber relative flex flex-col items-center justify-center shadow-[0_0_15px_rgba(217,119,6,0.15)] bg-background">
+                          <span className="text-xl font-black text-foreground">14</span>
+                          <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider">Days Left</span>
+                        </div>
+
+                        <div className="mt-4 w-full bg-surface-raised border border-border/40 p-2.5 rounded-xl text-center">
+                          <span className="text-[10px] text-pb-amber font-extrabold block">WARNING: RUNWAY DECAY DETECTED</span>
+                          <span className="text-[9px] text-muted-foreground block mt-0.5">
+                            Canteen spend fits budget, but 2 pending subscriptions trigger before exams.
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeLoopStep === 3 && (
+                    <div className="w-full max-w-[340px] space-y-4 animate-[fadeIn_0.4s_ease-out]">
+                      <div className="bg-card border border-border p-4 rounded-2xl shadow-xl space-y-3">
+                        <div className="flex items-center justify-between border-b border-border pb-2">
+                          <span className="text-[10px] font-black uppercase text-foreground">Resolve Ingestion Flag</span>
+                          <span className="text-[9px] bg-pb-amber/10 border border-pb-amber/20 text-pb-amber px-2 py-0.5 rounded-full font-bold uppercase">review queue</span>
+                        </div>
+
+                        <div className="p-3 bg-surface rounded-xl border border-border/50 text-xs">
+                          <span className="block text-[9px] text-muted-foreground uppercase font-bold">Unrecognized Vendor Parsing</span>
+                          <p className="mt-1 text-foreground font-mono">"Hostl_Canten" → <span className="underline decoration-wavy decoration-[#C27D56]">Hostel Canteen</span>?</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="border border-border/60 bg-surface/40 hover:bg-pb-green/10 hover:border-pb-green/30 p-2.5 rounded-xl text-center cursor-pointer transition-all flex items-center justify-center gap-1 text-xs font-bold text-foreground">
+                            <Check className="h-3.5 w-3.5 text-pb-green" /> Correct
+                          </div>
+                          <div className="border border-border/60 bg-surface/40 hover:bg-pb-red/10 hover:border-pb-red/30 p-2.5 rounded-xl text-center cursor-pointer transition-all flex items-center justify-center gap-1 text-xs font-bold text-foreground">
+                            <X className="h-3.5 w-3.5 text-pb-red" /> Flag Typo
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-border/60 pt-3 relative z-10 flex justify-between text-[9px] font-mono text-muted-foreground/60 uppercase">
+                  <span>node_status: active</span>
+                  <span>© PocketBuddy Core v2</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1378,23 +1612,133 @@ function LandingPage() {
           </table>
         </div>
 
-        {/* 3 differentiators */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-12">
-          {[
-            { icon: Lock, title: "No Credentials, No Raw Alerts", body: "PocketBuddy never asks for your bank login, MPIN, or OTP. Optional Instant UPI Sync parses supported payment alerts on your phone and does not upload raw notification text.", accent: "#16a34a" },
-            { icon: Brain, title: "Campus-Native Intelligence", body: "Unlike generic finance apps, PocketBuddy's AI context is scoped to real campus prices, mess schedules, and hostel geography ── not internet averages.", accent: "#C27D56" },
-            { icon: Handshake, title: "Network Effects by Design", body: "Every merchant classification, every pool created, every check-in improves the experience for every other student on campus. It compounds.", accent: "#5E17EB" },
-          ].map(({ icon: Icon, title, body, accent }) => {
-            const { ref, inView } = useInView();
-            return (
-              <div key={title} ref={ref} className="relative bg-card border border-border rounded-2xl p-6 overflow-hidden transition-all duration-750" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(24px)" }}>
-                <div className="absolute top-0 right-0 w-20 h-20 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${accent}15, transparent 70%)` }} />
-                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: `${accent}1a`, color: accent }}><Icon className="h-5 w-5" /></div>
-                <h4 className="text-sm font-bold text-foreground mb-2">{title}</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed">{body}</p>
+        {/* Grounded Security Inspector Panel (Proof, not claims) */}
+        <div className="mt-16 rounded-3xl border border-border/80 bg-gradient-to-br from-card to-background p-5 sm:p-8 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-[300px] h-[300px] pointer-events-none opacity-50 bg-[radial-gradient(ellipse_at_100%_0%,rgba(194,125,86,0.06),transparent_70%)]" />
+
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between border-b border-border/60 pb-6 mb-8">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#C27D56]">Proof, not claims</p>
+              <h3 className="mt-2 text-xl sm:text-2xl font-black uppercase tracking-tight text-foreground">Trust is designed into the flow.</h3>
+            </div>
+            <p className="max-w-[420px] text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              PocketBuddy does not ask students to trust a black box. Select a layer below to inspect our verification pipeline.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+            {/* Tab controls */}
+            <div className="lg:col-span-5 flex flex-col justify-start gap-3">
+              {[
+                { tab: "sandbox", icon: Lock, title: "On-Device Sandbox", subtitle: "Zero Credential Ingest", desc: "No bank login, credentials, or OTP path. Supported alerts are parsed locally on your phone and sent as structured, masked transaction fields." },
+                { tab: "grounded", icon: Layers, title: "Grounded Math Engines", subtitle: "Grounded & Verifiable", desc: "AI does not touch ledger calculations. Runway projections, fare bands, and pooled split dues come from deterministic engines; AI only summarizes the facts." },
+                { tab: "collaborative", icon: Globe, title: "Shared Campus Memory", subtitle: "Consensus validation", desc: "Unverified pricing indexes or menu changes are held in a local review pool, updated by direct user confirmation before going live." },
+              ].map(({ tab, icon: Icon, title, subtitle, desc }) => {
+                const active = activeProofTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveProofTab(tab)}
+                    className={`text-left rounded-xl border p-4 transition-all duration-300 flex items-start gap-4 cursor-pointer outline-none ${
+                      active
+                        ? "border-[#C27D56]/50 bg-gradient-to-r from-surface to-[#C27D56]/5 shadow-sm"
+                        : "border-border/60 bg-transparent hover:border-border hover:bg-surface-raised/30"
+                    }`}
+                  >
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                      active ? "border-[#C27D56] bg-[#C27D56]/10 text-[#C27D56]" : "border-border bg-surface text-muted-foreground"
+                    }`}>
+                      <Icon className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-black text-foreground">{title}</h4>
+                      <span className="block text-[10px] font-bold text-muted-foreground/80 mt-0.5 uppercase tracking-wider">{subtitle}</span>
+                      {active && (
+                        <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed animate-[fadeIn_0.2s_ease-out]">
+                          {desc}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Simulated Inspector Output */}
+            <div className="lg:col-span-7 flex flex-col">
+              <div className="flex-1 rounded-2xl border border-border/80 bg-zinc-50 dark:bg-zinc-950/80 p-5 font-mono text-[10px] sm:text-xs text-zinc-700 dark:text-zinc-400 shadow-inner min-h-[260px] flex flex-col justify-between">
+                <div className="space-y-4">
+                  {activeProofTab === "sandbox" && (
+                    <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2 text-[9px] text-zinc-500 uppercase">
+                        <span>SECURITY_CONSOLE // SANDBOX_RUN</span>
+                        <span className="text-[#C27D56]">SANDBOX: SECURE</span>
+                      </div>
+                      <div className="space-y-1.5 text-zinc-800 dark:text-zinc-300">
+                        <p><span className="text-zinc-500">[1]</span> INITIALIZE ON_DEVICE PARSER (REGEXP_MODE)</p>
+                        <p><span className="text-zinc-500">[2]</span> SUPPORTED UPI ALERT RECEIVED ON DEVICE</p>
+                        <p className="text-[#C27D56]"><span className="text-zinc-500">[3]</span> EXTRACTING: AMOUNT = 30.00, CURRENCY = INR, VENDOR = Canteen</p>
+                        <p className="text-pb-green"><span className="text-zinc-500">[4]</span> MASKING RECORD: RAW_TEXT = DROPPED, PAYLOAD = STRUCTURED_FIELDS</p>
+                        <p className="text-zinc-500"><span className="text-zinc-500">[5]</span> PASSING TO REMOTE API: [SIGNED_OR_PAIRED_REQUEST]</p>
+                      </div>
+                      <div className="bg-background border border-border/40 p-2.5 rounded-lg flex items-center justify-between text-[9px]">
+                        <span className="flex items-center gap-1.5 text-foreground"><Smartphone className="h-3 w-3 text-[#C27D56]" /> Phone Storage</span>
+                        <span className="text-zinc-600">------------------</span>
+                        <span className="flex items-center gap-1.5 text-pb-green"><Lock className="h-3 w-3" /> Shield Hash</span>
+                        <span className="text-zinc-600">------------------</span>
+                        <span className="flex items-center gap-1.5 text-zinc-500"><Globe className="h-3 w-3" /> DB Cloud</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeProofTab === "grounded" && (
+                    <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2 text-[9px] text-zinc-500 uppercase">
+                        <span>ENGINE_CONSOLE // CALCULATOR_STATS</span>
+                        <span className="text-pb-amber">VERIFYING MATH CORES</span>
+                      </div>
+                      <div className="space-y-1 text-zinc-800 dark:text-zinc-300 font-mono text-[11px]">
+                        <p className="text-zinc-500"># Formula: Runway days left</p>
+                        <p className="text-foreground">
+                          const remainingDiscretionary = funding - spent - commitments;
+                        </p>
+                        <p className="text-foreground">
+                          const runwayDays = Math.floor(remainingDiscretionary / (dailyPace * 100));
+                        </p>
+                        <p className="text-pb-amber mt-2">
+                          $ verified_runway_compute(active_simulated_spend: 15000)
+                        </p>
+                        <p className="text-pb-green">
+                          → Output: 14.5 Days (Grounded by local commitments cache)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeProofTab === "collaborative" && (
+                    <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2 text-[9px] text-zinc-500 uppercase">
+                        <span>COLLAB_CONSOLE // CONSENSUS_LOG</span>
+                        <span className="text-blue-400">CONSENSUS: STABLE</span>
+                      </div>
+                      <div className="space-y-1.5 text-zinc-800 dark:text-zinc-300">
+                        <p><span className="text-zinc-500">[1]</span> QUERY CROWD DATA FOR MERCHANT = Hostel Canteen</p>
+                        <p><span className="text-zinc-500">[2]</span> LOCAL PRICE DETECTED: Meal = ₹40.00</p>
+                        <p className="text-blue-400"><span className="text-zinc-500">[3]</span> CONSENSUS RATINGS: 12 Approvals / 0 Disagreements</p>
+                        <p className="text-pb-green"><span className="text-zinc-500">[4]</span> STATUS: CONFIRMED - Automatically mapping menu pricing rules</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-[10px] text-zinc-600 border-t border-border/40 pt-2 flex justify-between">
+                  <span>Inspector Status: Idle</span>
+                  <span>Logs: Grounded</span>
+                </div>
               </div>
-            );
-          })}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1403,7 +1747,7 @@ function LandingPage() {
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
             <SectionLabel text="Core Feature Set" />
-            <SectionHeading>Five loops that protect<br /><span className="text-muted-foreground/60">your campus survival.</span></SectionHeading>
+            <SectionHeading>Six loops that protect<br /><span className="text-muted-foreground/60">the student month.</span></SectionHeading>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {features.map((f) => <FeatureCard key={f.title} {...f} />)}
@@ -1460,52 +1804,50 @@ function LandingPage() {
       <section className="py-20 px-4 sm:px-6 max-w-[1100px] mx-auto">
         <div className="text-center mb-14">
           <SectionLabel text="Architecture" />
-          <SectionHeading>Built on AWS.<br /><span className="text-muted-foreground/60">Built to scale.</span></SectionHeading>
-          <p className="text-xs sm:text-sm text-muted-foreground max-w-[540px] mx-auto mt-4 leading-relaxed">A hybrid cloud stack: CloudFront fronts a static React app on S3, the existing FastAPI backend on EC2, and a burst-safe serverless pipeline for mobile payment ingestion.</p>
+          <SectionHeading>AWS path today.<br /><span className="text-muted-foreground/60">Retry-safe ingest lane.</span></SectionHeading>
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-[620px] mx-auto mt-4 leading-relaxed">CloudFront, S3, EC2, MongoDB Atlas, and Bedrock serve the product app. The mobile ingest lane isolates bursty phone events behind API Gateway, Lambda, SQS, DynamoDB, and DLQ replay.</p>
         </div>
 
         {/* Service grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
-            { layer: "CDN + Edge", tech: "CloudFront", icon: Globe, color: "#FF9900" },
-            { layer: "Static Frontend", tech: "S3 + React/Vite", icon: HardDrive, color: "#3ECF8E" },
-            { layer: "Mobile Ingest API", tech: "API Gateway", icon: Network, color: "#CC2264" },
-            { layer: "Serverless Compute", tech: "Lambda (Ingest + Processor)", icon: Zap, color: "#ED7100" },
-            { layer: "Event Buffer", tech: "SQS Queue", icon: Layers, color: "#CC2264" },
-            { layer: "Ingest Ledger", tech: "DynamoDB", icon: Database, color: "#4053D6" },
-            { layer: "App Backend", tech: "EC2 + FastAPI", icon: Server, color: "#FF9900" },
-            { layer: "Main Database", tech: "MongoDB Atlas", icon: Leaf, color: "#00ED64" },
-          ].map(({ layer, tech, icon: Icon, color }) => {
-            const { ref, inView } = useInView();
-            return (
-              <div key={tech} ref={ref} className="bg-card border border-border rounded-xl p-4 transition-all duration-600" style={{ opacity: inView ? 1 : 0, transform: inView ? "translateY(0)" : "translateY(18px)" }}>
-                <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: `${color}1a`, color }}><Icon className="h-4 w-4" /></div>
-                <div className="text-[9px] text-muted-foreground tracking-wider font-mono uppercase mb-1">{layer}</div>
-                <div className="text-xs sm:text-sm font-bold text-foreground">{tech}</div>
-              </div>
-            );
-          })}
+            { layer: "HTTPS edge", tech: "Amazon CloudFront", icon: "/aws-icons/cloudfront.svg", badge: "live" as const },
+            { layer: "Static app + APK", tech: "Amazon S3", icon: "/aws-icons/s3.svg", badge: "live" as const },
+            { layer: "App backend", tech: "Amazon EC2", icon: "/aws-icons/ec2.svg", badge: "live" as const },
+            { layer: "AI explanations", tech: "Amazon Bedrock", icon: "/aws-icons/bedrock.svg", badge: "live" as const },
+            { layer: "Logs and alarms", tech: "Amazon CloudWatch", icon: "/aws-icons/cloudwatch.svg", badge: "live" as const },
+            { layer: "API front door", tech: "Amazon API Gateway", icon: "/aws-icons/api-gateway.svg", badge: "ingest" as const },
+            { layer: "Ingest compute", tech: "AWS Lambda", icon: "/aws-icons/lambda.svg", badge: "ingest" as const },
+            { layer: "Retry buffer", tech: "Amazon SQS", icon: "/aws-icons/sqs.svg", badge: "ingest" as const },
+            { layer: "Replay queue", tech: "SQS DLQ", icon: "/aws-icons/sqs.svg", badge: "ingest" as const },
+            { layer: "Immutable ledger", tech: "Amazon DynamoDB", icon: "/aws-icons/dynamodb.svg", badge: "ingest" as const },
+          ].map((service) => <AwsServiceCard key={`${service.layer}-${service.tech}`} {...service} />)}
         </div>
 
         {/* Flow paths */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-8">
           <FlowPath
-            label="Browser App Path"
+            label="Live browser app path"
             accent="#FF9900"
-            nodes={["Browser", "CloudFront", "S3 / EC2 FastAPI", "MongoDB Atlas"]}
+            nodes={["Browser", "CloudFront", "S3 assets", "EC2 FastAPI", "MongoDB Atlas"]}
           />
           <FlowPath
-            label="Mobile Ingest Path"
+            label="Live Android v2 path"
             accent="#00C16A"
-            nodes={["Android", "CloudFront", "API Gateway", "Lambda", "SQS", "Lambda", "DynamoDB", "EC2 / Mongo"]}
+            nodes={["Android", "CloudFront /api/*", "EC2 FastAPI", "Review inbox", "Transactions"]}
+          />
+          <FlowPath
+            label="Retry-safe mobile ingest lane"
+            accent="#CC2264"
+            nodes={["API Gateway", "Lambda", "SQS", "Processor", "DynamoDB", "DLQ replay"]}
           />
         </div>
 
         {/* Region note */}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
-          <span className="flex items-center gap-1.5"><Globe className="h-3 w-3 text-[#C27D56]" /> Region: ap-south-1 · Mumbai</span>
+          <span className="flex items-center gap-1.5"><Globe className="h-3 w-3 text-[#C27D56]" /> Region: ap-south-1 Mumbai</span>
           <span className="flex items-center gap-1.5"><Lock className="h-3 w-3 text-[#C27D56]" /> Private S3 via CloudFront OAC</span>
-          <span className="flex items-center gap-1.5"><Layers className="h-3 w-3 text-[#C27D56]" /> Idempotent SQS dedupe</span>
+          <span className="flex items-center gap-1.5"><Layers className="h-3 w-3 text-[#C27D56]" /> Queue retry and DLQ replay path</span>
         </div>
       </section>
 
@@ -1532,28 +1874,109 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* ── CTA BANNER ───────────────────────────────────────────────────── */}
+      {/* ── CTA BANNER (INTERACTIVE RUNWAY CALCULATOR) ───────────────────── */}
       <section className="py-20 px-4 sm:px-6">
-        <div className="max-w-[800px] mx-auto text-center rounded-[28px] border border-primary/20 bg-gradient-to-br from-primary/8 to-primary/3 p-8 sm:p-14 relative overflow-hidden shadow-md">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[240px] sm:w-[400px] h-[200px] pointer-events-none" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(255,107,0,0.18), transparent 70%)" }} />
-          <SectionLabel text="Don't Go Broke Before Exams" />
-          <SectionHeading className="mb-4">Your financial guard<br />is one tap away.</SectionHeading>
-          <p className="text-xs sm:text-sm text-muted-foreground mb-8 max-w-[480px] mx-auto leading-relaxed">Free for all campus students. No credit card. No complex setup.<br />Just install the Android companion and you're live in 60 seconds.</p>
-          <Link to="/login" className="inline-block px-8 py-3.5 rounded-full text-xs font-black text-[#0A0A0A] bg-gradient-to-br from-primary to-pb-amber hover:scale-[1.03] active:scale-[0.97] transition-all shadow-lg shadow-primary/20 text-decoration-none">
-            Create Free Account →
-          </Link>
-          {/* Trust badges */}
-          <div className="flex justify-center gap-4 sm:gap-6 mt-8 flex-wrap">
-            {[
-              { icon: Lock, label: "No bank access" },
-              { icon: WifiOff, label: "Works offline" },
-              { icon: GraduationCap, label: "Campus-ready" },
-              { icon: Zap, label: "Setup in 60s" },
-            ].map(({ icon: Icon, label }) => (
-              <span key={label} className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted-foreground font-semibold font-mono">
-                <Icon className="h-3.5 w-3.5 text-[#C27D56]" />{label}
+        <div className="max-w-[840px] mx-auto rounded-[32px] border border-zinc-200 dark:border-zinc-800/80 bg-gradient-to-br from-zinc-50 to-zinc-100/50 dark:from-[#111115] dark:to-[#09090C] p-6 sm:p-12 relative overflow-hidden shadow-xl dark:shadow-2xl">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] sm:w-[500px] h-[250px] pointer-events-none" style={{ background: theme === "dark" ? "radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.03), transparent 70%)" : "radial-gradient(ellipse at 50% 0%, rgba(0,0,0,0.02), transparent 70%)" }} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+            <div className="lg:col-span-6 text-center lg:text-left space-y-4">
+              <span className="inline-block px-3 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-150 dark:bg-zinc-900/50 text-[9px] font-black uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+                Don't Go Broke Before Exams
               </span>
-            ))}
+              <h3 className="text-2xl sm:text-4xl font-black leading-tight uppercase tracking-tight text-zinc-900 dark:text-zinc-100">
+                Your financial guard<br />is one tap away.
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-[420px] mx-auto lg:mx-0">
+                Log quick items, scan canteen chalkboard menus, settle roommate dues, and watch your runway respond. Get passive sync for supported alerts with the Android companion.
+              </p>
+
+              <div className="pt-2">
+                <Link to="/login" className="inline-flex items-center gap-2 px-8 py-4 rounded-full text-xs font-black bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-zinc-50 dark:text-zinc-900 transition-all shadow-md active:scale-95 cursor-pointer text-decoration-none">
+                  Create Free Account <ArrowRight className="h-4.5 w-4.5" />
+                </Link>
+              </div>
+
+              <div className="flex flex-wrap justify-center lg:justify-start gap-4 pt-4">
+                {[
+                  { icon: Lock, label: "No bank access" },
+                  { icon: WifiOff, label: "Works offline" },
+                  { icon: GraduationCap, label: "Campus-ready" },
+                ].map(({ icon: Icon, label }) => (
+                  <span key={label} className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold font-mono">
+                    <Icon className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />{label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-6 w-full">
+              <div className="bg-white/85 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 p-5 rounded-2xl shadow-lg dark:shadow-xl backdrop-blur-md relative overflow-hidden">
+                <div className="flex items-center justify-between border-b border-zinc-250 dark:border-zinc-800/60 pb-3">
+                  <span className="text-[10px] font-black uppercase text-zinc-900 dark:text-zinc-100">Runway Sandbox</span>
+                  <span className="text-[9px] font-mono text-zinc-450 dark:text-zinc-500">LIVE SIMULATION</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-zinc-500 dark:text-zinc-400 font-bold">Monthly Allowance</span>
+                    <span className="font-extrabold text-zinc-900 dark:text-zinc-100 text-sm font-mono">₹{ctaAllowance.toLocaleString("en-IN")}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="2000"
+                    max="15000"
+                    step="500"
+                    value={ctaAllowance}
+                    onChange={(e) => setCtaAllowance(Number(e.target.value))}
+                    className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-900 dark:accent-zinc-100"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-zinc-500 dark:text-zinc-400 font-bold">Daily Spending Rate</span>
+                    <span className="font-extrabold text-zinc-900 dark:text-zinc-100 text-sm font-mono">₹{ctaDailySpend.toLocaleString("en-IN")}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="50"
+                    max="600"
+                    step="10"
+                    value={ctaDailySpend}
+                    onChange={(e) => setCtaDailySpend(Number(e.target.value))}
+                    className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-900 dark:accent-zinc-100"
+                  />
+                </div>
+
+                {(() => {
+                  const days = Math.floor(ctaAllowance / ctaDailySpend);
+                  const isSafe = days >= 25;
+                  const isTight = days >= 15 && days < 25;
+
+                  const statusLabel = isSafe ? "Safe Horizon" : isTight ? "Tight Runway" : "Shortfall Risk";
+                  const statusColor = isSafe
+                    ? "text-emerald-700 bg-emerald-50 border-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900/30"
+                    : isTight
+                      ? "text-amber-700 bg-amber-50 border-amber-100 dark:text-amber-400 dark:bg-amber-950/30 dark:border-amber-900/30"
+                      : "text-rose-700 bg-rose-50 border-rose-100 dark:text-rose-400 dark:bg-rose-950/30 dark:border-rose-900/30";
+
+                  return (
+                    <div className="mt-2 bg-zinc-50 dark:bg-zinc-950/80 border border-zinc-200/60 dark:border-zinc-800/50 rounded-xl p-3 flex items-center justify-between gap-4">
+                      <div>
+                        <span className="block text-[8px] text-zinc-400 dark:text-zinc-500 font-mono uppercase">Estimated Runway</span>
+                        <span className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono leading-none tracking-tight">{days} Days</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block text-[9px] font-extrabold uppercase px-2.5 py-1 rounded-full border ${statusColor}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
         </div>
       </section>
